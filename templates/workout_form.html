@@ -166,6 +166,66 @@
             text-decoration: underline;
         }
 
+        /* Navbar styles */
+        .navbar {
+            background: #2c3e50;
+            padding: 12px 16px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .navbar-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .navbar-brand {
+            color: white;
+            font-size: 1.2rem;
+            font-weight: 700;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .navbar-nav {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .navbar-nav a {
+            color: #bdc3c7;
+            text-decoration: none;
+            font-weight: 500;
+            padding: 8px 12px;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+
+        .navbar-nav a:hover {
+            color: white;
+            background: #34495e;
+        }
+
+        .navbar-nav a.active {
+            color: #3498db;
+            background: #34495e;
+        }
+
+        /* Adjust body to account for fixed navbar */
+        body {
+            padding-top: 60px;
+        }
+
         /* Tablet and desktop styles */
         @media (min-width: 768px) {
             body {
@@ -212,6 +272,20 @@
     </style>
 </head>
 <body>
+    <nav class="navbar">
+        <div class="navbar-content">
+            <a href="/" class="navbar-brand">
+                💪 Trucker
+            </a>
+            <div class="navbar-nav">
+                <a href="/workout/new" class="active">Log Workout</a>
+                <a href="/gzclp">GZCLP</a>
+                <a href="/workouts">Workouts</a>
+                <a href="/statistics">Statistics</a>
+            </div>
+        </div>
+    </nav>
+
     <h1>Log New Workout</h1>
     <form method="POST" action="/workout/create">
         <label>Date:</label><br>
@@ -289,6 +363,13 @@
 
         exercisesDiv.appendChild(newExercise);
         exerciseCount++;
+
+        // Add event listeners to new inputs
+        const newInputs = newExercise.querySelectorAll('input, select');
+        newInputs.forEach(input => {
+            input.addEventListener('change', markFormChanged);
+            input.addEventListener('input', markFormChanged);
+        });
     }
 
     function addSet(exerciseIndex) {
@@ -305,6 +386,13 @@
 
         setsDiv.appendChild(newSet);
         setCounts[exerciseIndex]++;
+
+        // Add event listeners to new inputs
+        const newInputs = newSet.querySelectorAll('input');
+        newInputs.forEach(input => {
+            input.addEventListener('change', markFormChanged);
+            input.addEventListener('input', markFormChanged);
+        });
     }
 
     function removeExercise(exerciseIndex) {
@@ -375,10 +463,41 @@
                 document.getElementById('latest_data_' + exerciseIndex).style.display = 'none';
             });
     }
+
+    // Track if user has made changes to the form
+    let formChanged = false;
+    let isSubmitting = false;
+
+    // Mark form as changed when user interacts with inputs
+    function markFormChanged() {
+        formChanged = true;
+    }
+
+    // Add event listeners to detect form changes
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.querySelector('form');
+        const inputs = form.querySelectorAll('input, select');
+
+        inputs.forEach(input => {
+            input.addEventListener('change', markFormChanged);
+            input.addEventListener('input', markFormChanged);
+        });
+
+        // Don't warn when submitting the form
+        form.addEventListener('submit', function() {
+            isSubmitting = true;
+        });
+    });
+
+    // Warn user before leaving if they have unsaved changes
+    window.addEventListener('beforeunload', function(e) {
+        if (formChanged && !isSubmitting) {
+            e.preventDefault();
+            e.returnValue = 'You have unsaved workout data. Are you sure you want to leave?';
+            return e.returnValue;
+        }
+    });
     </script>
 
-    <div class="nav-links">
-        <a href="/">Back to Home</a>
-    </div>
 </body>
 </html>

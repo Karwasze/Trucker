@@ -82,6 +82,13 @@ func initDB() {
 		reps INTEGER NOT NULL,
 		weight REAL NOT NULL,
 		FOREIGN KEY(exercise_id) REFERENCES exercises(id)
+	);
+
+	CREATE TABLE IF NOT EXISTS gzclp_settings (
+		id INTEGER PRIMARY KEY DEFAULT 1,
+		current_day INTEGER NOT NULL DEFAULT 1,
+		skipped_days INTEGER NOT NULL DEFAULT 0,
+		CONSTRAINT single_row CHECK (id = 1)
 	);`
 
 	_, err = db.Exec(createTables)
@@ -92,6 +99,9 @@ func initDB() {
 	// Add new columns if they don't exist (migration)
 	db.Exec("ALTER TABLE workouts ADD COLUMN workout_type TEXT DEFAULT 'custom'")
 	db.Exec("ALTER TABLE workouts ADD COLUMN workout_day INTEGER DEFAULT 0")
+
+	// Initialize GZCLP settings
+	db.Exec("INSERT OR IGNORE INTO gzclp_settings (id, current_day, skipped_days) VALUES (1, 1, 0)")
 
 	// Populate default exercises
 	populateDefaultExercises()
@@ -175,6 +185,7 @@ func main() {
 	http.HandleFunc("/workout/create", createWorkout)          // Handle form submission
 	http.HandleFunc("/workouts", listWorkouts)                 // Show all logged workouts
 	http.HandleFunc("/gzclp", gzclpForm)                       // GZCLP workout form
+	http.HandleFunc("/gzclp/skip", skipGZCLPDay)               // Skip GZCLP workout day
 	http.HandleFunc("/workout/delete", deleteWorkout)          // Delete workout endpoint
 	http.HandleFunc("/statistics", statisticsPage)             // Statistics page
 	http.HandleFunc("/api/latest-exercise", getLatestExercise) // API endpoint for latest exercise data
@@ -305,6 +316,22 @@ func createWorkout(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to save workout", http.StatusInternalServerError)
 		log.Printf("Error saving workout: %v", err)
 		return
+	}
+
+	// If this is a GZCLP workout, advance the day counter
+	if workout.WorkoutType == "gzclp" {
+		currentDay := workout.WorkoutDay
+		nextDay := (currentDay % 4) + 1
+		_, err = db.Exec(`
+			UPDATE gzclp_settings
+			SET current_day = ?
+			WHERE id = 1
+		`, nextDay)
+		if err != nil {
+			log.Printf("Error advancing GZCLP day: %v", err)
+		} else {
+			log.Printf("Advanced GZCLP from day %d to day %d", currentDay, nextDay)
+		}
 	}
 
 	// Redirect to success page or home
@@ -506,18 +533,21 @@ func getLatestExercise(w http.ResponseWriter, r *http.Request) {
 }
 
 func getNextGZCLPWorkoutDay() (int, error) {
-	var lastWorkoutDay int
+	var currentDay int
 	err := db.QueryRow(`
-		SELECT COALESCE(MAX(workout_day), 0)
-		FROM workouts
-		WHERE workout_type = 'gzclp'
-	`).Scan(&lastWorkoutDay)
+		SELECT current_day FROM gzclp_settings WHERE id = 1
+	`).Scan(&currentDay)
 
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// If no settings exist, initialize and return day 1
+			db.Exec("INSERT INTO gzclp_settings (id, current_day, skipped_days) VALUES (1, 1, 0)")
+			return 1, nil
+		}
 		return 0, err
 	}
 
-	return (lastWorkoutDay % 4) + 1, nil
+	return currentDay, nil
 }
 
 func getGZCLPExercises(workoutDay int) (string, string, string) {
@@ -570,6 +600,41 @@ func gzclpForm(w http.ResponseWriter, r *http.Request) {
 		T3Exercises: t3Exercises,
 	}
 	tmpl.Execute(w, data)
+}
+
+func skipGZCLPDay(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get current workout day (the day we're about to skip)
+	currentDay, err := getNextGZCLPWorkoutDay()
+	if err != nil {
+		log.Printf("Error getting current workout day: %v", err)
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	// Calculate next workout day (1-4 cycle)
+	nextDay := (currentDay % 4) + 1
+
+	// Update the current day in settings and increment skipped days counter
+	_, err = db.Exec(`
+		UPDATE gzclp_settings
+		SET current_day = ?, skipped_days = skipped_days + 1
+		WHERE id = 1
+	`, nextDay)
+
+	if err != nil {
+		log.Printf("Error updating GZCLP settings: %v", err)
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("Skipped GZCLP workout day %d, advanced to day %d", currentDay, nextDay)
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, "Day skipped successfully")
 }
 
 func deleteWorkout(w http.ResponseWriter, r *http.Request) {

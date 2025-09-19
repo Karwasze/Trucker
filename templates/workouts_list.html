@@ -193,9 +193,82 @@
                 max-width: 1100px;
             }
         }
+
+        /* Navbar styles */
+        .navbar {
+            background: #2c3e50;
+            padding: 12px 16px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .navbar-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .navbar-brand {
+            color: white;
+            font-size: 1.2rem;
+            font-weight: 700;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .navbar-nav {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .navbar-nav a {
+            color: #bdc3c7;
+            text-decoration: none;
+            font-weight: 500;
+            padding: 8px 12px;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+
+        .navbar-nav a:hover {
+            color: white;
+            background: #34495e;
+        }
+
+        .navbar-nav a.active {
+            color: #3498db;
+            background: #34495e;
+        }
+
+        /* Adjust body to account for fixed navbar */
+        body {
+            padding-top: 60px;
+        }
     </style>
 </head>
 <body>
+    <nav class="navbar">
+        <div class="navbar-content">
+            <a href="/" class="navbar-brand">
+                💪 Trucker
+            </a>
+            <div class="navbar-nav">
+                <a href="/workout/new">Log Workout</a>
+                <a href="/gzclp">GZCLP</a>
+                <a href="/workouts" class="active">Workouts</a>
+                <a href="/statistics">Statistics</a>
+            </div>
+        </div>
+    </nav>
     <h1>Past Workouts</h1>
 
     {{if .Workouts}}
@@ -260,9 +333,5 @@
     }
     </script>
 
-    <div class="nav-links">
-        <a href="/">Back to Home</a> |
-        <a href="/workout/new">Log New Workout</a>
-    </div>
 </body>
 </html>

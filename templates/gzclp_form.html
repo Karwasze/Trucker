@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GZCLP Workout</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            padding: 16px;
+            background-color: #f5f5f5;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            text-align: center;
+            color: #2c3e50;
+        }
+
+        .gzclp-info {
+            background: #fff3cd;
+            padding: 16px;
+            margin: 16px 0 24px 0;
+            border: 1px solid #ffeaa7;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .gzclp-info h3 {
+            font-size: 1.1rem;
+            margin-bottom: 12px;
+            color: #2c3e50;
+        }
+
+        .gzclp-info p {
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .exercise {
+            margin: 16px 0;
+            padding: 16px;
+            border: 2px solid #333;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .tier-1 { background: #d4edda; border-color: #27ae60; }
+        .tier-2 { background: #d1ecf1; border-color: #3498db; }
+        .tier-3 { background: #f8d7da; border-color: #e74c3c; }
+
+        .exercise h3 {
+            font-size: 1.2rem;
+            margin-bottom: 8px;
+            color: #2c3e50;
+        }
+
+        .exercise-type {
+            font-weight: 600;
+            color: #495057;
+            font-size: 14px;
+            margin-bottom: 12px;
+            padding: 4px 8px;
+            background: rgba(255,255,255,0.8);
+            border-radius: 4px;
+            display: inline-block;
+        }
+
+        .set {
+            margin: 12px 0;
+            padding: 12px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        label {
+            font-weight: 500;
+            margin-bottom: 4px;
+            display: block;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+            background: white;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        button[type="submit"] {
+            background-color: #27ae60;
+            color: white;
+            font-size: 18px;
+            padding: 16px;
+            margin-top: 20px;
+        }
+
+        button[type="submit"]:hover {
+            background-color: #219a52;
+        }
+
+        button[type="button"] {
+            background-color: #3498db;
+            color: white;
+        }
+
+        button[type="button"]:hover {
+            background-color: #2980b9;
+        }
+
+        .remove-btn {
+            background-color: #e74c3c !important;
+            color: white !important;
+            font-size: 14px !important;
+            padding: 8px 12px !important;
+            margin: 4px 0 !important;
+        }
+
+        .remove-btn:hover {
+            background-color: #c0392b !important;
+        }
+
+        .latest-data {
+            background: #e8f4fd !important;
+            padding: 12px;
+            margin: 12px 0;
+            border-radius: 6px;
+            border: 1px solid #bde4ff;
+        }
+
+        .latest-data h5 {
+            margin-bottom: 8px;
+            color: #2c3e50;
+            font-size: 14px;
+        }
+
+        .latest-data table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        .latest-data th,
+        .latest-data td {
+            border: 1px solid #ddd;
+            padding: 6px;
+            text-align: left;
+        }
+
+        .latest-data th {
+            background-color: #f2f2f2;
+            font-weight: 600;
+        }
+
+        .nav-links {
+            text-align: center;
+            margin-top: 24px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+        }
+
+        .nav-links a {
+            color: #3498db;
+            text-decoration: none;
+            margin: 0 8px;
+            font-weight: 500;
+            display: inline-block;
+            margin-bottom: 8px;
+        }
+
+        .nav-links a:hover {
+            text-decoration: underline;
+        }
+
+        /* Tablet and desktop styles */
+        @media (min-width: 768px) {
+            body {
+                max-width: 900px;
+                margin: 0 auto;
+                padding: 32px;
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+
+            .gzclp-info {
+                padding: 24px;
+            }
+
+            .gzclp-info h3 {
+                font-size: 1.3rem;
+            }
+
+            .gzclp-info p {
+                font-size: 16px;
+            }
+
+            .set {
+                flex-direction: row;
+                align-items: center;
+                gap: 12px;
+            }
+
+            .set label {
+                margin-bottom: 0;
+                white-space: nowrap;
+            }
+
+            .set input {
+                max-width: 120px;
+            }
+
+            button {
+                width: auto;
+                display: inline-block;
+                margin-right: 8px;
+            }
+
+            .remove-btn {
+                margin-left: 12px !important;
+            }
+
+            .nav-links a {
+                margin-bottom: 0;
+            }
+        }
+
+        @media (min-width: 1024px) {
+            body {
+                max-width: 1100px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>GZCLP Workout - Day {{.WorkoutDay}}</h1>
+
+    <div class="gzclp-info">
+        <h3>GZCLP Program Structure - Workout {{.WorkoutDay}} of 4</h3>
+        <p><strong>T1 (Tier 1):</strong> Main compound movements - 5x3+, 6x2+, 10x1+</p>
+        <p><strong>T2 (Tier 2):</strong> Secondary movements - 3x10</p>
+        <p><strong>T3 (Tier 3):</strong> Accessory work - 3x15+</p>
+        {{if eq .WorkoutDay 1}}
+        <p><strong>Today's Focus:</strong> Squat + Upper Body Press + Back Work</p>
+        {{else if eq .WorkoutDay 2}}
+        <p><strong>Today's Focus:</strong> Bench + Deadlift + Back Work</p>
+        {{else if eq .WorkoutDay 3}}
+        <p><strong>Today's Focus:</strong> Squat + Upper Body Press + Back Work</p>
+        {{else if eq .WorkoutDay 4}}
+        <p><strong>Today's Focus:</strong> Bench + Deadlift + Back Work</p>
+        {{end}}
+    </div>
+
+    <form method="POST" action="/workout/create">
+        <input type="hidden" name="workout_type" value="gzclp">
+        <input type="hidden" name="workout_day" value="{{.WorkoutDay}}">
+        <label>Date:</label><br>
+        <input type="date" name="date" value="{{.Today}}" required><br><br>
+
+        <div id="exercises">
+            <!-- T1 Exercise -->
+            <div class="exercise tier-1">
+                <h3>T1 - Main Compound Movement</h3>
+                <div class="exercise-type">Tier 1 (5x3+ / 6x2+ / 10x1+)</div><br>
+                <label>Exercise:</label><br>
+                <select name="exercise_0" onchange="loadLatestExercise(this.value, 0)" required>
+                    <option value="">Select T1 Exercise</option>
+                    {{range .T1Exercises}}
+                    <option value="{{.Name}}" {{if eq $.T1Exercise .Name}}selected{{end}}>{{.Name}}</option>
+                    {{end}}
+                </select><br><br>
+
+                <div id="latest_data_0" class="latest-data" style="display: none; background: #e8f4fd; padding: 10px; margin: 10px 0; border-radius: 5px;">
+                    <h5>Latest recorded sets for this exercise:</h5>
+                    <div id="latest_sets_0"></div>
+                </div>
+
+                <div class="sets" id="sets_0">
+                    <h4>Sets</h4>
+                    <div class="set">
+                        <label>Set 1:</label>
+                        <label>Reps: <input type="number" name="reps_0_0" min="1" required></label>
+                        <label>Weight: <input type="number" name="weight_0_0" step="0.5" min="0" required></label>
+                        <button type="button" onclick="removeSet(this, 0)" style="background-color: #dc3545; color: white; margin-left: 10px; font-size: 12px;">Remove Set</button>
+                    </div>
+                </div>
+                <button type="button" onclick="addSet(0)">Add Another Set</button>
+            </div>
+
+            <!-- T2 Exercise -->
+            <div class="exercise tier-2">
+                <h3>T2 - Secondary Movement</h3>
+                <div class="exercise-type">Tier 2 (3x10)</div><br>
+                <label>Exercise:</label><br>
+                <select name="exercise_1" onchange="loadLatestExercise(this.value, 1)" required>
+                    <option value="">Select T2 Exercise</option>
+                    {{range .T2Exercises}}
+                    <option value="{{.Name}}" {{if eq $.T2Exercise .Name}}selected{{end}}>{{.Name}}</option>
+                    {{end}}
+                </select><br><br>
+
+                <div id="latest_data_1" class="latest-data" style="display: none; background: #e8f4fd; padding: 10px; margin: 10px 0; border-radius: 5px;">
+                    <h5>Latest recorded sets for this exercise:</h5>
+                    <div id="latest_sets_1"></div>
+                </div>
+
+                <div class="sets" id="sets_1">
+                    <h4>Sets</h4>
+                    <div class="set">
+                        <label>Set 1:</label>
+                        <label>Reps: <input type="number" name="reps_1_0" min="1" required></label>
+                        <label>Weight: <input type="number" name="weight_1_0" step="0.5" min="0" required></label>
+                        <button type="button" onclick="removeSet(this, 1)" style="background-color: #dc3545; color: white; margin-left: 10px; font-size: 12px;">Remove Set</button>
+                    </div>
+                </div>
+                <button type="button" onclick="addSet(1)">Add Another Set</button>
+            </div>
+
+            <!-- T3 Exercise -->
+            <div class="exercise tier-3">
+                <h3>T3 - Accessory Work</h3>
+                <div class="exercise-type">Tier 3 (3x15+)</div><br>
+                <label>Exercise:</label><br>
+                <select name="exercise_2" onchange="loadLatestExercise(this.value, 2)" required>
+                    <option value="">Select T3 Exercise</option>
+                    {{range .T3Exercises}}
+                    <option value="{{.Name}}" {{if eq $.T3Exercise .Name}}selected{{end}}>{{.Name}}</option>
+                    {{end}}
+                </select><br><br>
+
+                <div id="latest_data_2" class="latest-data" style="display: none; background: #e8f4fd; padding: 10px; margin: 10px 0; border-radius: 5px;">
+                    <h5>Latest recorded sets for this exercise:</h5>
+                    <div id="latest_sets_2"></div>
+                </div>
+
+                <div class="sets" id="sets_2">
+                    <h4>Sets</h4>
+                    <div class="set">
+                        <label>Set 1:</label>
+                        <label>Reps: <input type="number" name="reps_2_0" min="1" required></label>
+                        <label>Weight: <input type="number" name="weight_2_0" step="0.5" min="0" required></label>
+                        <button type="button" onclick="removeSet(this, 2)" style="background-color: #dc3545; color: white; margin-left: 10px; font-size: 12px;">Remove Set</button>
+                    </div>
+                </div>
+                <button type="button" onclick="addSet(2)">Add Another Set</button>
+            </div>
+        </div>
+
+        <button type="button" onclick="addExercise()">Add Another Exercise</button><br><br>
+        <input type="submit" value="Log GZCLP Workout">
+    </form>
+
+    <script>
+    let exerciseCount = 3;
+    let setCounts = [1, 1, 1]; // Track set count for each exercise
+
+    function addExercise() {
+        const exercisesDiv = document.getElementById('exercises');
+        const newExercise = document.createElement('div');
+        newExercise.className = 'exercise';
+
+        setCounts.push(1); // Initialize set count for new exercise
+
+        let exerciseOptions = '<option value="">Select Exercise</option>';
+        {{range .T1Exercises}}
+        exerciseOptions += '<option value="{{.Name}}">{{.Name}}</option>';
+        {{end}}
+        {{range .T2Exercises}}
+        exerciseOptions += '<option value="{{.Name}}">{{.Name}}</option>';
+        {{end}}
+        {{range .T3Exercises}}
+        exerciseOptions += '<option value="{{.Name}}">{{.Name}}</option>';
+        {{end}}
+
+        newExercise.innerHTML =
+            '<h3>Additional Exercise ' + (exerciseCount - 2) + '</h3>' +
+            '<label>Exercise:</label><br>' +
+            '<select name="exercise_' + exerciseCount + '" onchange="loadLatestExercise(this.value, ' + exerciseCount + ')" required>' +
+                exerciseOptions +
+            '</select><br><br>' +
+            '<div id="latest_data_' + exerciseCount + '" class="latest-data" style="display: none; background: #e8f4fd; padding: 10px; margin: 10px 0; border-radius: 5px;">' +
+                '<h5>Latest recorded sets for this exercise:</h5>' +
+                '<div id="latest_sets_' + exerciseCount + '"></div>' +
+            '</div>' +
+            '<div class="sets" id="sets_' + exerciseCount + '">' +
+                '<h4>Sets</h4>' +
+                '<div class="set">' +
+                    '<label>Set 1:</label>' +
+                    '<label>Reps: <input type="number" name="reps_' + exerciseCount + '_0" min="1" required></label>' +
+                    '<label>Weight: <input type="number" name="weight_' + exerciseCount + '_0" step="0.5" min="0" required></label>' +
+                    '<button type="button" onclick="removeSet(this, ' + exerciseCount + ')" style="background-color: #dc3545; color: white; margin-left: 10px; font-size: 12px;">Remove Set</button>' +
+                '</div>' +
+            '</div>' +
+            '<button type="button" onclick="addSet(' + exerciseCount + ')">Add Another Set</button>' +
+            '<button type="button" onclick="removeExercise(' + exerciseCount + ')" style="background-color: #dc3545; color: white; margin-left: 10px;">Remove Exercise</button>';
+
+        exercisesDiv.appendChild(newExercise);
+        exerciseCount++;
+    }
+
+    function addSet(exerciseIndex) {
+        const setsDiv = document.getElementById('sets_' + exerciseIndex);
+        const newSet = document.createElement('div');
+        newSet.className = 'set';
+
+        const setNumber = setCounts[exerciseIndex];
+        newSet.innerHTML =
+            '<label>Set ' + (setNumber + 1) + ':</label>' +
+            '<label>Reps: <input type="number" name="reps_' + exerciseIndex + '_' + setNumber + '" min="1" required></label>' +
+            '<label>Weight: <input type="number" name="weight_' + exerciseIndex + '_' + setNumber + '" step="0.5" min="0" required></label>' +
+            '<button type="button" onclick="removeSet(this, ' + exerciseIndex + ')" style="background-color: #dc3545; color: white; margin-left: 10px; font-size: 12px;">Remove Set</button>';
+
+        setsDiv.appendChild(newSet);
+        setCounts[exerciseIndex]++;
+    }
+
+    function removeExercise(exerciseIndex) {
+        const exercisesDiv = document.getElementById('exercises');
+        const exercises = exercisesDiv.querySelectorAll('.exercise');
+
+        // Don't allow removing core T1, T2, T3 exercises
+        if (exerciseIndex < 3) {
+            alert('Cannot remove core GZCLP tier exercises!');
+            return;
+        }
+
+        // Find and remove the exercise with the matching index
+        exercises.forEach((exercise, index) => {
+            if (index === exerciseIndex) {
+                exercise.remove();
+            }
+        });
+    }
+
+    function removeSet(button, exerciseIndex) {
+        const setsDiv = document.getElementById('sets_' + exerciseIndex);
+        const sets = setsDiv.querySelectorAll('.set');
+
+        // Don't allow removing the last set
+        if (sets.length <= 1) {
+            alert('You must have at least one set per exercise!');
+            return;
+        }
+
+        // Remove the set containing this button
+        button.parentElement.remove();
+    }
+
+    function loadLatestExercise(exerciseName, exerciseIndex) {
+        if (!exerciseName) {
+            document.getElementById('latest_data_' + exerciseIndex).style.display = 'none';
+            return;
+        }
+
+        fetch('/api/latest-exercise?name=' + encodeURIComponent(exerciseName))
+            .then(response => response.json())
+            .then(data => {
+                const latestDiv = document.getElementById('latest_data_' + exerciseIndex);
+                const setsDiv = document.getElementById('latest_sets_' + exerciseIndex);
+
+                if (data.sets && data.sets.length > 0) {
+                    let setsHtml = '<table style="width: 100%; border-collapse: collapse;">';
+                    setsHtml += '<tr><th style="border: 1px solid #ddd; padding: 4px;">Reps</th><th style="border: 1px solid #ddd; padding: 4px;">Weight</th></tr>';
+
+                    data.sets.forEach(set => {
+                        setsHtml += '<tr>';
+                        setsHtml += '<td style="border: 1px solid #ddd; padding: 4px;">' + set.reps + '</td>';
+                        setsHtml += '<td style="border: 1px solid #ddd; padding: 4px;">' + set.weight + ' kg</td>';
+                        setsHtml += '</tr>';
+                    });
+
+                    setsHtml += '</table>';
+                    setsDiv.innerHTML = setsHtml;
+                    latestDiv.style.display = 'block';
+                } else {
+                    setsDiv.innerHTML = '<p style="margin: 0;">No previous data for this exercise</p>';
+                    latestDiv.style.display = 'block';
+                }
+            })
+            .catch(error => {
+                console.error('Error loading latest exercise data:', error);
+                document.getElementById('latest_data_' + exerciseIndex).style.display = 'none';
+            });
+    }
+    </script>
+
+    <div class="nav-links">
+        <a href="/">Back to Home</a> |
+        <a href="/workout/new">Custom Workout</a> |
+        <a href="/workouts">View Past Workouts</a>
+    </div>
+</body>
+</html>

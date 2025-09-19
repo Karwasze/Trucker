@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Statistics - Trucker</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            padding: 16px;
+            background-color: #f5f5f5;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 24px;
+            text-align: center;
+            color: #2c3e50;
+        }
+
+        .loading {
+            text-align: center;
+            margin: 60px 0;
+            color: #7f8c8d;
+        }
+
+        .no-data {
+            text-align: center;
+            margin: 60px 0;
+            padding: 40px 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .no-data h2 {
+            font-size: 1.3rem;
+            margin-bottom: 16px;
+            color: #7f8c8d;
+        }
+
+        .no-data p {
+            font-size: 16px;
+            color: #95a5a6;
+        }
+
+        .chart-container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 16px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            position: relative;
+            height: 300px;
+        }
+
+        .chart-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+
+        .chart-canvas {
+            position: relative;
+            height: 250px;
+        }
+
+        .exercise-filter {
+            background: white;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .filter-row {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            align-items: stretch;
+        }
+
+        .filter-row label {
+            font-weight: 500;
+            color: #2c3e50;
+        }
+
+        .filter-row select {
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+            background: white;
+        }
+
+        .filter-row select:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+        }
+
+        .nav-links {
+            text-align: center;
+            margin-top: 24px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+        }
+
+        .nav-links a {
+            color: #3498db;
+            text-decoration: none;
+            margin: 0 8px;
+            font-weight: 500;
+            display: inline-block;
+            margin-bottom: 8px;
+        }
+
+        .nav-links a:hover {
+            text-decoration: underline;
+        }
+
+        .stats-summary {
+            background: white;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 6px;
+        }
+
+        .stat-value {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #2c3e50;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: #7f8c8d;
+            margin-top: 4px;
+        }
+
+        /* Tablet and desktop styles */
+        @media (min-width: 768px) {
+            body {
+                max-width: 1200px;
+                margin: 0 auto;
+                padding: 32px;
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+
+            .chart-container {
+                height: 400px;
+                padding: 24px;
+            }
+
+            .chart-canvas {
+                height: 350px;
+            }
+
+            .filter-row {
+                flex-direction: row;
+                align-items: center;
+            }
+
+            .filter-row label {
+                flex-shrink: 0;
+                margin-right: 12px;
+            }
+
+            .filter-row select {
+                flex: 1;
+                max-width: 300px;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            }
+
+            .nav-links a {
+                margin-bottom: 0;
+            }
+        }
+
+        @media (min-width: 1024px) {
+            body {
+                max-width: 1400px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>📊 Exercise Statistics</h1>
+
+    <div class="exercise-filter">
+        <div class="filter-row">
+            <label for="exerciseSelect">Select Exercise:</label>
+            <select id="exerciseSelect" onchange="loadExerciseStats()">
+                <option value="">Loading exercises...</option>
+            </select>
+        </div>
+    </div>
+
+    <div id="statsContainer">
+        <div class="loading">
+            <h3>No exercise selected</h3>
+            <p>Please select an exercise</p>
+        </div>
+    </div>
+
+    <div class="nav-links">
+        <a href="/">Back to Home</a> |
+        <a href="/workouts">View Workouts</a> |
+        <a href="/workout/new">Log New Workout</a>
+    </div>
+
+    <script>
+        let progressChart = null;
+        let volumeChart = null;
+
+        async function loadExercises() {
+            try {
+                const response = await fetch('/api/statistics');
+                const data = await response.json();
+
+                const select = document.getElementById('exerciseSelect');
+                select.innerHTML = '<option value="">Select an exercise</option>';
+
+                if (data.exercises && data.exercises.length > 0) {
+                    data.exercises.forEach(exercise => {
+                        const option = document.createElement('option');
+                        option.value = exercise;
+                        option.textContent = exercise;
+                        select.appendChild(option);
+                    });
+                } else {
+                    select.innerHTML = '<option value="">No exercises found</option>';
+                    showNoData();
+                }
+            } catch (error) {
+                console.error('Error loading exercises:', error);
+                document.getElementById('exerciseSelect').innerHTML = '<option value="">Error loading exercises</option>';
+                showNoData();
+            }
+        }
+
+        async function loadExerciseStats() {
+            const exercise = document.getElementById('exerciseSelect').value;
+            if (!exercise) {
+                showNoData();
+                return;
+            }
+
+            document.getElementById('statsContainer').innerHTML = `
+                <div class="loading">
+                    <h3>Loading ${exercise} statistics...</h3>
+                    <p>Calculating your progress...</p>
+                </div>
+            `;
+
+            try {
+                const response = await fetch(`/api/statistics?exercise=${encodeURIComponent(exercise)}`);
+                const data = await response.json();
+
+                if (data.data && data.data.length > 0) {
+                    showStats(exercise, data);
+                } else {
+                    showNoDataForExercise(exercise);
+                }
+            } catch (error) {
+                console.error('Error loading exercise stats:', error);
+                showNoData();
+            }
+        }
+
+        function showStats(exercise, data) {
+            const container = document.getElementById('statsContainer');
+
+            // Calculate summary stats
+            const oneRMs = data.data.map(d => d.estimated_1rm);
+            const volumes = data.data.map(d => d.total_volume);
+            const currentMax = Math.max(...oneRMs);
+            const currentMaxVolume = Math.max(...volumes);
+            const totalWorkouts = data.data.length;
+            const improvement = oneRMs.length > 1 ?
+                ((oneRMs[oneRMs.length - 1] - oneRMs[0]) / oneRMs[0] * 100).toFixed(1) : 0;
+            const volumeImprovement = volumes.length > 1 ?
+                ((volumes[volumes.length - 1] - volumes[0]) / volumes[0] * 100).toFixed(1) : 0;
+
+            container.innerHTML = `
+                <div class="stats-summary">
+                    <h3 style="text-align: center; margin-bottom: 16px; color: #2c3e50;">${exercise} Progress</h3>
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <div class="stat-value">${currentMax.toFixed(1)} kg</div>
+                            <div class="stat-label">Current Max 1RM</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">${currentMaxVolume.toFixed(0)} kg</div>
+                            <div class="stat-label">Max Volume</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">${totalWorkouts}</div>
+                            <div class="stat-label">Total Workouts</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">${improvement}%</div>
+                            <div class="stat-label">1RM Improvement</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">${volumeImprovement}%</div>
+                            <div class="stat-label">Volume Improvement</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">Estimated 1RM Progress Over Time</div>
+                    <div class="chart-canvas">
+                        <canvas id="progressChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">Total Volume Progress Over Time</div>
+                    <div class="chart-canvas">
+                        <canvas id="volumeChart"></canvas>
+                    </div>
+                </div>
+            `;
+
+            // Destroy existing charts if they exist
+            if (progressChart) {
+                progressChart.destroy();
+            }
+            if (volumeChart) {
+                volumeChart.destroy();
+            }
+
+            // Create 1RM Progress Chart
+            const progressCtx = document.getElementById('progressChart').getContext('2d');
+            progressChart = new Chart(progressCtx, {
+                type: 'line',
+                data: {
+                    labels: data.data.map(d => new Date(d.date).toLocaleDateString()),
+                    datasets: [{
+                        label: 'Estimated 1RM (kg)',
+                        data: data.data.map(d => d.estimated_1rm),
+                        borderColor: '#3498db',
+                        backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.2,
+                        pointBackgroundColor: '#3498db',
+                        pointBorderColor: '#2980b9',
+                        pointBorderWidth: 2,
+                        pointRadius: 6,
+                        pointHoverRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    layout: {
+                        padding: {
+                            bottom: 20
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            grid: {
+                                color: 'rgba(0,0,0,0.1)'
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    return value.toFixed(1) + ' kg';
+                                }
+                            }
+                        },
+                        x: {
+                            grid: {
+                                color: 'rgba(0,0,0,0.1)'
+                            },
+                            ticks: {
+                                padding: 10
+                            }
+                        }
+                    },
+                    elements: {
+                        point: {
+                            hoverBackgroundColor: '#2980b9'
+                        }
+                    }
+                }
+            });
+
+            // Create Volume Chart
+            const volumeCtx = document.getElementById('volumeChart').getContext('2d');
+            volumeChart = new Chart(volumeCtx, {
+                type: 'line',
+                data: {
+                    labels: data.data.map(d => new Date(d.date).toLocaleDateString()),
+                    datasets: [{
+                        label: 'Total Volume (kg)',
+                        data: data.data.map(d => d.total_volume),
+                        borderColor: '#e67e22',
+                        backgroundColor: 'rgba(230, 126, 34, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.2,
+                        pointBackgroundColor: '#e67e22',
+                        pointBorderColor: '#d35400',
+                        pointBorderWidth: 2,
+                        pointRadius: 6,
+                        pointHoverRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    layout: {
+                        padding: {
+                            bottom: 20
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                color: 'rgba(0,0,0,0.1)'
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    return value.toFixed(0) + ' kg';
+                                }
+                            }
+                        },
+                        x: {
+                            grid: {
+                                color: 'rgba(0,0,0,0.1)'
+                            },
+                            ticks: {
+                                padding: 10
+                            }
+                        }
+                    },
+                    elements: {
+                        point: {
+                            hoverBackgroundColor: '#d35400'
+                        }
+                    }
+                }
+            });
+        }
+
+        function showNoDataForExercise(exercise) {
+            document.getElementById('statsContainer').innerHTML = `
+                <div class="no-data">
+                    <h2>No data for ${exercise}</h2>
+                    <p>Start logging workouts to see your progress!</p>
+                </div>
+            `;
+        }
+
+        function showNoData() {
+            document.getElementById('statsContainer').innerHTML = `
+                <div class="no-data">
+                    <h2>No workout data found</h2>
+                    <p>Start logging workouts to see your progress statistics!</p>
+                </div>
+            `;
+        }
+
+        // Load exercises when page loads
+        window.addEventListener('load', loadExercises);
+    </script>
+</body>
+</html>

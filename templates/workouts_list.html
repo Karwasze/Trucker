@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Past Workouts</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            padding: 16px;
+            background-color: #f5f5f5;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 24px;
+            text-align: center;
+            color: #2c3e50;
+        }
+
+        .workout {
+            margin: 16px 0;
+            padding: 16px;
+            border: 2px solid #333;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .workout-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 16px;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .workout h2 {
+            font-size: 1.2rem;
+            color: #2c3e50;
+            margin: 0;
+        }
+
+        .delete-btn {
+            background-color: #e74c3c;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+            width: 100%;
+        }
+
+        .delete-btn:hover {
+            background-color: #c0392b;
+        }
+
+        .exercise {
+            margin: 12px 0;
+            padding: 12px;
+            border: 1px solid #ddd;
+            background: #f8f9fa;
+            border-radius: 6px;
+        }
+
+        .exercise h3 {
+            font-size: 1.1rem;
+            margin-bottom: 12px;
+            color: #2c3e50;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            font-size: 14px;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f2f2f2;
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .no-workouts {
+            text-align: center;
+            color: #666;
+            margin: 60px 0;
+            padding: 40px 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .no-workouts h2 {
+            font-size: 1.3rem;
+            margin-bottom: 16px;
+            color: #7f8c8d;
+        }
+
+        .no-workouts p {
+            font-size: 16px;
+        }
+
+        .no-workouts a {
+            color: #3498db;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .no-workouts a:hover {
+            text-decoration: underline;
+        }
+
+        .nav-links {
+            text-align: center;
+            margin-top: 24px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+        }
+
+        .nav-links a {
+            color: #3498db;
+            text-decoration: none;
+            margin: 0 8px;
+            font-weight: 500;
+            display: inline-block;
+            margin-bottom: 8px;
+        }
+
+        .nav-links a:hover {
+            text-decoration: underline;
+        }
+
+        /* Tablet and desktop styles */
+        @media (min-width: 768px) {
+            body {
+                max-width: 900px;
+                margin: 0 auto;
+                padding: 32px;
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+
+            .workout-header {
+                flex-direction: row;
+                align-items: center;
+                gap: 0;
+            }
+
+            .delete-btn {
+                width: auto;
+                min-width: 140px;
+            }
+
+            table {
+                font-size: 16px;
+            }
+
+            th {
+                font-size: 15px;
+            }
+
+            th, td {
+                padding: 12px;
+            }
+
+            .nav-links a {
+                margin-bottom: 0;
+            }
+        }
+
+        @media (min-width: 1024px) {
+            body {
+                max-width: 1100px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Past Workouts</h1>
+
+    {{if .Workouts}}
+        {{range .Workouts}}
+        <div class="workout">
+            <div class="workout-header">
+                <h2>Workout - {{.Date}}</h2>
+                <button onclick="deleteWorkout({{.ID}})" class="delete-btn">Delete Workout</button>
+            </div>
+            {{range .Exercises}}
+            <div class="exercise">
+                <h3>{{.Name}}</h3>
+                {{if .Sets}}
+                <table>
+                    <tr>
+                        <th>Reps</th>
+                        <th>Weight (kg)</th>
+                    </tr>
+                    {{range .Sets}}
+                    <tr>
+                        <td>{{.Reps}}</td>
+                        <td>{{.Weight}}</td>
+                    </tr>
+                    {{end}}
+                </table>
+                {{else}}
+                <p>No sets recorded</p>
+                {{end}}
+            </div>
+            {{end}}
+        </div>
+        {{end}}
+    {{else}}
+        <div class="no-workouts">
+            <h2>No workouts logged yet</h2>
+            <p><a href="/workout/new">Log your first workout</a></p>
+        </div>
+    {{end}}
+
+    <script>
+    function deleteWorkout(workoutId) {
+        if (confirm('Are you sure you want to delete this workout? This action cannot be undone.')) {
+            fetch('/workout/delete', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'id=' + workoutId
+            })
+            .then(response => {
+                if (response.ok) {
+                    location.reload(); // Refresh the page to show updated list
+                } else {
+                    alert('Failed to delete workout. Please try again.');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Failed to delete workout. Please try again.');
+            });
+        }
+    }
+    </script>
+
+    <div class="nav-links">
+        <a href="/">Back to Home</a> |
+        <a href="/workout/new">Log New Workout</a>
+    </div>
+</body>
+</html>

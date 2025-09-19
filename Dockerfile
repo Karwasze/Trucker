@@ -35,8 +35,14 @@ COPY --from=builder /app/main .
 COPY --from=builder /app/templates ./templates
 COPY --from=builder /app/static ./static
 
+# Create directory for database
+RUN mkdir -p /database
+
+# Set environment variable to indicate Docker environment
+ENV DOCKER_ENV=true
+
 # Expose port
-EXPOSE 8081
+EXPOSE 8080
 
 # Run the application
 CMD ["./main"]

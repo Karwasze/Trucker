@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
@@ -39,9 +40,16 @@ type Set struct {
 
 var db *sql.DB
 
+func getDatabasePath() string {
+	if os.Getenv("DOCKER_ENV") == "true" {
+		return "/database/workouts.db"
+	}
+	return "./workouts.db"
+}
+
 func initDB() {
 	var err error
-	db, err = sql.Open("sqlite3", "./workouts.db")
+	db, err = sql.Open("sqlite3", getDatabasePath())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -172,8 +180,8 @@ func main() {
 	http.HandleFunc("/api/latest-exercise", getLatestExercise) // API endpoint for latest exercise data
 	http.HandleFunc("/api/statistics", getStatisticsData)      // API endpoint for statistics data
 
-	log.Println("Starting server on :8081")
-	err := http.ListenAndServe(":8081", nil)
+	log.Println("Starting server on :8080")
+	err := http.ListenAndServe(":8080", nil)
 	log.Fatal(err)
 }
 

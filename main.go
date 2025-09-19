@@ -180,8 +180,8 @@ func main() {
 	http.HandleFunc("/api/latest-exercise", getLatestExercise) // API endpoint for latest exercise data
 	http.HandleFunc("/api/statistics", getStatisticsData)      // API endpoint for statistics data
 
-	log.Println("Starting server on :8080")
-	err := http.ListenAndServe(":8080", nil)
+	log.Println("Starting server on :8081")
+	err := http.ListenAndServe(":8081", nil)
 	log.Fatal(err)
 }
 

@@ -42,7 +42,7 @@ RUN mkdir -p /database
 ENV DOCKER_ENV=true
 
 # Expose port
-EXPOSE 8080
+EXPOSE 8081
 
 # Run the application
 CMD ["./main"]

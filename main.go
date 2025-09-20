@@ -28,9 +28,8 @@ type Exercise struct {
 }
 
 type ExerciseDB struct {
-	ID       int    `json:"id"`
-	Name     string `json:"name"`
-	Category string `json:"category"`
+	ID   int    `json:"id"`
+	Name string `json:"name"`
 }
 
 type Set struct {
@@ -65,8 +64,7 @@ func initDB() {
 
 	CREATE TABLE IF NOT EXISTS exercise_library (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT NOT NULL UNIQUE,
-		category TEXT NOT NULL
+		name TEXT NOT NULL UNIQUE
 	);
 
 	CREATE TABLE IF NOT EXISTS exercises (
@@ -109,53 +107,35 @@ func initDB() {
 
 func populateDefaultExercises() {
 	exercises := []ExerciseDB{
-		// T1 - Main Compounds
-		{Name: "Squat", Category: "T1"},
-		{Name: "Bench Press", Category: "T1"},
-		{Name: "Deadlift", Category: "T1"},
-		{Name: "Overhead Press", Category: "T1"},
-
-		// T2 - Secondary Movements
-		{Name: "Front Squat", Category: "T2"},
-		{Name: "Incline Bench Press", Category: "T2"},
-		{Name: "Sumo Deadlift", Category: "T2"},
-		{Name: "Close Grip Bench Press", Category: "T2"},
-		{Name: "Romanian Deadlift", Category: "T2"},
-		{Name: "Paused Bench Press", Category: "T2"},
-
-		// T3 - Accessories
-		{Name: "Lat Pulldown", Category: "T3"},
-		{Name: "Dumbbell Row", Category: "T3"},
-		{Name: "Leg Curl", Category: "T3"},
-		{Name: "Leg Extension", Category: "T3"},
-		{Name: "Tricep Pushdown", Category: "T3"},
-		{Name: "Bicep Curl", Category: "T3"},
-		{Name: "Calf Raise", Category: "T3"},
-		{Name: "Face Pull", Category: "T3"},
-		{Name: "Lateral Raise", Category: "T3"},
-		{Name: "Chest Fly", Category: "T3"},
+		{Name: "Squat"},
+		{Name: "Bench Press"},
+		{Name: "Deadlift"},
+		{Name: "Overhead Press"},
+		{Name: "Front Squat"},
+		{Name: "Sumo Deadlift"},
+		{Name: "Lat Pulldown"},
+		{Name: "Bent Over Row"},
+		{Name: "Leg Curl"},
+		{Name: "Leg Extension"},
+		{Name: "Leg Press"},
+		{Name: "Tricep Pushdown"},
+		{Name: "Bicep Curl"},
+		{Name: "Calf Raise"},
+		{Name: "Lateral Raise"},
+		{Name: "Chest Fly"},
 	}
 
 	for _, exercise := range exercises {
-		db.Exec("INSERT OR IGNORE INTO exercise_library (name, category) VALUES (?, ?)",
-			exercise.Name, exercise.Category)
+		db.Exec("INSERT OR IGNORE INTO exercise_library (name) VALUES (?)", exercise.Name)
 	}
 }
 
-func getExercisesByCategory(category string) ([]ExerciseDB, error) {
+func getAllExercises() ([]ExerciseDB, error) {
 	var exercises []ExerciseDB
 
-	query := "SELECT id, name, category FROM exercise_library"
-	var args []interface{}
+	query := "SELECT id, name FROM exercise_library ORDER BY name"
 
-	if category != "" {
-		query += " WHERE category = ?"
-		args = append(args, category)
-	}
-
-	query += " ORDER BY name"
-
-	rows, err := db.Query(query, args...)
+	rows, err := db.Query(query)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +143,7 @@ func getExercisesByCategory(category string) ([]ExerciseDB, error) {
 
 	for rows.Next() {
 		var exercise ExerciseDB
-		err := rows.Scan(&exercise.ID, &exercise.Name, &exercise.Category)
+		err := rows.Scan(&exercise.ID, &exercise.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -212,7 +192,7 @@ func home(w http.ResponseWriter, r *http.Request) {
 }
 
 func newWorkoutForm(w http.ResponseWriter, r *http.Request) {
-	exercises, err := getExercisesByCategory("")
+	exercises, err := getAllExercises()
 	if err != nil {
 		log.Printf("Error loading exercises: %v", err)
 		exercises = []ExerciseDB{}
@@ -550,18 +530,18 @@ func getNextGZCLPWorkoutDay() (int, error) {
 	return currentDay, nil
 }
 
-func getGZCLPExercises(workoutDay int) (string, string, string) {
+func getGZCLPExercises(workoutDay int) (string, string, string, string, string) {
 	switch workoutDay {
 	case 1: // Day A1
-		return "Squat", "Overhead Press", "Lat Pulldown"
+		return "Squat", "Bench Press", "Lat Pulldown", "Leg Press", "Chest Fly"
 	case 2: // Day B1
-		return "Bench Press", "Deadlift", "Dumbbell Row"
+		return "Overhead Press", "Deadlift", "Bent Over Row", "Lateral Raise", "Leg Curl"
 	case 3: // Day A2
-		return "Squat", "Overhead Press", "Lat Pulldown"
+		return "Bench Press", "Squat", "Lat Pulldown", "Chest Fly", "Leg Press"
 	case 4: // Day B2
-		return "Bench Press", "Deadlift", "Dumbbell Row"
+		return "Deadlift", "Overhead Press", "Bent Over Row", "Leg Curl", "Lateral Raise"
 	default:
-		return "Squat", "Overhead Press", "Lat Pulldown"
+		return "Squat", "Bench Press", "Lat Pulldown", "Leg Press", "Chest Fly"
 	}
 }
 
@@ -572,32 +552,30 @@ func gzclpForm(w http.ResponseWriter, r *http.Request) {
 		workoutDay = 1
 	}
 
-	t1, t2, t3 := getGZCLPExercises(workoutDay)
+	t1, t2, t3, additional1, additional2 := getGZCLPExercises(workoutDay)
 
-	// Get exercises by category
-	t1Exercises, _ := getExercisesByCategory("T1")
-	t2Exercises, _ := getExercisesByCategory("T2")
-	t3Exercises, _ := getExercisesByCategory("T3")
+	// Get all exercises
+	exercises, _ := getAllExercises()
 
 	tmpl := template.Must(template.ParseFiles("templates/gzclp_form.html"))
 	data := struct {
-		Today       string
-		WorkoutDay  int
-		T1Exercise  string
-		T2Exercise  string
-		T3Exercise  string
-		T1Exercises []ExerciseDB
-		T2Exercises []ExerciseDB
-		T3Exercises []ExerciseDB
+		Today               string
+		WorkoutDay          int
+		T1Exercise          string
+		T2Exercise          string
+		T3Exercise          string
+		Additional1Exercise string
+		Additional2Exercise string
+		Exercises           []ExerciseDB
 	}{
-		Today:       time.Now().Format("2006-01-02"),
-		WorkoutDay:  workoutDay,
-		T1Exercise:  t1,
-		T2Exercise:  t2,
-		T3Exercise:  t3,
-		T1Exercises: t1Exercises,
-		T2Exercises: t2Exercises,
-		T3Exercises: t3Exercises,
+		Today:               time.Now().Format("2006-01-02"),
+		WorkoutDay:          workoutDay,
+		T1Exercise:          t1,
+		T2Exercise:          t2,
+		T3Exercise:          t3,
+		Additional1Exercise: additional1,
+		Additional2Exercise: additional2,
+		Exercises:           exercises,
 	}
 	tmpl.Execute(w, data)
 }

@@ -320,7 +320,7 @@
 
         /* Adjust body to account for fixed navbar */
         body {
-            padding-top: 60px;
+            padding-top: 80px;
         }
     </style>
 </head>
@@ -375,7 +375,7 @@
                 <label>Exercise:</label><br>
                 <select name="exercise_0" onchange="loadLatestExercise(this.value, 0)" required>
                     <option value="">Select T1 Exercise</option>
-                    {{range .T1Exercises}}
+                    {{range .Exercises}}
                     <option value="{{.Name}}" {{if eq $.T1Exercise .Name}}selected{{end}}>{{.Name}}</option>
                     {{end}}
                 </select><br><br>
@@ -404,7 +404,7 @@
                 <label>Exercise:</label><br>
                 <select name="exercise_1" onchange="loadLatestExercise(this.value, 1)" required>
                     <option value="">Select T2 Exercise</option>
-                    {{range .T2Exercises}}
+                    {{range .Exercises}}
                     <option value="{{.Name}}" {{if eq $.T2Exercise .Name}}selected{{end}}>{{.Name}}</option>
                     {{end}}
                 </select><br><br>
@@ -433,7 +433,7 @@
                 <label>Exercise:</label><br>
                 <select name="exercise_2" onchange="loadLatestExercise(this.value, 2)" required>
                     <option value="">Select T3 Exercise</option>
-                    {{range .T3Exercises}}
+                    {{range .Exercises}}
                     <option value="{{.Name}}" {{if eq $.T3Exercise .Name}}selected{{end}}>{{.Name}}</option>
                     {{end}}
                 </select><br><br>
@@ -454,6 +454,64 @@
                 </div>
                 <button type="button" onclick="addSet(2)">Add Another Set</button>
             </div>
+
+            <!-- Optional Exercise 1 -->
+            <div class="exercise">
+                <h3>Optional Exercise 1</h3>
+                <label>Exercise:</label><br>
+                <select name="exercise_3" onchange="loadLatestExercise(this.value, 3)" required>
+                    <option value="">Select Exercise</option>
+                    {{range .Exercises}}
+                    <option value="{{.Name}}" {{if eq $.Additional1Exercise .Name}}selected{{end}}>{{.Name}}</option>
+                    {{end}}
+                </select><br><br>
+
+                <div id="latest_data_3" class="latest-data" style="display: none; background: #e8f4fd; padding: 10px; margin: 10px 0; border-radius: 5px;">
+                    <h5>Latest recorded sets for this exercise:</h5>
+                    <div id="latest_sets_3"></div>
+                </div>
+
+                <div class="sets" id="sets_3">
+                    <h4>Sets</h4>
+                    <div class="set">
+                        <label>Set 1:</label>
+                        <label>Reps: <input type="number" name="reps_3_0" min="1" required></label>
+                        <label>Weight: <input type="number" name="weight_3_0" step="0.5" min="0" required></label>
+                        <button type="button" onclick="removeSet(this, 3)" style="background-color: #dc3545; color: white; margin-left: 10px; font-size: 12px;">Remove Set</button>
+                    </div>
+                </div>
+                <button type="button" onclick="addSet(3)">Add Another Set</button>
+                <button type="button" onclick="removeExercise(this)" style="background-color: #dc3545; color: white; margin-left: 10px;">Remove Exercise</button>
+            </div>
+
+            <!-- Optional Exercise 2 -->
+            <div class="exercise">
+                <h3>Optional Exercise 2</h3>
+                <label>Exercise:</label><br>
+                <select name="exercise_4" onchange="loadLatestExercise(this.value, 4)" required>
+                    <option value="">Select Exercise</option>
+                    {{range .Exercises}}
+                    <option value="{{.Name}}" {{if eq $.Additional2Exercise .Name}}selected{{end}}>{{.Name}}</option>
+                    {{end}}
+                </select><br><br>
+
+                <div id="latest_data_4" class="latest-data" style="display: none; background: #e8f4fd; padding: 10px; margin: 10px 0; border-radius: 5px;">
+                    <h5>Latest recorded sets for this exercise:</h5>
+                    <div id="latest_sets_4"></div>
+                </div>
+
+                <div class="sets" id="sets_4">
+                    <h4>Sets</h4>
+                    <div class="set">
+                        <label>Set 1:</label>
+                        <label>Reps: <input type="number" name="reps_4_0" min="1" required></label>
+                        <label>Weight: <input type="number" name="weight_4_0" step="0.5" min="0" required></label>
+                        <button type="button" onclick="removeSet(this, 4)" style="background-color: #dc3545; color: white; margin-left: 10px; font-size: 12px;">Remove Set</button>
+                    </div>
+                </div>
+                <button type="button" onclick="addSet(4)">Add Another Set</button>
+                <button type="button" onclick="removeExercise(this)" style="background-color: #dc3545; color: white; margin-left: 10px;">Remove Exercise</button>
+            </div>
         </div>
 
         <button type="button" onclick="addExercise()">Add Another Exercise</button><br><br>
@@ -461,8 +519,8 @@
     </form>
 
     <script>
-    let exerciseCount = 3;
-    let setCounts = [1, 1, 1]; // Track set count for each exercise
+    let exerciseCount = 5;
+    let setCounts = [1, 1, 1, 1, 1]; // Track set count for each exercise
 
     function addExercise() {
         const exercisesDiv = document.getElementById('exercises');
@@ -472,18 +530,12 @@
         setCounts.push(1); // Initialize set count for new exercise
 
         let exerciseOptions = '<option value="">Select Exercise</option>';
-        {{range .T1Exercises}}
-        exerciseOptions += '<option value="{{.Name}}">{{.Name}}</option>';
-        {{end}}
-        {{range .T2Exercises}}
-        exerciseOptions += '<option value="{{.Name}}">{{.Name}}</option>';
-        {{end}}
-        {{range .T3Exercises}}
+        {{range .Exercises}}
         exerciseOptions += '<option value="{{.Name}}">{{.Name}}</option>';
         {{end}}
 
         newExercise.innerHTML =
-            '<h3>Additional Exercise ' + (exerciseCount - 2) + '</h3>' +
+            '<h3>Additional Exercise ' + (exerciseCount - 4) + '</h3>' +
             '<label>Exercise:</label><br>' +
             '<select name="exercise_' + exerciseCount + '" onchange="loadLatestExercise(this.value, ' + exerciseCount + ')" required>' +
                 exerciseOptions +
@@ -502,7 +554,7 @@
                 '</div>' +
             '</div>' +
             '<button type="button" onclick="addSet(' + exerciseCount + ')">Add Another Set</button>' +
-            '<button type="button" onclick="removeExercise(' + exerciseCount + ')" style="background-color: #dc3545; color: white; margin-left: 10px;">Remove Exercise</button>';
+            '<button type="button" onclick="removeExercise(this)" style="background-color: #dc3545; color: white; margin-left: 10px;">Remove Exercise</button>';
 
         exercisesDiv.appendChild(newExercise);
         exerciseCount++;
@@ -524,9 +576,18 @@
         setCounts[exerciseIndex]++;
     }
 
-    function removeExercise(exerciseIndex) {
+    function removeExercise(button) {
+        const exercise = button.closest('.exercise');
         const exercisesDiv = document.getElementById('exercises');
         const exercises = exercisesDiv.querySelectorAll('.exercise');
+
+        // Find the index of this exercise in the DOM
+        let exerciseIndex = -1;
+        exercises.forEach((ex, index) => {
+            if (ex === exercise) {
+                exerciseIndex = index;
+            }
+        });
 
         // Don't allow removing core T1, T2, T3 exercises
         if (exerciseIndex < 3) {
@@ -534,12 +595,8 @@
             return;
         }
 
-        // Find and remove the exercise with the matching index
-        exercises.forEach((exercise, index) => {
-            if (index === exerciseIndex) {
-                exercise.remove();
-            }
-        });
+        // Remove the exercise
+        exercise.remove();
     }
 
     function removeSet(button, exerciseIndex) {

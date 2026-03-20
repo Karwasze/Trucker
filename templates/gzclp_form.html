@@ -3,603 +3,384 @@
 <head>
     <title>GZCLP Workout</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            padding: 16px;
-            background-color: #f5f5f5;
-        }
-
-        h1 {
-            font-size: 1.5rem;
-            margin-bottom: 20px;
-            text-align: center;
-            color: #2c3e50;
-        }
-
-        .gzclp-info {
-            background: #fff3cd;
-            padding: 16px;
-            margin: 16px 0 24px 0;
-            border: 1px solid #ffeaa7;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        .gzclp-info h3 {
-            font-size: 1.1rem;
-            margin-bottom: 12px;
-            color: #2c3e50;
-        }
-
-        .gzclp-info p {
-            margin-bottom: 8px;
-            font-size: 14px;
-        }
-
-        .exercise {
-            margin: 16px 0;
-            padding: 16px;
-            border: 2px solid #333;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        .tier-1 { background: #d4edda; border-color: #27ae60; }
-        .tier-2 { background: #d1ecf1; border-color: #3498db; }
-        .tier-3 { background: #f8d7da; border-color: #e74c3c; }
-
-        .exercise h3 {
-            font-size: 1.2rem;
-            margin-bottom: 8px;
-            color: #2c3e50;
-        }
-
-        .exercise-type {
-            font-weight: 600;
-            color: #495057;
-            font-size: 14px;
-            margin-bottom: 12px;
-            padding: 4px 8px;
-            background: rgba(255,255,255,0.8);
-            border-radius: 4px;
-            display: inline-block;
-        }
-
-        .set {
-            margin: 12px 0;
-            padding: 12px;
-            border: 1px solid #ddd;
-            background: white;
-            border-radius: 6px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        label {
-            font-weight: 500;
-            margin-bottom: 4px;
-            display: block;
-        }
-
-        input, select {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            font-size: 16px;
-            background: white;
-        }
-
-        input:focus, select:focus {
-            outline: none;
-            border-color: #3498db;
-            box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
-        }
-
-        button {
-            width: 100%;
-            padding: 12px;
-            margin: 8px 0;
-            border: none;
-            border-radius: 6px;
-            font-size: 16px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-
-        button[type="submit"] {
-            background-color: #27ae60;
-            color: white;
-            font-size: 18px;
-            padding: 16px;
-            margin-top: 20px;
-        }
-
-        button[type="submit"]:hover {
-            background-color: #219a52;
-        }
-
-        button[type="button"] {
-            background-color: #3498db;
-            color: white;
-        }
-
-        button[type="button"]:hover {
-            background-color: #2980b9;
-        }
-
-        .remove-btn {
-            background-color: #e74c3c !important;
-            color: white !important;
-            font-size: 14px !important;
-            padding: 8px 12px !important;
-            margin: 4px 0 !important;
-        }
-
-        .remove-btn:hover {
-            background-color: #c0392b !important;
-        }
-
-        .latest-data {
-            background: #e8f4fd !important;
-            padding: 12px;
-            margin: 12px 0;
-            border-radius: 6px;
-            border: 1px solid #bde4ff;
-        }
-
-        .latest-data h5 {
-            margin-bottom: 8px;
-            color: #2c3e50;
-            font-size: 14px;
-        }
-
-        .latest-data table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 14px;
-        }
-
-        .latest-data th,
-        .latest-data td {
-            border: 1px solid #ddd;
-            padding: 6px;
-            text-align: left;
-        }
-
-        .latest-data th {
-            background-color: #f2f2f2;
-            font-weight: 600;
-        }
-
-        .nav-links {
-            text-align: center;
-            margin-top: 24px;
-            padding-top: 20px;
-            border-top: 1px solid #ddd;
-        }
-
-        .nav-links a {
-            color: #3498db;
-            text-decoration: none;
-            margin: 0 8px;
-            font-weight: 500;
-            display: inline-block;
-            margin-bottom: 8px;
-        }
-
-        .nav-links a:hover {
-            text-decoration: underline;
-        }
-
-        /* Tablet and desktop styles */
-        @media (min-width: 768px) {
-            body {
-                max-width: 900px;
-                margin: 0 auto;
-                padding: 32px;
-            }
-
-            h1 {
-                font-size: 2rem;
-            }
-
-            .gzclp-info {
-                padding: 24px;
-            }
-
-            .gzclp-info h3 {
-                font-size: 1.3rem;
-            }
-
-            .gzclp-info p {
-                font-size: 16px;
-            }
-
-            .set {
-                flex-direction: row;
-                align-items: center;
-                gap: 12px;
-            }
-
-            .set label {
-                margin-bottom: 0;
-                white-space: nowrap;
-            }
-
-            .set input {
-                max-width: 120px;
-            }
-
-            button {
-                width: auto;
-                display: inline-block;
-                margin-right: 8px;
-            }
-
-            .remove-btn {
-                margin-left: 12px !important;
-            }
-
-            .nav-links a {
-                margin-bottom: 0;
-            }
-        }
-
-        @media (min-width: 1024px) {
-            body {
-                max-width: 1100px;
-            }
-        }
-
-        /* Navbar styles */
-        .navbar {
-            background: #2c3e50;
-            padding: 12px 16px;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 1000;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        .navbar-content {
-            max-width: 1200px;
-            margin: 0 auto;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .navbar-brand {
-            color: white;
-            font-size: 1.2rem;
-            font-weight: 700;
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .navbar-nav {
-            display: flex;
-            gap: 20px;
-            align-items: center;
-        }
-
-        .navbar-nav a {
-            color: #bdc3c7;
-            text-decoration: none;
-            font-weight: 500;
-            padding: 8px 12px;
-            border-radius: 4px;
-            transition: all 0.2s ease;
-        }
-
-        .navbar-nav a:hover {
-            color: white;
-            background: #34495e;
-        }
-
-        .navbar-nav a.active {
-            color: #3498db;
-            background: #34495e;
-        }
-
-        /* Adjust body to account for fixed navbar */
-        body {
-            padding-top: 80px;
+        @media (max-width: 767px) {
+            .nav-open { display: flex !important; flex-direction: column; position: absolute; top: 100%; left: 0; right: 0; background: #1e293b; padding: 0.5rem 0; box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
         }
     </style>
 </head>
-<body>
-    <nav class="navbar">
-        <div class="navbar-content">
-            <a href="/" class="navbar-brand">
-                💪 Trucker
+<body class="bg-gray-100 font-sans leading-relaxed text-gray-700 p-4 pt-20 md:max-w-4xl lg:max-w-6xl md:mx-auto md:px-8 md:pb-8">
+    <nav class="fixed top-0 left-0 right-0 z-50 bg-slate-800 px-4 py-3 shadow-md">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <a href="/" class="text-white text-lg font-bold no-underline flex items-center gap-2">
+                Trucker
             </a>
-            <div class="navbar-nav">
-                <a href="/workout/new">Log Workout</a>
-                <a href="/gzclp" class="active">GZCLP</a>
-                <a href="/workouts">Workouts</a>
-                <a href="/statistics">Statistics</a>
+            <button class="md:hidden bg-transparent border-none text-white text-2xl cursor-pointer px-2 py-1 leading-none" onclick="document.getElementById('nav-links').classList.toggle('nav-open')">&#9776;</button>
+            <div id="nav-links" class="hidden md:flex gap-5 items-center">
+                <a href="/workout/new" class="text-gray-400 no-underline font-medium px-3 py-2 rounded transition-all duration-200 hover:text-white hover:bg-slate-700">Log Workout</a>
+                <a href="/gzclp" class="text-blue-400 bg-slate-700 no-underline font-medium px-3 py-2 rounded transition-all duration-200 hover:text-white hover:bg-slate-700">GZCLP</a>
+                <a href="/workouts" class="text-gray-400 no-underline font-medium px-3 py-2 rounded transition-all duration-200 hover:text-white hover:bg-slate-700">Workouts</a>
+                <a href="/statistics" class="text-gray-400 no-underline font-medium px-3 py-2 rounded transition-all duration-200 hover:text-white hover:bg-slate-700">Statistics</a>
             </div>
         </div>
     </nav>
-    <h1>GZCLP Workout - Day {{.WorkoutDay}}</h1>
 
-    <div class="gzclp-info">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
-            <h3 style="margin: 0;">GZCLP Program Structure - Workout {{.WorkoutDay}} of 4</h3>
-            <button type="button" onclick="skipDay()" style="background-color: #f39c12; color: white; padding: 12px 16px; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; white-space: nowrap;">
+    <h1 class="text-2xl md:text-3xl mb-5 text-center text-slate-800">GZCLP Workout - Day {{.WorkoutDay}}</h1>
+
+    <div class="bg-amber-50 p-4 md:p-6 my-4 mb-6 border border-amber-200 rounded-lg shadow">
+        <div class="flex justify-between items-center mb-4 flex-wrap gap-3">
+            <h3 class="text-base md:text-lg text-slate-800 m-0">GZCLP Program Structure - Workout {{.WorkoutDay}} of 4</h3>
+            <button type="button" onclick="skipDay()" class="bg-amber-500 text-white py-3 px-4 border-none rounded-md text-sm font-medium cursor-pointer whitespace-nowrap hover:bg-amber-600">
                 Skip to Day {{if eq .WorkoutDay 1}}2{{else if eq .WorkoutDay 2}}3{{else if eq .WorkoutDay 3}}4{{else}}1{{end}}
             </button>
         </div>
-        <p><strong>T1 (Tier 1):</strong> Main compound movements - 5x3+, 6x2+, 10x1+</p>
-        <p><strong>T2 (Tier 2):</strong> Secondary movements - 3x10</p>
-        <p><strong>T3 (Tier 3):</strong> Accessory work - 3x15+</p>
+        <p class="mb-2 text-sm md:text-base"><strong>T1 (Tier 1):</strong> Main compound movements - 5x3+, 6x2+, 10x1+</p>
+        <p class="mb-2 text-sm md:text-base"><strong>T2 (Tier 2):</strong> Secondary movements - 3x10</p>
+        <p class="mb-2 text-sm md:text-base"><strong>T3 (Tier 3):</strong> Accessory work - 3x15+</p>
         {{if eq .WorkoutDay 1}}
-        <p><strong>Today's Focus:</strong> Squat + Bench Press + Back Work</p>
+        <p class="mb-2 text-sm md:text-base"><strong>Today's Focus:</strong> Squat + Bench Press + Back Work</p>
         {{else if eq .WorkoutDay 2}}
-        <p><strong>Today's Focus:</strong> Overhead Press + Deadlift + Back Work</p>
+        <p class="mb-2 text-sm md:text-base"><strong>Today's Focus:</strong> Overhead Press + Deadlift + Back Work</p>
         {{else if eq .WorkoutDay 3}}
-        <p><strong>Today's Focus:</strong> Bench Press + Squat +  Back Work</p>
+        <p class="mb-2 text-sm md:text-base"><strong>Today's Focus:</strong> Bench Press + Squat + Back Work</p>
         {{else if eq .WorkoutDay 4}}
-        <p><strong>Today's Focus:</strong> Deadlift + Overhead Press + Back Work</p>
+        <p class="mb-2 text-sm md:text-base"><strong>Today's Focus:</strong> Deadlift + Overhead Press + Back Work</p>
         {{end}}
     </div>
 
     <form method="POST" action="/workout/create">
         <input type="hidden" name="workout_type" value="gzclp">
         <input type="hidden" name="workout_day" value="{{.WorkoutDay}}">
-        <label>Date:</label><br>
-        <input type="date" name="date" value="{{.Today}}" required><br><br>
+        <label class="font-medium mb-1 block">Date:</label>
+        <input type="date" name="date" value="{{.Today}}" required class="w-full p-3 border border-gray-300 rounded-md text-base bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 mb-4">
 
         <div id="exercises">
             <!-- T1 Exercise -->
-            <div class="exercise tier-1">
-                <h3>T1 - Main Compound Movement</h3>
-                <div class="exercise-type">Tier 1 (5x3+ / 6x2+ / 10x1+)</div><br>
-                <label>Exercise:</label><br>
-                <select name="exercise_0" onchange="loadLatestExercise(this.value, 0)" required>
+            <div class="exercise my-4 p-4 border-2 border-green-600 bg-green-50 rounded-lg shadow">
+                <h3 class="text-lg mb-2 text-slate-800">T1 - Main Compound Movement</h3>
+                <div class="font-semibold text-gray-600 text-sm mb-3 py-1 px-2 bg-white/80 rounded inline-block">Tier 1 (5x3+ / 6x2+ / 10x1+)</div>
+                <label class="font-medium mb-1 block">Exercise:</label>
+                <select name="exercise_0" onchange="loadLatestExercise(this.value, 0)" required class="w-full p-3 border border-gray-300 rounded-md text-base bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 mb-4">
                     <option value="">Select T1 Exercise</option>
                     {{range .Exercises}}
                     <option value="{{.Name}}" {{if eq $.T1Exercise .Name}}selected{{end}}>{{.Name}}</option>
                     {{end}}
-                </select><br><br>
+                </select>
 
-                <div id="latest_data_0" class="latest-data" style="display: none; background: #e8f4fd; padding: 10px; margin: 10px 0; border-radius: 5px;">
-                    <h5>Latest recorded sets for this exercise:</h5>
+                <div id="latest_data_0" class="hidden bg-blue-50 p-3 my-3 rounded-md border border-blue-200">
+                    <h5 class="mb-2 text-slate-800 text-sm">Latest recorded sets for this exercise:</h5>
                     <div id="latest_sets_0"></div>
                 </div>
 
-                <div class="sets" id="sets_0">
-                    <h4>Sets</h4>
-                    <div class="set">
-                        <label>Set 1:</label>
-                        <label>Reps: <input type="number" name="reps_0_0" min="1" value="3" required></label>
-                        <label>Weight: <input type="number" name="weight_0_0" step="0.5" min="0" required></label>
-                        <button type="button" onclick="removeSet(this, 0)" style="background-color: #dc3545; color: white; margin-left: 10px; font-size: 12px;">Remove Set</button>
+                <div class="mt-4" id="sets_0">
+                    {{range $i := (slice (printf "%5s" "") )}}{{end}}
+                    <div class="set mb-2 px-2.5 py-2 border border-gray-200 bg-white rounded-md flex items-center gap-2">
+                        <div class="font-semibold text-slate-800 text-sm min-w-[12px] shrink-0">Set 1</div>
+                        <div class="flex gap-2 items-center ml-auto shrink-0">
+                            <div class="flex items-center gap-1">
+                                <input type="number" name="weight_0_0" step="0.5" min="0" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded">
+                                <label class="text-xs text-gray-500 font-medium whitespace-nowrap">kg</label>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <input type="number" name="reps_0_0" min="1" value="3" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded">
+                                <label class="text-xs text-gray-500 font-medium whitespace-nowrap">reps</label>
+                            </div>
+                        </div>
+                        <button type="button" class="remove-btn bg-transparent text-gray-400 text-sm p-0 m-0 border-none w-5 h-5 min-w-[20px] flex items-center justify-center rounded-sm shrink-0 hover:bg-gray-50 hover:text-red-500 cursor-pointer" onclick="removeSet(this, 0)">&#10060;</button>
                     </div>
-                    <div class="set">
-                        <label>Set 2:</label>
-                        <label>Reps: <input type="number" name="reps_0_1" min="1" value="3" required></label>
-                        <label>Weight: <input type="number" name="weight_0_1" step="0.5" min="0" required></label>
-                        <button type="button" onclick="removeSet(this, 0)" style="background-color: #dc3545; color: white; margin-left: 10px; font-size: 12px;">Remove Set</button>
+                    <div class="set mb-2 px-2.5 py-2 border border-gray-200 bg-white rounded-md flex items-center gap-2">
+                        <div class="font-semibold text-slate-800 text-sm min-w-[12px] shrink-0">Set 2</div>
+                        <div class="flex gap-2 items-center ml-auto shrink-0">
+                            <div class="flex items-center gap-1">
+                                <input type="number" name="weight_0_1" step="0.5" min="0" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded">
+                                <label class="text-xs text-gray-500 font-medium whitespace-nowrap">kg</label>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <input type="number" name="reps_0_1" min="1" value="3" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded">
+                                <label class="text-xs text-gray-500 font-medium whitespace-nowrap">reps</label>
+                            </div>
+                        </div>
+                        <button type="button" class="remove-btn bg-transparent text-gray-400 text-sm p-0 m-0 border-none w-5 h-5 min-w-[20px] flex items-center justify-center rounded-sm shrink-0 hover:bg-gray-50 hover:text-red-500 cursor-pointer" onclick="removeSet(this, 0)">&#10060;</button>
                     </div>
-                    <div class="set">
-                        <label>Set 3:</label>
-                        <label>Reps: <input type="number" name="reps_0_2" min="1" value="3" required></label>
-                        <label>Weight: <input type="number" name="weight_0_2" step="0.5" min="0" required></label>
-                        <button type="button" onclick="removeSet(this, 0)" style="background-color: #dc3545; color: white; margin-left: 10px; font-size: 12px;">Remove Set</button>
+                    <div class="set mb-2 px-2.5 py-2 border border-gray-200 bg-white rounded-md flex items-center gap-2">
+                        <div class="font-semibold text-slate-800 text-sm min-w-[12px] shrink-0">Set 3</div>
+                        <div class="flex gap-2 items-center ml-auto shrink-0">
+                            <div class="flex items-center gap-1">
+                                <input type="number" name="weight_0_2" step="0.5" min="0" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded">
+                                <label class="text-xs text-gray-500 font-medium whitespace-nowrap">kg</label>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <input type="number" name="reps_0_2" min="1" value="3" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded">
+                                <label class="text-xs text-gray-500 font-medium whitespace-nowrap">reps</label>
+                            </div>
+                        </div>
+                        <button type="button" class="remove-btn bg-transparent text-gray-400 text-sm p-0 m-0 border-none w-5 h-5 min-w-[20px] flex items-center justify-center rounded-sm shrink-0 hover:bg-gray-50 hover:text-red-500 cursor-pointer" onclick="removeSet(this, 0)">&#10060;</button>
                     </div>
-                    <div class="set">
-                        <label>Set 4:</label>
-                        <label>Reps: <input type="number" name="reps_0_3" min="1" value="3" required></label>
-                        <label>Weight: <input type="number" name="weight_0_3" step="0.5" min="0" required></label>
-                        <button type="button" onclick="removeSet(this, 0)" style="background-color: #dc3545; color: white; margin-left: 10px; font-size: 12px;">Remove Set</button>
+                    <div class="set mb-2 px-2.5 py-2 border border-gray-200 bg-white rounded-md flex items-center gap-2">
+                        <div class="font-semibold text-slate-800 text-sm min-w-[12px] shrink-0">Set 4</div>
+                        <div class="flex gap-2 items-center ml-auto shrink-0">
+                            <div class="flex items-center gap-1">
+                                <input type="number" name="weight_0_3" step="0.5" min="0" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded">
+                                <label class="text-xs text-gray-500 font-medium whitespace-nowrap">kg</label>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <input type="number" name="reps_0_3" min="1" value="3" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded">
+                                <label class="text-xs text-gray-500 font-medium whitespace-nowrap">reps</label>
+                            </div>
+                        </div>
+                        <button type="button" class="remove-btn bg-transparent text-gray-400 text-sm p-0 m-0 border-none w-5 h-5 min-w-[20px] flex items-center justify-center rounded-sm shrink-0 hover:bg-gray-50 hover:text-red-500 cursor-pointer" onclick="removeSet(this, 0)">&#10060;</button>
                     </div>
-                    <div class="set">
-                        <label>Set 5:</label>
-                        <label>Reps: <input type="number" name="reps_0_4" min="1" value="3" required></label>
-                        <label>Weight: <input type="number" name="weight_0_4" step="0.5" min="0" required></label>
-                        <button type="button" onclick="removeSet(this, 0)" style="background-color: #dc3545; color: white; margin-left: 10px; font-size: 12px;">Remove Set</button>
+                    <div class="set mb-2 px-2.5 py-2 border border-gray-200 bg-white rounded-md flex items-center gap-2">
+                        <div class="font-semibold text-slate-800 text-sm min-w-[12px] shrink-0">Set 5</div>
+                        <div class="flex gap-2 items-center ml-auto shrink-0">
+                            <div class="flex items-center gap-1">
+                                <input type="number" name="weight_0_4" step="0.5" min="0" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded">
+                                <label class="text-xs text-gray-500 font-medium whitespace-nowrap">kg</label>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <input type="number" name="reps_0_4" min="1" value="3" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded">
+                                <label class="text-xs text-gray-500 font-medium whitespace-nowrap">reps</label>
+                            </div>
+                        </div>
+                        <button type="button" class="remove-btn bg-transparent text-gray-400 text-sm p-0 m-0 border-none w-5 h-5 min-w-[20px] flex items-center justify-center rounded-sm shrink-0 hover:bg-gray-50 hover:text-red-500 cursor-pointer" onclick="removeSet(this, 0)">&#10060;</button>
                     </div>
                 </div>
-                <button type="button" onclick="addSet(0)">Add Another Set</button>
+                <div class="flex gap-2.5 mt-3">
+                    <button type="button" onclick="addSet(0)" class="flex-1 py-3 px-4 bg-blue-500 text-white border-none rounded-md text-base font-medium cursor-pointer transition-colors duration-200 hover:bg-blue-600">Add Another Set</button>
+                </div>
             </div>
 
             <!-- T2 Exercise -->
-            <div class="exercise tier-2">
-                <h3>T2 - Secondary Movement</h3>
-                <div class="exercise-type">Tier 2 (3x10)</div><br>
-                <label>Exercise:</label><br>
-                <select name="exercise_1" onchange="loadLatestExercise(this.value, 1)" required>
+            <div class="exercise my-4 p-4 border-2 border-blue-500 bg-blue-50 rounded-lg shadow">
+                <h3 class="text-lg mb-2 text-slate-800">T2 - Secondary Movement</h3>
+                <div class="font-semibold text-gray-600 text-sm mb-3 py-1 px-2 bg-white/80 rounded inline-block">Tier 2 (3x10)</div>
+                <label class="font-medium mb-1 block">Exercise:</label>
+                <select name="exercise_1" onchange="loadLatestExercise(this.value, 1)" required class="w-full p-3 border border-gray-300 rounded-md text-base bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 mb-4">
                     <option value="">Select T2 Exercise</option>
                     {{range .Exercises}}
                     <option value="{{.Name}}" {{if eq $.T2Exercise .Name}}selected{{end}}>{{.Name}}</option>
                     {{end}}
-                </select><br><br>
+                </select>
 
-                <div id="latest_data_1" class="latest-data" style="display: none; background: #e8f4fd; padding: 10px; margin: 10px 0; border-radius: 5px;">
-                    <h5>Latest recorded sets for this exercise:</h5>
+                <div id="latest_data_1" class="hidden bg-blue-50 p-3 my-3 rounded-md border border-blue-200">
+                    <h5 class="mb-2 text-slate-800 text-sm">Latest recorded sets for this exercise:</h5>
                     <div id="latest_sets_1"></div>
                 </div>
 
-                <div class="sets" id="sets_1">
-                    <h4>Sets</h4>
-                    <div class="set">
-                        <label>Set 1:</label>
-                        <label>Reps: <input type="number" name="reps_1_0" min="1" value="10" required></label>
-                        <label>Weight: <input type="number" name="weight_1_0" step="0.5" min="0" required></label>
-                        <button type="button" onclick="removeSet(this, 1)" style="background-color: #dc3545; color: white; margin-left: 10px; font-size: 12px;">Remove Set</button>
+                <div class="mt-4" id="sets_1">
+                    <div class="set mb-2 px-2.5 py-2 border border-gray-200 bg-white rounded-md flex items-center gap-2">
+                        <div class="font-semibold text-slate-800 text-sm min-w-[12px] shrink-0">Set 1</div>
+                        <div class="flex gap-2 items-center ml-auto shrink-0">
+                            <div class="flex items-center gap-1"><input type="number" name="weight_1_0" step="0.5" min="0" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded"><label class="text-xs text-gray-500 font-medium whitespace-nowrap">kg</label></div>
+                            <div class="flex items-center gap-1"><input type="number" name="reps_1_0" min="1" value="10" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded"><label class="text-xs text-gray-500 font-medium whitespace-nowrap">reps</label></div>
+                        </div>
+                        <button type="button" class="remove-btn bg-transparent text-gray-400 text-sm p-0 m-0 border-none w-5 h-5 min-w-[20px] flex items-center justify-center rounded-sm shrink-0 hover:bg-gray-50 hover:text-red-500 cursor-pointer" onclick="removeSet(this, 1)">&#10060;</button>
                     </div>
-                    <div class="set">
-                        <label>Set 2:</label>
-                        <label>Reps: <input type="number" name="reps_1_1" min="1" value="10" required></label>
-                        <label>Weight: <input type="number" name="weight_1_1" step="0.5" min="0" required></label>
-                        <button type="button" onclick="removeSet(this, 1)" style="background-color: #dc3545; color: white; margin-left: 10px; font-size: 12px;">Remove Set</button>
+                    <div class="set mb-2 px-2.5 py-2 border border-gray-200 bg-white rounded-md flex items-center gap-2">
+                        <div class="font-semibold text-slate-800 text-sm min-w-[12px] shrink-0">Set 2</div>
+                        <div class="flex gap-2 items-center ml-auto shrink-0">
+                            <div class="flex items-center gap-1"><input type="number" name="weight_1_1" step="0.5" min="0" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded"><label class="text-xs text-gray-500 font-medium whitespace-nowrap">kg</label></div>
+                            <div class="flex items-center gap-1"><input type="number" name="reps_1_1" min="1" value="10" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded"><label class="text-xs text-gray-500 font-medium whitespace-nowrap">reps</label></div>
+                        </div>
+                        <button type="button" class="remove-btn bg-transparent text-gray-400 text-sm p-0 m-0 border-none w-5 h-5 min-w-[20px] flex items-center justify-center rounded-sm shrink-0 hover:bg-gray-50 hover:text-red-500 cursor-pointer" onclick="removeSet(this, 1)">&#10060;</button>
                     </div>
-                    <div class="set">
-                        <label>Set 3:</label>
-                        <label>Reps: <input type="number" name="reps_1_2" min="1" value="10" required></label>
-                        <label>Weight: <input type="number" name="weight_1_2" step="0.5" min="0" required></label>
-                        <button type="button" onclick="removeSet(this, 1)" style="background-color: #dc3545; color: white; margin-left: 10px; font-size: 12px;">Remove Set</button>
+                    <div class="set mb-2 px-2.5 py-2 border border-gray-200 bg-white rounded-md flex items-center gap-2">
+                        <div class="font-semibold text-slate-800 text-sm min-w-[12px] shrink-0">Set 3</div>
+                        <div class="flex gap-2 items-center ml-auto shrink-0">
+                            <div class="flex items-center gap-1"><input type="number" name="weight_1_2" step="0.5" min="0" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded"><label class="text-xs text-gray-500 font-medium whitespace-nowrap">kg</label></div>
+                            <div class="flex items-center gap-1"><input type="number" name="reps_1_2" min="1" value="10" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded"><label class="text-xs text-gray-500 font-medium whitespace-nowrap">reps</label></div>
+                        </div>
+                        <button type="button" class="remove-btn bg-transparent text-gray-400 text-sm p-0 m-0 border-none w-5 h-5 min-w-[20px] flex items-center justify-center rounded-sm shrink-0 hover:bg-gray-50 hover:text-red-500 cursor-pointer" onclick="removeSet(this, 1)">&#10060;</button>
                     </div>
                 </div>
-                <button type="button" onclick="addSet(1)">Add Another Set</button>
+                <div class="flex gap-2.5 mt-3">
+                    <button type="button" onclick="addSet(1)" class="flex-1 py-3 px-4 bg-blue-500 text-white border-none rounded-md text-base font-medium cursor-pointer transition-colors duration-200 hover:bg-blue-600">Add Another Set</button>
+                </div>
             </div>
 
             <!-- T3 Exercise -->
-            <div class="exercise tier-3">
-                <h3>T3 - Accessory Work</h3>
-                <div class="exercise-type">Tier 3 (3x15+)</div><br>
-                <label>Exercise:</label><br>
-                <select name="exercise_2" onchange="loadLatestExercise(this.value, 2)" required>
+            <div class="exercise my-4 p-4 border-2 border-red-500 bg-red-50 rounded-lg shadow">
+                <h3 class="text-lg mb-2 text-slate-800">T3 - Accessory Work</h3>
+                <div class="font-semibold text-gray-600 text-sm mb-3 py-1 px-2 bg-white/80 rounded inline-block">Tier 3 (3x15+)</div>
+                <label class="font-medium mb-1 block">Exercise:</label>
+                <select name="exercise_2" onchange="loadLatestExercise(this.value, 2)" required class="w-full p-3 border border-gray-300 rounded-md text-base bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 mb-4">
                     <option value="">Select T3 Exercise</option>
                     {{range .Exercises}}
                     <option value="{{.Name}}" {{if eq $.T3Exercise .Name}}selected{{end}}>{{.Name}}</option>
                     {{end}}
-                </select><br><br>
+                </select>
 
-                <div id="latest_data_2" class="latest-data" style="display: none; background: #e8f4fd; padding: 10px; margin: 10px 0; border-radius: 5px;">
-                    <h5>Latest recorded sets for this exercise:</h5>
+                <div id="latest_data_2" class="hidden bg-blue-50 p-3 my-3 rounded-md border border-blue-200">
+                    <h5 class="mb-2 text-slate-800 text-sm">Latest recorded sets for this exercise:</h5>
                     <div id="latest_sets_2"></div>
                 </div>
 
-                <div class="sets" id="sets_2">
-                    <h4>Sets</h4>
-                    <div class="set">
-                        <label>Set 1:</label>
-                        <label>Reps: <input type="number" name="reps_2_0" min="1" value="15" required></label>
-                        <label>Weight: <input type="number" name="weight_2_0" step="0.5" min="0" required></label>
-                        <button type="button" onclick="removeSet(this, 2)" style="background-color: #dc3545; color: white; margin-left: 10px; font-size: 12px;">Remove Set</button>
+                <div class="mt-4" id="sets_2">
+                    <div class="set mb-2 px-2.5 py-2 border border-gray-200 bg-white rounded-md flex items-center gap-2">
+                        <div class="font-semibold text-slate-800 text-sm min-w-[12px] shrink-0">Set 1</div>
+                        <div class="flex gap-2 items-center ml-auto shrink-0">
+                            <div class="flex items-center gap-1"><input type="number" name="weight_2_0" step="0.5" min="0" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded"><label class="text-xs text-gray-500 font-medium whitespace-nowrap">kg</label></div>
+                            <div class="flex items-center gap-1"><input type="number" name="reps_2_0" min="1" value="15" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded"><label class="text-xs text-gray-500 font-medium whitespace-nowrap">reps</label></div>
+                        </div>
+                        <button type="button" class="remove-btn bg-transparent text-gray-400 text-sm p-0 m-0 border-none w-5 h-5 min-w-[20px] flex items-center justify-center rounded-sm shrink-0 hover:bg-gray-50 hover:text-red-500 cursor-pointer" onclick="removeSet(this, 2)">&#10060;</button>
                     </div>
-                    <div class="set">
-                        <label>Set 2:</label>
-                        <label>Reps: <input type="number" name="reps_2_1" min="1" value="15" required></label>
-                        <label>Weight: <input type="number" name="weight_2_1" step="0.5" min="0" required></label>
-                        <button type="button" onclick="removeSet(this, 2)" style="background-color: #dc3545; color: white; margin-left: 10px; font-size: 12px;">Remove Set</button>
+                    <div class="set mb-2 px-2.5 py-2 border border-gray-200 bg-white rounded-md flex items-center gap-2">
+                        <div class="font-semibold text-slate-800 text-sm min-w-[12px] shrink-0">Set 2</div>
+                        <div class="flex gap-2 items-center ml-auto shrink-0">
+                            <div class="flex items-center gap-1"><input type="number" name="weight_2_1" step="0.5" min="0" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded"><label class="text-xs text-gray-500 font-medium whitespace-nowrap">kg</label></div>
+                            <div class="flex items-center gap-1"><input type="number" name="reps_2_1" min="1" value="15" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded"><label class="text-xs text-gray-500 font-medium whitespace-nowrap">reps</label></div>
+                        </div>
+                        <button type="button" class="remove-btn bg-transparent text-gray-400 text-sm p-0 m-0 border-none w-5 h-5 min-w-[20px] flex items-center justify-center rounded-sm shrink-0 hover:bg-gray-50 hover:text-red-500 cursor-pointer" onclick="removeSet(this, 2)">&#10060;</button>
                     </div>
-                    <div class="set">
-                        <label>Set 3:</label>
-                        <label>Reps: <input type="number" name="reps_2_2" min="1" value="15" required></label>
-                        <label>Weight: <input type="number" name="weight_2_2" step="0.5" min="0" required></label>
-                        <button type="button" onclick="removeSet(this, 2)" style="background-color: #dc3545; color: white; margin-left: 10px; font-size: 12px;">Remove Set</button>
+                    <div class="set mb-2 px-2.5 py-2 border border-gray-200 bg-white rounded-md flex items-center gap-2">
+                        <div class="font-semibold text-slate-800 text-sm min-w-[12px] shrink-0">Set 3</div>
+                        <div class="flex gap-2 items-center ml-auto shrink-0">
+                            <div class="flex items-center gap-1"><input type="number" name="weight_2_2" step="0.5" min="0" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded"><label class="text-xs text-gray-500 font-medium whitespace-nowrap">kg</label></div>
+                            <div class="flex items-center gap-1"><input type="number" name="reps_2_2" min="1" value="15" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded"><label class="text-xs text-gray-500 font-medium whitespace-nowrap">reps</label></div>
+                        </div>
+                        <button type="button" class="remove-btn bg-transparent text-gray-400 text-sm p-0 m-0 border-none w-5 h-5 min-w-[20px] flex items-center justify-center rounded-sm shrink-0 hover:bg-gray-50 hover:text-red-500 cursor-pointer" onclick="removeSet(this, 2)">&#10060;</button>
                     </div>
                 </div>
-                <button type="button" onclick="addSet(2)">Add Another Set</button>
+                <div class="flex gap-2.5 mt-3">
+                    <button type="button" onclick="addSet(2)" class="flex-1 py-3 px-4 bg-blue-500 text-white border-none rounded-md text-base font-medium cursor-pointer transition-colors duration-200 hover:bg-blue-600">Add Another Set</button>
+                </div>
             </div>
 
             <!-- Optional Exercise 1 -->
-            <div class="exercise">
-                <h3>Optional Exercise 1</h3>
-                <label>Exercise:</label><br>
-                <select name="exercise_3" onchange="loadLatestExercise(this.value, 3)" required>
+            <div class="exercise my-4 p-4 border-2 border-gray-800 bg-white rounded-lg shadow">
+                <h3 class="text-lg mb-3 text-slate-800">Optional Exercise 1</h3>
+                <label class="font-medium mb-1 block">Exercise:</label>
+                <select name="exercise_3" onchange="loadLatestExercise(this.value, 3)" required class="w-full p-3 border border-gray-300 rounded-md text-base bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 mb-4">
                     <option value="">Select Exercise</option>
                     {{range .Exercises}}
                     <option value="{{.Name}}" {{if eq $.Additional1Exercise .Name}}selected{{end}}>{{.Name}}</option>
                     {{end}}
-                </select><br><br>
+                </select>
 
-                <div id="latest_data_3" class="latest-data" style="display: none; background: #e8f4fd; padding: 10px; margin: 10px 0; border-radius: 5px;">
-                    <h5>Latest recorded sets for this exercise:</h5>
+                <div id="latest_data_3" class="hidden bg-blue-50 p-3 my-3 rounded-md border border-blue-200">
+                    <h5 class="mb-2 text-slate-800 text-sm">Latest recorded sets for this exercise:</h5>
                     <div id="latest_sets_3"></div>
                 </div>
 
-                <div class="sets" id="sets_3">
-                    <h4>Sets</h4>
-                    <div class="set">
-                        <label>Set 1:</label>
-                        <label>Reps: <input type="number" name="reps_3_0" min="1" value="15" required></label>
-                        <label>Weight: <input type="number" name="weight_3_0" step="0.5" min="0" required></label>
-                        <button type="button" onclick="removeSet(this, 3)" style="background-color: #dc3545; color: white; margin-left: 10px; font-size: 12px;">Remove Set</button>
+                <div class="mt-4" id="sets_3">
+                    <div class="set mb-2 px-2.5 py-2 border border-gray-200 bg-white rounded-md flex items-center gap-2">
+                        <div class="font-semibold text-slate-800 text-sm min-w-[12px] shrink-0">Set 1</div>
+                        <div class="flex gap-2 items-center ml-auto shrink-0">
+                            <div class="flex items-center gap-1"><input type="number" name="weight_3_0" step="0.5" min="0" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded"><label class="text-xs text-gray-500 font-medium whitespace-nowrap">kg</label></div>
+                            <div class="flex items-center gap-1"><input type="number" name="reps_3_0" min="1" value="15" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded"><label class="text-xs text-gray-500 font-medium whitespace-nowrap">reps</label></div>
+                        </div>
+                        <button type="button" class="remove-btn bg-transparent text-gray-400 text-sm p-0 m-0 border-none w-5 h-5 min-w-[20px] flex items-center justify-center rounded-sm shrink-0 hover:bg-gray-50 hover:text-red-500 cursor-pointer" onclick="removeSet(this, 3)">&#10060;</button>
                     </div>
-                    <div class="set">
-                        <label>Set 2:</label>
-                        <label>Reps: <input type="number" name="reps_3_1" min="1" value="15" required></label>
-                        <label>Weight: <input type="number" name="weight_3_1" step="0.5" min="0" required></label>
-                        <button type="button" onclick="removeSet(this, 3)" style="background-color: #dc3545; color: white; margin-left: 10px; font-size: 12px;">Remove Set</button>
+                    <div class="set mb-2 px-2.5 py-2 border border-gray-200 bg-white rounded-md flex items-center gap-2">
+                        <div class="font-semibold text-slate-800 text-sm min-w-[12px] shrink-0">Set 2</div>
+                        <div class="flex gap-2 items-center ml-auto shrink-0">
+                            <div class="flex items-center gap-1"><input type="number" name="weight_3_1" step="0.5" min="0" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded"><label class="text-xs text-gray-500 font-medium whitespace-nowrap">kg</label></div>
+                            <div class="flex items-center gap-1"><input type="number" name="reps_3_1" min="1" value="15" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded"><label class="text-xs text-gray-500 font-medium whitespace-nowrap">reps</label></div>
+                        </div>
+                        <button type="button" class="remove-btn bg-transparent text-gray-400 text-sm p-0 m-0 border-none w-5 h-5 min-w-[20px] flex items-center justify-center rounded-sm shrink-0 hover:bg-gray-50 hover:text-red-500 cursor-pointer" onclick="removeSet(this, 3)">&#10060;</button>
                     </div>
-                    <div class="set">
-                        <label>Set 3:</label>
-                        <label>Reps: <input type="number" name="reps_3_2" min="1" value="15" required></label>
-                        <label>Weight: <input type="number" name="weight_3_2" step="0.5" min="0" required></label>
-                        <button type="button" onclick="removeSet(this, 3)" style="background-color: #dc3545; color: white; margin-left: 10px; font-size: 12px;">Remove Set</button>
+                    <div class="set mb-2 px-2.5 py-2 border border-gray-200 bg-white rounded-md flex items-center gap-2">
+                        <div class="font-semibold text-slate-800 text-sm min-w-[12px] shrink-0">Set 3</div>
+                        <div class="flex gap-2 items-center ml-auto shrink-0">
+                            <div class="flex items-center gap-1"><input type="number" name="weight_3_2" step="0.5" min="0" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded"><label class="text-xs text-gray-500 font-medium whitespace-nowrap">kg</label></div>
+                            <div class="flex items-center gap-1"><input type="number" name="reps_3_2" min="1" value="15" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded"><label class="text-xs text-gray-500 font-medium whitespace-nowrap">reps</label></div>
+                        </div>
+                        <button type="button" class="remove-btn bg-transparent text-gray-400 text-sm p-0 m-0 border-none w-5 h-5 min-w-[20px] flex items-center justify-center rounded-sm shrink-0 hover:bg-gray-50 hover:text-red-500 cursor-pointer" onclick="removeSet(this, 3)">&#10060;</button>
                     </div>
                 </div>
-                <button type="button" onclick="addSet(3)">Add Another Set</button>
-                <button type="button" onclick="removeExercise(this)" style="background-color: #dc3545; color: white; margin-left: 10px;">Remove Exercise</button>
+                <div class="flex gap-2.5 mt-3">
+                    <button type="button" onclick="addSet(3)" class="flex-1 py-3 px-4 bg-blue-500 text-white border-none rounded-md text-base font-medium cursor-pointer transition-colors duration-200 hover:bg-blue-600">Add Another Set</button>
+                    <button type="button" onclick="removeExercise(this)" class="flex-1 py-3 px-4 bg-red-600 text-white border-none rounded-md text-base font-medium cursor-pointer transition-colors duration-200 hover:bg-red-700">Remove Exercise</button>
+                </div>
             </div>
 
             <!-- Optional Exercise 2 -->
-            <div class="exercise">
-                <h3>Optional Exercise 2</h3>
-                <label>Exercise:</label><br>
-                <select name="exercise_4" onchange="loadLatestExercise(this.value, 4)" required>
+            <div class="exercise my-4 p-4 border-2 border-gray-800 bg-white rounded-lg shadow">
+                <h3 class="text-lg mb-3 text-slate-800">Optional Exercise 2</h3>
+                <label class="font-medium mb-1 block">Exercise:</label>
+                <select name="exercise_4" onchange="loadLatestExercise(this.value, 4)" required class="w-full p-3 border border-gray-300 rounded-md text-base bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 mb-4">
                     <option value="">Select Exercise</option>
                     {{range .Exercises}}
                     <option value="{{.Name}}" {{if eq $.Additional2Exercise .Name}}selected{{end}}>{{.Name}}</option>
                     {{end}}
-                </select><br><br>
+                </select>
 
-                <div id="latest_data_4" class="latest-data" style="display: none; background: #e8f4fd; padding: 10px; margin: 10px 0; border-radius: 5px;">
-                    <h5>Latest recorded sets for this exercise:</h5>
+                <div id="latest_data_4" class="hidden bg-blue-50 p-3 my-3 rounded-md border border-blue-200">
+                    <h5 class="mb-2 text-slate-800 text-sm">Latest recorded sets for this exercise:</h5>
                     <div id="latest_sets_4"></div>
                 </div>
 
-                <div class="sets" id="sets_4">
-                    <h4>Sets</h4>
-                    <div class="set">
-                        <label>Set 1:</label>
-                        <label>Reps: <input type="number" name="reps_4_0" min="1" value="15" required></label>
-                        <label>Weight: <input type="number" name="weight_4_0" step="0.5" min="0" required></label>
-                        <button type="button" onclick="removeSet(this, 4)" style="background-color: #dc3545; color: white; margin-left: 10px; font-size: 12px;">Remove Set</button>
+                <div class="mt-4" id="sets_4">
+                    <div class="set mb-2 px-2.5 py-2 border border-gray-200 bg-white rounded-md flex items-center gap-2">
+                        <div class="font-semibold text-slate-800 text-sm min-w-[12px] shrink-0">Set 1</div>
+                        <div class="flex gap-2 items-center ml-auto shrink-0">
+                            <div class="flex items-center gap-1"><input type="number" name="weight_4_0" step="0.5" min="0" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded"><label class="text-xs text-gray-500 font-medium whitespace-nowrap">kg</label></div>
+                            <div class="flex items-center gap-1"><input type="number" name="reps_4_0" min="1" value="15" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded"><label class="text-xs text-gray-500 font-medium whitespace-nowrap">reps</label></div>
+                        </div>
+                        <button type="button" class="remove-btn bg-transparent text-gray-400 text-sm p-0 m-0 border-none w-5 h-5 min-w-[20px] flex items-center justify-center rounded-sm shrink-0 hover:bg-gray-50 hover:text-red-500 cursor-pointer" onclick="removeSet(this, 4)">&#10060;</button>
                     </div>
-                    <div class="set">
-                        <label>Set 2:</label>
-                        <label>Reps: <input type="number" name="reps_4_1" min="1" value="15" required></label>
-                        <label>Weight: <input type="number" name="weight_4_1" step="0.5" min="0" required></label>
-                        <button type="button" onclick="removeSet(this, 4)" style="background-color: #dc3545; color: white; margin-left: 10px; font-size: 12px;">Remove Set</button>
+                    <div class="set mb-2 px-2.5 py-2 border border-gray-200 bg-white rounded-md flex items-center gap-2">
+                        <div class="font-semibold text-slate-800 text-sm min-w-[12px] shrink-0">Set 2</div>
+                        <div class="flex gap-2 items-center ml-auto shrink-0">
+                            <div class="flex items-center gap-1"><input type="number" name="weight_4_1" step="0.5" min="0" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded"><label class="text-xs text-gray-500 font-medium whitespace-nowrap">kg</label></div>
+                            <div class="flex items-center gap-1"><input type="number" name="reps_4_1" min="1" value="15" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded"><label class="text-xs text-gray-500 font-medium whitespace-nowrap">reps</label></div>
+                        </div>
+                        <button type="button" class="remove-btn bg-transparent text-gray-400 text-sm p-0 m-0 border-none w-5 h-5 min-w-[20px] flex items-center justify-center rounded-sm shrink-0 hover:bg-gray-50 hover:text-red-500 cursor-pointer" onclick="removeSet(this, 4)">&#10060;</button>
                     </div>
-                    <div class="set">
-                        <label>Set 3:</label>
-                        <label>Reps: <input type="number" name="reps_4_2" min="1" value="15" required></label>
-                        <label>Weight: <input type="number" name="weight_4_2" step="0.5" min="0" required></label>
-                        <button type="button" onclick="removeSet(this, 4)" style="background-color: #dc3545; color: white; margin-left: 10px; font-size: 12px;">Remove Set</button>
+                    <div class="set mb-2 px-2.5 py-2 border border-gray-200 bg-white rounded-md flex items-center gap-2">
+                        <div class="font-semibold text-slate-800 text-sm min-w-[12px] shrink-0">Set 3</div>
+                        <div class="flex gap-2 items-center ml-auto shrink-0">
+                            <div class="flex items-center gap-1"><input type="number" name="weight_4_2" step="0.5" min="0" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded"><label class="text-xs text-gray-500 font-medium whitespace-nowrap">kg</label></div>
+                            <div class="flex items-center gap-1"><input type="number" name="reps_4_2" min="1" value="15" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded"><label class="text-xs text-gray-500 font-medium whitespace-nowrap">reps</label></div>
+                        </div>
+                        <button type="button" class="remove-btn bg-transparent text-gray-400 text-sm p-0 m-0 border-none w-5 h-5 min-w-[20px] flex items-center justify-center rounded-sm shrink-0 hover:bg-gray-50 hover:text-red-500 cursor-pointer" onclick="removeSet(this, 4)">&#10060;</button>
                     </div>
                 </div>
-                <button type="button" onclick="addSet(4)">Add Another Set</button>
-                <button type="button" onclick="removeExercise(this)" style="background-color: #dc3545; color: white; margin-left: 10px;">Remove Exercise</button>
+                <div class="flex gap-2.5 mt-3">
+                    <button type="button" onclick="addSet(4)" class="flex-1 py-3 px-4 bg-blue-500 text-white border-none rounded-md text-base font-medium cursor-pointer transition-colors duration-200 hover:bg-blue-600">Add Another Set</button>
+                    <button type="button" onclick="removeExercise(this)" class="flex-1 py-3 px-4 bg-red-600 text-white border-none rounded-md text-base font-medium cursor-pointer transition-colors duration-200 hover:bg-red-700">Remove Exercise</button>
+                </div>
             </div>
         </div>
 
-        <button type="button" onclick="addExercise()">Add Another Exercise</button><br><br>
-        <input type="submit" value="Log GZCLP Workout">
+        <button type="button" onclick="addExercise()" class="w-full md:w-auto py-3 px-4 my-2 bg-blue-500 text-white border-none rounded-md text-base font-medium cursor-pointer transition-colors duration-200 hover:bg-blue-600">Add Another Exercise</button>
+        <input type="submit" value="Log GZCLP Workout" class="w-full py-4 mt-5 bg-green-600 text-white text-lg border-none rounded-md font-medium cursor-pointer transition-colors duration-200 hover:bg-green-700">
     </form>
 
     <script>
     let exerciseCount = 5;
-    let setCounts = [5, 3, 3, 3, 3]; // Track set count for each exercise (T1=5 sets, T2/T3/Optional=3 sets by default)
+    let setCounts = [5, 3, 3, 3, 3];
+
+    const SET_CLASSES = 'set mb-2 px-2.5 py-2 border border-gray-200 bg-white rounded-md flex items-center gap-2';
+    const SET_NUM_CLASSES = 'font-semibold text-slate-800 text-sm min-w-[12px] shrink-0';
+    const SET_INPUTS_CLASSES = 'flex gap-2 items-center ml-auto shrink-0';
+    const INPUT_GROUP_CLASSES = 'flex items-center gap-1';
+    const INPUT_CLASSES = 'w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded';
+    const LABEL_CLASSES = 'text-xs text-gray-500 font-medium whitespace-nowrap';
+    const REMOVE_BTN_CLASSES = 'remove-btn bg-transparent text-gray-400 text-sm p-0 m-0 border-none w-5 h-5 min-w-[20px] flex items-center justify-center rounded-sm shrink-0 hover:bg-gray-50 hover:text-red-500 cursor-pointer';
+    const EXERCISE_CLASSES = 'exercise my-4 p-4 border-2 border-gray-800 bg-white rounded-lg shadow';
+    const SELECT_CLASSES = 'w-full p-3 border border-gray-300 rounded-md text-base bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 mb-4';
+    const ADD_BTN_CLASSES = 'flex-1 py-3 px-4 bg-blue-500 text-white border-none rounded-md text-base font-medium cursor-pointer transition-colors duration-200 hover:bg-blue-600';
+    const REMOVE_EX_BTN_CLASSES = 'flex-1 py-3 px-4 bg-red-600 text-white border-none rounded-md text-base font-medium cursor-pointer transition-colors duration-200 hover:bg-red-700';
+
+    function makeSetHtml(exIdx, setIdx, setNum) {
+        return '<div class="' + SET_CLASSES + '">' +
+            '<div class="' + SET_NUM_CLASSES + '">Set ' + setNum + '</div>' +
+            '<div class="' + SET_INPUTS_CLASSES + '">' +
+                '<div class="' + INPUT_GROUP_CLASSES + '"><input type="number" name="weight_' + exIdx + '_' + setIdx + '" step="0.5" min="0" required class="' + INPUT_CLASSES + '"><label class="' + LABEL_CLASSES + '">kg</label></div>' +
+                '<div class="' + INPUT_GROUP_CLASSES + '"><input type="number" name="reps_' + exIdx + '_' + setIdx + '" min="1" value="15" required class="' + INPUT_CLASSES + '"><label class="' + LABEL_CLASSES + '">reps</label></div>' +
+            '</div>' +
+            '<button type="button" class="' + REMOVE_BTN_CLASSES + '" onclick="removeSet(this, ' + exIdx + ')">&#10060;</button>' +
+        '</div>';
+    }
 
     function addExercise() {
         const exercisesDiv = document.getElementById('exercises');
         const newExercise = document.createElement('div');
-        newExercise.className = 'exercise';
+        newExercise.className = EXERCISE_CLASSES;
 
-        setCounts.push(3); // Initialize set count for new exercise (3 sets of 15 reps by default)
+        setCounts.push(3);
 
         let exerciseOptions = '<option value="">Select Exercise</option>';
         {{range .Exercises}}
@@ -607,38 +388,24 @@
         {{end}}
 
         newExercise.innerHTML =
-            '<h3>Additional Exercise ' + (exerciseCount - 4) + '</h3>' +
-            '<label>Exercise:</label><br>' +
-            '<select name="exercise_' + exerciseCount + '" onchange="loadLatestExercise(this.value, ' + exerciseCount + ')" required>' +
+            '<h3 class="text-lg mb-3 text-slate-800">Additional Exercise ' + (exerciseCount - 4) + '</h3>' +
+            '<label class="font-medium mb-1 block">Exercise:</label>' +
+            '<select name="exercise_' + exerciseCount + '" onchange="loadLatestExercise(this.value, ' + exerciseCount + ')" required class="' + SELECT_CLASSES + '">' +
                 exerciseOptions +
-            '</select><br><br>' +
-            '<div id="latest_data_' + exerciseCount + '" class="latest-data" style="display: none; background: #e8f4fd; padding: 10px; margin: 10px 0; border-radius: 5px;">' +
-                '<h5>Latest recorded sets for this exercise:</h5>' +
+            '</select>' +
+            '<div id="latest_data_' + exerciseCount + '" class="hidden bg-blue-50 p-3 my-3 rounded-md border border-blue-200">' +
+                '<h5 class="mb-2 text-slate-800 text-sm">Latest recorded sets for this exercise:</h5>' +
                 '<div id="latest_sets_' + exerciseCount + '"></div>' +
             '</div>' +
-            '<div class="sets" id="sets_' + exerciseCount + '">' +
-                '<h4>Sets</h4>' +
-                '<div class="set">' +
-                    '<label>Set 1:</label>' +
-                    '<label>Reps: <input type="number" name="reps_' + exerciseCount + '_0" min="1" value="15" required></label>' +
-                    '<label>Weight: <input type="number" name="weight_' + exerciseCount + '_0" step="0.5" min="0" required></label>' +
-                    '<button type="button" onclick="removeSet(this, ' + exerciseCount + ')" style="background-color: #dc3545; color: white; margin-left: 10px; font-size: 12px;">Remove Set</button>' +
-                '</div>' +
-                '<div class="set">' +
-                    '<label>Set 2:</label>' +
-                    '<label>Reps: <input type="number" name="reps_' + exerciseCount + '_1" min="1" value="15" required></label>' +
-                    '<label>Weight: <input type="number" name="weight_' + exerciseCount + '_1" step="0.5" min="0" required></label>' +
-                    '<button type="button" onclick="removeSet(this, ' + exerciseCount + ')" style="background-color: #dc3545; color: white; margin-left: 10px; font-size: 12px;">Remove Set</button>' +
-                '</div>' +
-                '<div class="set">' +
-                    '<label>Set 3:</label>' +
-                    '<label>Reps: <input type="number" name="reps_' + exerciseCount + '_2" min="1" value="15" required></label>' +
-                    '<label>Weight: <input type="number" name="weight_' + exerciseCount + '_2" step="0.5" min="0" required></label>' +
-                    '<button type="button" onclick="removeSet(this, ' + exerciseCount + ')" style="background-color: #dc3545; color: white; margin-left: 10px; font-size: 12px;">Remove Set</button>' +
-                '</div>' +
+            '<div class="mt-4" id="sets_' + exerciseCount + '">' +
+                makeSetHtml(exerciseCount, 0, 1) +
+                makeSetHtml(exerciseCount, 1, 2) +
+                makeSetHtml(exerciseCount, 2, 3) +
             '</div>' +
-            '<button type="button" onclick="addSet(' + exerciseCount + ')">Add Another Set</button>' +
-            '<button type="button" onclick="removeExercise(this)" style="background-color: #dc3545; color: white; margin-left: 10px;">Remove Exercise</button>';
+            '<div class="flex gap-2.5 mt-3">' +
+                '<button type="button" onclick="addSet(' + exerciseCount + ')" class="' + ADD_BTN_CLASSES + '">Add Another Set</button>' +
+                '<button type="button" onclick="removeExercise(this)" class="' + REMOVE_EX_BTN_CLASSES + '">Remove Exercise</button>' +
+            '</div>';
 
         exercisesDiv.appendChild(newExercise);
         exerciseCount++;
@@ -647,14 +414,22 @@
     function addSet(exerciseIndex) {
         const setsDiv = document.getElementById('sets_' + exerciseIndex);
         const newSet = document.createElement('div');
-        newSet.className = 'set';
+        newSet.className = SET_CLASSES;
 
         const setNumber = setCounts[exerciseIndex];
         newSet.innerHTML =
-            '<label>Set ' + (setNumber + 1) + ':</label>' +
-            '<label>Reps: <input type="number" name="reps_' + exerciseIndex + '_' + setNumber + '" min="1" required></label>' +
-            '<label>Weight: <input type="number" name="weight_' + exerciseIndex + '_' + setNumber + '" step="0.5" min="0" required></label>' +
-            '<button type="button" onclick="removeSet(this, ' + exerciseIndex + ')" style="background-color: #dc3545; color: white; margin-left: 10px; font-size: 12px;">Remove Set</button>';
+            '<div class="' + SET_NUM_CLASSES + '">Set ' + (setNumber + 1) + '</div>' +
+            '<div class="' + SET_INPUTS_CLASSES + '">' +
+                '<div class="' + INPUT_GROUP_CLASSES + '">' +
+                    '<input type="number" name="weight_' + exerciseIndex + '_' + setNumber + '" step="0.5" min="0" required class="' + INPUT_CLASSES + '">' +
+                    '<label class="' + LABEL_CLASSES + '">kg</label>' +
+                '</div>' +
+                '<div class="' + INPUT_GROUP_CLASSES + '">' +
+                    '<input type="number" name="reps_' + exerciseIndex + '_' + setNumber + '" min="1" required class="' + INPUT_CLASSES + '">' +
+                    '<label class="' + LABEL_CLASSES + '">reps</label>' +
+                '</div>' +
+            '</div>' +
+            '<button type="button" class="' + REMOVE_BTN_CLASSES + '" onclick="removeSet(this, ' + exerciseIndex + ')">&#10060;</button>';
 
         setsDiv.appendChild(newSet);
         setCounts[exerciseIndex]++;
@@ -665,21 +440,16 @@
         const exercisesDiv = document.getElementById('exercises');
         const exercises = exercisesDiv.querySelectorAll('.exercise');
 
-        // Find the index of this exercise in the DOM
         let exerciseIndex = -1;
         exercises.forEach((ex, index) => {
-            if (ex === exercise) {
-                exerciseIndex = index;
-            }
+            if (ex === exercise) exerciseIndex = index;
         });
 
-        // Don't allow removing core T1, T2, T3 exercises
         if (exerciseIndex < 3) {
             alert('Cannot remove core GZCLP tier exercises!');
             return;
         }
 
-        // Remove the exercise
         exercise.remove();
     }
 
@@ -687,19 +457,17 @@
         const setsDiv = document.getElementById('sets_' + exerciseIndex);
         const sets = setsDiv.querySelectorAll('.set');
 
-        // Don't allow removing the last set
         if (sets.length <= 1) {
             alert('You must have at least one set per exercise!');
             return;
         }
 
-        // Remove the set containing this button
         button.parentElement.remove();
     }
 
     function loadLatestExercise(exerciseName, exerciseIndex) {
         if (!exerciseName) {
-            document.getElementById('latest_data_' + exerciseIndex).style.display = 'none';
+            document.getElementById('latest_data_' + exerciseIndex).classList.add('hidden');
             return;
         }
 
@@ -710,27 +478,27 @@
                 const setsDiv = document.getElementById('latest_sets_' + exerciseIndex);
 
                 if (data.sets && data.sets.length > 0) {
-                    let setsHtml = '<table style="width: 100%; border-collapse: collapse;">';
-                    setsHtml += '<tr><th style="border: 1px solid #ddd; padding: 4px;">Reps</th><th style="border: 1px solid #ddd; padding: 4px;">Weight</th></tr>';
+                    let setsHtml = '<table class="w-full border-collapse text-sm">';
+                    setsHtml += '<tr><th class="border border-gray-300 p-1 text-left bg-gray-100 font-semibold">Reps</th><th class="border border-gray-300 p-1 text-left bg-gray-100 font-semibold">Weight</th></tr>';
 
                     data.sets.forEach(set => {
                         setsHtml += '<tr>';
-                        setsHtml += '<td style="border: 1px solid #ddd; padding: 4px;">' + set.reps + '</td>';
-                        setsHtml += '<td style="border: 1px solid #ddd; padding: 4px;">' + set.weight + ' kg</td>';
+                        setsHtml += '<td class="border border-gray-300 p-1">' + set.reps + '</td>';
+                        setsHtml += '<td class="border border-gray-300 p-1">' + set.weight + ' kg</td>';
                         setsHtml += '</tr>';
                     });
 
                     setsHtml += '</table>';
                     setsDiv.innerHTML = setsHtml;
-                    latestDiv.style.display = 'block';
+                    latestDiv.classList.remove('hidden');
                 } else {
-                    setsDiv.innerHTML = '<p style="margin: 0;">No previous data for this exercise</p>';
-                    latestDiv.style.display = 'block';
+                    setsDiv.innerHTML = '<p class="m-0">No previous data for this exercise</p>';
+                    latestDiv.classList.remove('hidden');
                 }
             })
             .catch(error => {
                 console.error('Error loading latest exercise data:', error);
-                document.getElementById('latest_data_' + exerciseIndex).style.display = 'none';
+                document.getElementById('latest_data_' + exerciseIndex).classList.add('hidden');
             });
     }
 
@@ -738,13 +506,11 @@
         if (confirm('Are you sure you want to skip to the next workout day? This will advance the GZCLP program without logging any exercises.')) {
             fetch('/gzclp/skip', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                }
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
             })
             .then(response => {
                 if (response.ok) {
-                    window.location.href = '/gzclp'; // Redirect to GZCLP page to show the next workout day
+                    window.location.href = '/gzclp';
                 } else {
                     alert('Failed to skip day. Please try again.');
                 }
@@ -756,17 +522,14 @@
         }
     }
 
-    // Track if user has made changes to the form
     let formChanged = false;
     let isSubmitting = false;
     let isSkipping = false;
 
-    // Mark form as changed when user interacts with inputs
     function markFormChanged() {
         formChanged = true;
     }
 
-    // Add event listeners to detect form changes
     document.addEventListener('DOMContentLoaded', function() {
         const form = document.querySelector('form');
         const inputs = form.querySelectorAll('input, select');
@@ -776,20 +539,17 @@
             input.addEventListener('input', markFormChanged);
         });
 
-        // Don't warn when submitting the form
         form.addEventListener('submit', function() {
             isSubmitting = true;
         });
     });
 
-    // Modify skipDay function to not warn during skip
     const originalSkipDay = skipDay;
     skipDay = function() {
         isSkipping = true;
         originalSkipDay();
     };
 
-    // Warn user before leaving if they have unsaved changes
     window.addEventListener('beforeunload', function(e) {
         if (formChanged && !isSubmitting && !isSkipping) {
             e.preventDefault();

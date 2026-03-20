@@ -4,308 +4,46 @@
     <title>Statistics - Trucker</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            padding: 16px;
-            background-color: #f5f5f5;
-        }
-
-        h1 {
-            font-size: 1.5rem;
-            margin-bottom: 24px;
-            text-align: center;
-            color: #2c3e50;
-        }
-
-        .loading {
-            text-align: center;
-            margin: 60px 0;
-            color: #7f8c8d;
-        }
-
-        .no-data {
-            text-align: center;
-            margin: 60px 0;
-            padding: 40px 20px;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        .no-data h2 {
-            font-size: 1.3rem;
-            margin-bottom: 16px;
-            color: #7f8c8d;
-        }
-
-        .no-data p {
-            font-size: 16px;
-            color: #95a5a6;
-        }
-
-        .chart-container {
-            background: white;
-            border-radius: 8px;
-            padding: 20px;
-            margin: 16px 0;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            position: relative;
-            height: 300px;
-        }
-
-        .chart-title {
-            font-size: 1.1rem;
-            font-weight: 600;
-            color: #2c3e50;
-            margin-bottom: 16px;
-            text-align: center;
-        }
-
-        .chart-canvas {
-            position: relative;
-            height: 250px;
-        }
-
-        .exercise-filter {
-            background: white;
-            border-radius: 8px;
-            padding: 16px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        .filter-row {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            align-items: stretch;
-        }
-
-        .filter-row label {
-            font-weight: 500;
-            color: #2c3e50;
-        }
-
-        .filter-row select {
-            padding: 12px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            font-size: 16px;
-            background: white;
-        }
-
-        .filter-row select:focus {
-            outline: none;
-            border-color: #3498db;
-            box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
-        }
-
-        .nav-links {
-            text-align: center;
-            margin-top: 24px;
-            padding-top: 20px;
-            border-top: 1px solid #ddd;
-        }
-
-        .nav-links a {
-            color: #3498db;
-            text-decoration: none;
-            margin: 0 8px;
-            font-weight: 500;
-            display: inline-block;
-            margin-bottom: 8px;
-        }
-
-        .nav-links a:hover {
-            text-decoration: underline;
-        }
-
-        .stats-summary {
-            background: white;
-            border-radius: 8px;
-            padding: 16px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 12px;
-        }
-
-        .stat-item {
-            text-align: center;
-            padding: 12px;
-            background: #f8f9fa;
-            border-radius: 6px;
-        }
-
-        .stat-value {
-            font-size: 1.2rem;
-            font-weight: 700;
-            color: #2c3e50;
-        }
-
-        .stat-label {
-            font-size: 0.9rem;
-            color: #7f8c8d;
-            margin-top: 4px;
-        }
-
-        /* Tablet and desktop styles */
-        @media (min-width: 768px) {
-            body {
-                max-width: 1200px;
-                margin: 0 auto;
-                padding: 80px 32px 32px 32px;
-            }
-
-            h1 {
-                font-size: 2rem;
-            }
-
-            .chart-container {
-                height: 400px;
-                padding: 24px;
-            }
-
-            .chart-canvas {
-                height: 350px;
-            }
-
-            .filter-row {
-                flex-direction: row;
-                align-items: center;
-            }
-
-            .filter-row label {
-                flex-shrink: 0;
-                margin-right: 12px;
-            }
-
-            .filter-row select {
-                flex: 1;
-                max-width: 300px;
-            }
-
-            .stats-grid {
-                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            }
-
-            .nav-links a {
-                margin-bottom: 0;
-            }
-        }
-
-        @media (min-width: 1024px) {
-            body {
-                max-width: 1400px;
-            }
-        }
-
-        /* Navbar styles */
-        .navbar {
-            background: #2c3e50;
-            padding: 12px 16px;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 1000;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        .navbar-content {
-            max-width: 1200px;
-            margin: 0 auto;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .navbar-brand {
-            color: white;
-            font-size: 1.2rem;
-            font-weight: 700;
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .navbar-nav {
-            display: flex;
-            gap: 20px;
-            align-items: center;
-        }
-
-        .navbar-nav a {
-            color: #bdc3c7;
-            text-decoration: none;
-            font-weight: 500;
-            padding: 8px 12px;
-            border-radius: 4px;
-            transition: all 0.2s ease;
-        }
-
-        .navbar-nav a:hover {
-            color: white;
-            background: #34495e;
-        }
-
-        .navbar-nav a.active {
-            color: #3498db;
-            background: #34495e;
-        }
-
-        /* Adjust body to account for fixed navbar */
-        body {
-            padding-top: 80px;
+        @media (max-width: 767px) {
+            .nav-open { display: flex !important; flex-direction: column; position: absolute; top: 100%; left: 0; right: 0; background: #1e293b; padding: 0.5rem 0; box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
         }
     </style>
 </head>
-<body>
-    <nav class="navbar">
-        <div class="navbar-content">
-            <a href="/" class="navbar-brand">
-                💪 Trucker
+<body class="bg-gray-100 font-sans leading-relaxed text-gray-700 p-4 pt-20 md:max-w-6xl lg:max-w-7xl md:mx-auto md:px-8 md:pb-8">
+    <nav class="fixed top-0 left-0 right-0 z-50 bg-slate-800 px-4 py-3 shadow-md">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <a href="/" class="text-white text-lg font-bold no-underline flex items-center gap-2">
+                Trucker
             </a>
-            <div class="navbar-nav">
-                <a href="/workout/new">Log Workout</a>
-                <a href="/gzclp">GZCLP</a>
-                <a href="/workouts">Workouts</a>
-                <a href="/statistics" class="active">Statistics</a>
+            <button class="md:hidden bg-transparent border-none text-white text-2xl cursor-pointer px-2 py-1 leading-none" onclick="document.getElementById('nav-links').classList.toggle('nav-open')">&#9776;</button>
+            <div id="nav-links" class="hidden md:flex gap-5 items-center">
+                <a href="/workout/new" class="text-gray-400 no-underline font-medium px-3 py-2 rounded transition-all duration-200 hover:text-white hover:bg-slate-700">Log Workout</a>
+                <a href="/gzclp" class="text-gray-400 no-underline font-medium px-3 py-2 rounded transition-all duration-200 hover:text-white hover:bg-slate-700">GZCLP</a>
+                <a href="/workouts" class="text-gray-400 no-underline font-medium px-3 py-2 rounded transition-all duration-200 hover:text-white hover:bg-slate-700">Workouts</a>
+                <a href="/statistics" class="text-blue-400 bg-slate-700 no-underline font-medium px-3 py-2 rounded transition-all duration-200 hover:text-white hover:bg-slate-700">Statistics</a>
             </div>
         </div>
     </nav>
-    <h1>📊 Exercise Statistics</h1>
 
-    <div class="exercise-filter">
-        <div class="filter-row">
-            <label for="exerciseSelect">Select Exercise:</label>
-            <select id="exerciseSelect" onchange="loadExerciseStats()">
+    <h1 class="text-2xl md:text-3xl mb-6 text-center text-slate-800">Exercise Statistics</h1>
+
+    <div class="bg-white rounded-lg p-4 mb-5 shadow">
+        <div class="flex flex-col md:flex-row gap-3 md:items-center">
+            <label for="exerciseSelect" class="font-medium text-slate-800 shrink-0">Select Exercise:</label>
+            <select id="exerciseSelect" onchange="loadExerciseStats()" class="p-3 border border-gray-300 rounded-md text-base bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 md:flex-1 md:max-w-xs">
                 <option value="">Loading exercises...</option>
             </select>
         </div>
     </div>
 
     <div id="statsContainer">
-        <div class="loading">
+        <div class="text-center my-16 text-gray-500">
             <h3>No exercise selected</h3>
             <p>Please select an exercise</p>
         </div>
     </div>
-
 
     <script>
         let progressChart = null;
@@ -345,7 +83,7 @@
             }
 
             document.getElementById('statsContainer').innerHTML = `
-                <div class="loading">
+                <div class="text-center my-16 text-gray-500">
                     <h3>Loading ${exercise} statistics...</h3>
                     <p>Calculating your progress...</p>
                 </div>
@@ -369,7 +107,6 @@
         function showStats(exercise, data) {
             const container = document.getElementById('statsContainer');
 
-            // Calculate summary stats
             const oneRMs = data.data.map(d => d.estimated_1rm);
             const volumes = data.data.map(d => d.total_volume);
             const currentMax = Math.max(...oneRMs);
@@ -381,54 +118,48 @@
                 ((volumes[volumes.length - 1] - volumes[0]) / volumes[0] * 100).toFixed(1) : 0;
 
             container.innerHTML = `
-                <div class="stats-summary">
-                    <h3 style="text-align: center; margin-bottom: 16px; color: #2c3e50;">${exercise} Progress</h3>
-                    <div class="stats-grid">
-                        <div class="stat-item">
-                            <div class="stat-value">${currentMax.toFixed(1)} kg</div>
-                            <div class="stat-label">Current Max 1RM</div>
+                <div class="bg-white rounded-lg p-4 mb-5 shadow">
+                    <h3 class="text-center mb-4 text-slate-800">${exercise} Progress</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+                        <div class="text-center p-3 bg-gray-50 rounded-md">
+                            <div class="text-xl font-bold text-slate-800">${currentMax.toFixed(1)} kg</div>
+                            <div class="text-sm text-gray-500 mt-1">Current Max 1RM</div>
                         </div>
-                        <div class="stat-item">
-                            <div class="stat-value">${currentMaxVolume.toFixed(0)} kg</div>
-                            <div class="stat-label">Max Volume</div>
+                        <div class="text-center p-3 bg-gray-50 rounded-md">
+                            <div class="text-xl font-bold text-slate-800">${currentMaxVolume.toFixed(0)} kg</div>
+                            <div class="text-sm text-gray-500 mt-1">Max Volume</div>
                         </div>
-                        <div class="stat-item">
-                            <div class="stat-value">${totalWorkouts}</div>
-                            <div class="stat-label">Total Workouts</div>
+                        <div class="text-center p-3 bg-gray-50 rounded-md">
+                            <div class="text-xl font-bold text-slate-800">${totalWorkouts}</div>
+                            <div class="text-sm text-gray-500 mt-1">Total Workouts</div>
                         </div>
-                        <div class="stat-item">
-                            <div class="stat-value">${improvement}%</div>
-                            <div class="stat-label">1RM Improvement</div>
+                        <div class="text-center p-3 bg-gray-50 rounded-md">
+                            <div class="text-xl font-bold text-slate-800">${improvement}%</div>
+                            <div class="text-sm text-gray-500 mt-1">1RM Improvement</div>
                         </div>
-                        <div class="stat-item">
-                            <div class="stat-value">${volumeImprovement}%</div>
-                            <div class="stat-label">Volume Improvement</div>
+                        <div class="text-center p-3 bg-gray-50 rounded-md">
+                            <div class="text-xl font-bold text-slate-800">${volumeImprovement}%</div>
+                            <div class="text-sm text-gray-500 mt-1">Volume Improvement</div>
                         </div>
                     </div>
                 </div>
-                <div class="chart-container">
-                    <div class="chart-title">Estimated 1RM Progress Over Time</div>
-                    <div class="chart-canvas">
+                <div class="bg-white rounded-lg p-5 md:p-6 my-4 shadow relative h-[300px] md:h-[400px]">
+                    <div class="text-base font-semibold text-slate-800 mb-4 text-center">Estimated 1RM Progress Over Time</div>
+                    <div class="relative h-[250px] md:h-[350px]">
                         <canvas id="progressChart"></canvas>
                     </div>
                 </div>
-                <div class="chart-container">
-                    <div class="chart-title">Total Volume Progress Over Time</div>
-                    <div class="chart-canvas">
+                <div class="bg-white rounded-lg p-5 md:p-6 my-4 shadow relative h-[300px] md:h-[400px]">
+                    <div class="text-base font-semibold text-slate-800 mb-4 text-center">Total Volume Progress Over Time</div>
+                    <div class="relative h-[250px] md:h-[350px]">
                         <canvas id="volumeChart"></canvas>
                     </div>
                 </div>
             `;
 
-            // Destroy existing charts if they exist
-            if (progressChart) {
-                progressChart.destroy();
-            }
-            if (volumeChart) {
-                volumeChart.destroy();
-            }
+            if (progressChart) progressChart.destroy();
+            if (volumeChart) volumeChart.destroy();
 
-            // Create 1RM Progress Chart
             const progressCtx = document.getElementById('progressChart').getContext('2d');
             progressChart = new Chart(progressCtx, {
                 type: 'line',
@@ -439,59 +170,23 @@
                         data: data.data.map(d => d.estimated_1rm),
                         borderColor: '#3498db',
                         backgroundColor: 'rgba(52, 152, 219, 0.1)',
-                        borderWidth: 3,
-                        fill: true,
-                        tension: 0.2,
-                        pointBackgroundColor: '#3498db',
-                        pointBorderColor: '#2980b9',
-                        pointBorderWidth: 2,
-                        pointRadius: 6,
-                        pointHoverRadius: 8
+                        borderWidth: 3, fill: true, tension: 0.2,
+                        pointBackgroundColor: '#3498db', pointBorderColor: '#2980b9',
+                        pointBorderWidth: 2, pointRadius: 6, pointHoverRadius: 8
                     }]
                 },
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    layout: {
-                        padding: {
-                            bottom: 20
-                        }
-                    },
-                    plugins: {
-                        legend: {
-                            display: false
-                        }
-                    },
+                    responsive: true, maintainAspectRatio: false,
+                    layout: { padding: { bottom: 20 } },
+                    plugins: { legend: { display: false } },
                     scales: {
-                        y: {
-                            beginAtZero: false,
-                            grid: {
-                                color: 'rgba(0,0,0,0.1)'
-                            },
-                            ticks: {
-                                callback: function(value) {
-                                    return value.toFixed(1) + ' kg';
-                                }
-                            }
-                        },
-                        x: {
-                            grid: {
-                                color: 'rgba(0,0,0,0.1)'
-                            },
-                            ticks: {
-                                padding: 10
-                            }
-                        }
+                        y: { beginAtZero: false, grid: { color: 'rgba(0,0,0,0.1)' }, ticks: { callback: v => v.toFixed(1) + ' kg' } },
+                        x: { grid: { color: 'rgba(0,0,0,0.1)' }, ticks: { padding: 10 } }
                     },
-                    elements: {
-                        point: {
-                            hoverBackgroundColor: '#2980b9'
-                        }
-                    }
+                    elements: { point: { hoverBackgroundColor: '#2980b9' } }
                 }
             });
 
-            // Create Volume Chart
             const volumeCtx = document.getElementById('volumeChart').getContext('2d');
             volumeChart = new Chart(volumeCtx, {
                 type: 'line',
@@ -502,78 +197,42 @@
                         data: data.data.map(d => d.total_volume),
                         borderColor: '#e67e22',
                         backgroundColor: 'rgba(230, 126, 34, 0.1)',
-                        borderWidth: 3,
-                        fill: true,
-                        tension: 0.2,
-                        pointBackgroundColor: '#e67e22',
-                        pointBorderColor: '#d35400',
-                        pointBorderWidth: 2,
-                        pointRadius: 6,
-                        pointHoverRadius: 8
+                        borderWidth: 3, fill: true, tension: 0.2,
+                        pointBackgroundColor: '#e67e22', pointBorderColor: '#d35400',
+                        pointBorderWidth: 2, pointRadius: 6, pointHoverRadius: 8
                     }]
                 },
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    layout: {
-                        padding: {
-                            bottom: 20
-                        }
-                    },
-                    plugins: {
-                        legend: {
-                            display: false
-                        }
-                    },
+                    responsive: true, maintainAspectRatio: false,
+                    layout: { padding: { bottom: 20 } },
+                    plugins: { legend: { display: false } },
                     scales: {
-                        y: {
-                            beginAtZero: true,
-                            grid: {
-                                color: 'rgba(0,0,0,0.1)'
-                            },
-                            ticks: {
-                                callback: function(value) {
-                                    return value.toFixed(0) + ' kg';
-                                }
-                            }
-                        },
-                        x: {
-                            grid: {
-                                color: 'rgba(0,0,0,0.1)'
-                            },
-                            ticks: {
-                                padding: 10
-                            }
-                        }
+                        y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.1)' }, ticks: { callback: v => v.toFixed(0) + ' kg' } },
+                        x: { grid: { color: 'rgba(0,0,0,0.1)' }, ticks: { padding: 10 } }
                     },
-                    elements: {
-                        point: {
-                            hoverBackgroundColor: '#d35400'
-                        }
-                    }
+                    elements: { point: { hoverBackgroundColor: '#d35400' } }
                 }
             });
         }
 
         function showNoDataForExercise(exercise) {
             document.getElementById('statsContainer').innerHTML = `
-                <div class="no-data">
-                    <h2>No data for ${exercise}</h2>
-                    <p>Start logging workouts to see your progress!</p>
+                <div class="text-center my-16 py-10 px-5 bg-white rounded-lg shadow">
+                    <h2 class="text-xl mb-4 text-gray-500">No data for ${exercise}</h2>
+                    <p class="text-base text-gray-400">Start logging workouts to see your progress!</p>
                 </div>
             `;
         }
 
         function showNoData() {
             document.getElementById('statsContainer').innerHTML = `
-                <div class="no-data">
-                    <h2>No workout data found</h2>
-                    <p>Start logging workouts to see your progress statistics!</p>
+                <div class="text-center my-16 py-10 px-5 bg-white rounded-lg shadow">
+                    <h2 class="text-xl mb-4 text-gray-500">No workout data found</h2>
+                    <p class="text-base text-gray-400">Start logging workouts to see your progress statistics!</p>
                 </div>
             `;
         }
 
-        // Load exercises when page loads
         window.addEventListener('load', loadExercises);
     </script>
 </body>

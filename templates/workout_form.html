@@ -8,6 +8,9 @@
         @media (max-width: 767px) {
             .nav-open { display: flex !important; flex-direction: column; position: absolute; top: 100%; left: 0; right: 0; background: #1e293b; padding: 0.5rem 0; box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
         }
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; }
     </style>
 </head>
 <body class="bg-gray-100 font-sans leading-relaxed text-gray-700 p-4 pt-20 md:max-w-3xl lg:max-w-5xl md:mx-auto md:px-8 md:pb-8">
@@ -22,6 +25,7 @@
                 <a href="/gzclp" class="text-gray-400 no-underline font-medium px-3 py-2 rounded transition-all duration-200 hover:text-white hover:bg-slate-700">GZCLP</a>
                 <a href="/workouts" class="text-gray-400 no-underline font-medium px-3 py-2 rounded transition-all duration-200 hover:text-white hover:bg-slate-700">Workouts</a>
                 <a href="/statistics" class="text-gray-400 no-underline font-medium px-3 py-2 rounded transition-all duration-200 hover:text-white hover:bg-slate-700">Statistics</a>
+                <a href="/exercises" class="text-gray-400 no-underline font-medium px-3 py-2 rounded transition-all duration-200 hover:text-white hover:bg-slate-700">Exercises</a>
             </div>
         </div>
     </nav>

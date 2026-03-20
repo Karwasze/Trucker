@@ -8,6 +8,9 @@
         @media (max-width: 767px) {
             .nav-open { display: flex !important; flex-direction: column; position: absolute; top: 100%; left: 0; right: 0; background: #1e293b; padding: 0.5rem 0; box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
         }
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; }
     </style>
 </head>
 <body class="bg-gray-100 font-sans leading-relaxed text-gray-700 p-4 pt-20 md:max-w-4xl lg:max-w-6xl md:mx-auto md:px-8 md:pb-8">
@@ -22,6 +25,7 @@
                 <a href="/gzclp" class="text-blue-400 bg-slate-700 no-underline font-medium px-3 py-2 rounded transition-all duration-200 hover:text-white hover:bg-slate-700">GZCLP</a>
                 <a href="/workouts" class="text-gray-400 no-underline font-medium px-3 py-2 rounded transition-all duration-200 hover:text-white hover:bg-slate-700">Workouts</a>
                 <a href="/statistics" class="text-gray-400 no-underline font-medium px-3 py-2 rounded transition-all duration-200 hover:text-white hover:bg-slate-700">Statistics</a>
+                <a href="/exercises" class="text-gray-400 no-underline font-medium px-3 py-2 rounded transition-all duration-200 hover:text-white hover:bg-slate-700">Exercises</a>
             </div>
         </div>
     </nav>
@@ -74,7 +78,6 @@
                 </div>
 
                 <div class="mt-4" id="sets_0">
-                    {{range $i := (slice (printf "%5s" "") )}}{{end}}
                     <div class="set mb-2 px-2.5 py-2 border border-gray-200 bg-white rounded-md flex items-center gap-2">
                         <div class="font-semibold text-slate-800 text-sm min-w-[12px] shrink-0">Set 1</div>
                         <div class="flex gap-2 items-center ml-auto shrink-0">
@@ -413,26 +416,25 @@
 
     function addSet(exerciseIndex) {
         const setsDiv = document.getElementById('sets_' + exerciseIndex);
+        const currentCount = setsDiv.querySelectorAll('.set').length;
+
         const newSet = document.createElement('div');
         newSet.className = SET_CLASSES;
-
-        const setNumber = setCounts[exerciseIndex];
         newSet.innerHTML =
-            '<div class="' + SET_NUM_CLASSES + '">Set ' + (setNumber + 1) + '</div>' +
+            '<div class="' + SET_NUM_CLASSES + '">Set ' + (currentCount + 1) + '</div>' +
             '<div class="' + SET_INPUTS_CLASSES + '">' +
                 '<div class="' + INPUT_GROUP_CLASSES + '">' +
-                    '<input type="number" name="weight_' + exerciseIndex + '_' + setNumber + '" step="0.5" min="0" required class="' + INPUT_CLASSES + '">' +
+                    '<input type="number" name="weight_' + exerciseIndex + '_' + currentCount + '" step="0.5" min="0" required class="' + INPUT_CLASSES + '">' +
                     '<label class="' + LABEL_CLASSES + '">kg</label>' +
                 '</div>' +
                 '<div class="' + INPUT_GROUP_CLASSES + '">' +
-                    '<input type="number" name="reps_' + exerciseIndex + '_' + setNumber + '" min="1" required class="' + INPUT_CLASSES + '">' +
+                    '<input type="number" name="reps_' + exerciseIndex + '_' + currentCount + '" min="1" required class="' + INPUT_CLASSES + '">' +
                     '<label class="' + LABEL_CLASSES + '">reps</label>' +
                 '</div>' +
             '</div>' +
             '<button type="button" class="' + REMOVE_BTN_CLASSES + '" onclick="removeSet(this, ' + exerciseIndex + ')">&#10060;</button>';
 
         setsDiv.appendChild(newSet);
-        setCounts[exerciseIndex]++;
     }
 
     function removeExercise(button) {
@@ -463,6 +465,15 @@
         }
 
         button.parentElement.remove();
+        // Renumber remaining sets (labels and input names)
+        const remainingSets = setsDiv.querySelectorAll('.set');
+        remainingSets.forEach((set, idx) => {
+            set.querySelector('div').textContent = 'Set ' + (idx + 1);
+            const weightInput = set.querySelector('input[name^="weight_"]');
+            const repsInput = set.querySelector('input[name^="reps_"]');
+            if (weightInput) weightInput.name = 'weight_' + exerciseIndex + '_' + idx;
+            if (repsInput) repsInput.name = 'reps_' + exerciseIndex + '_' + idx;
+        });
     }
 
     function loadLatestExercise(exerciseName, exerciseIndex) {
@@ -542,6 +553,14 @@
         form.addEventListener('submit', function() {
             isSubmitting = true;
         });
+
+        // Auto-load latest data for pre-selected exercises
+        for (let i = 0; i < exerciseCount; i++) {
+            const select = document.querySelector('[name="exercise_' + i + '"]');
+            if (select && select.value) {
+                loadLatestExercise(select.value, i);
+            }
+        }
     });
 
     const originalSkipDay = skipDay;

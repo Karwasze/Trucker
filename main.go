@@ -28,8 +28,15 @@ type Exercise struct {
 }
 
 type ExerciseDB struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
+	ID        int    `json:"id"`
+	Name      string `json:"name"`
+	IsDefault bool   `json:"is_default"`
+}
+
+type GZCLPDayExercise struct {
+	Day          int    `json:"day"`
+	Slot         string `json:"slot"`
+	ExerciseName string `json:"exercise_name"`
 }
 
 type Set struct {
@@ -64,7 +71,8 @@ func initDB() {
 
 	CREATE TABLE IF NOT EXISTS exercise_library (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT NOT NULL UNIQUE
+		name TEXT NOT NULL UNIQUE,
+		is_default INTEGER NOT NULL DEFAULT 0
 	);
 
 	CREATE TABLE IF NOT EXISTS exercises (
@@ -87,6 +95,14 @@ func initDB() {
 		current_day INTEGER NOT NULL DEFAULT 1,
 		skipped_days INTEGER NOT NULL DEFAULT 0,
 		CONSTRAINT single_row CHECK (id = 1)
+	);
+
+	CREATE TABLE IF NOT EXISTS gzclp_day_exercises (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		day INTEGER NOT NULL,
+		slot TEXT NOT NULL,
+		exercise_name TEXT NOT NULL,
+		UNIQUE(day, slot)
 	);`
 
 	_, err = db.Exec(createTables)
@@ -97,43 +113,66 @@ func initDB() {
 	// Add new columns if they don't exist (migration)
 	db.Exec("ALTER TABLE workouts ADD COLUMN workout_type TEXT DEFAULT 'custom'")
 	db.Exec("ALTER TABLE workouts ADD COLUMN workout_day INTEGER DEFAULT 0")
-
 	// Initialize GZCLP settings
 	db.Exec("INSERT OR IGNORE INTO gzclp_settings (id, current_day, skipped_days) VALUES (1, 1, 0)")
 
-	// Populate default exercises
+	// Populate default exercises and GZCLP day assignments
 	populateDefaultExercises()
+	populateDefaultGZCLPDayExercises()
 }
 
 func populateDefaultExercises() {
-	exercises := []ExerciseDB{
-		{Name: "Squat"},
-		{Name: "Bench Press"},
-		{Name: "Deadlift"},
-		{Name: "Overhead Press"},
-		{Name: "Front Squat"},
-		{Name: "Sumo Deadlift"},
-		{Name: "Lat Pulldown"},
-		{Name: "Bent Over Row"},
-		{Name: "Leg Curl"},
-		{Name: "Leg Extension"},
-		{Name: "Leg Press"},
-		{Name: "Tricep Pushdown"},
-		{Name: "Bicep Curl"},
-		{Name: "Calf Raise"},
-		{Name: "Lateral Raise"},
-		{Name: "Chest Fly"},
+	exercises := []string{
+		"Squat", "Bench Press", "Deadlift", "Overhead Press",
+		"Front Squat", "Sumo Deadlift", "Lat Pulldown", "Bent Over Row",
+		"Leg Curl", "Leg Extension", "Leg Press", "Tricep Pushdown",
+		"Bicep Curl", "Calf Raise", "Lateral Raise", "Chest Fly",
 	}
 
-	for _, exercise := range exercises {
-		db.Exec("INSERT OR IGNORE INTO exercise_library (name) VALUES (?)", exercise.Name)
+	for _, name := range exercises {
+		db.Exec("INSERT OR IGNORE INTO exercise_library (name, is_default) VALUES (?, 1)", name)
+		db.Exec("UPDATE exercise_library SET is_default = 1 WHERE name = ?", name)
+	}
+}
+
+func populateDefaultGZCLPDayExercises() {
+	defaults := []GZCLPDayExercise{
+		// Day A1
+		{Day: 1, Slot: "T1", ExerciseName: "Squat"},
+		{Day: 1, Slot: "T2", ExerciseName: "Bench Press"},
+		{Day: 1, Slot: "T3", ExerciseName: "Lat Pulldown"},
+		{Day: 1, Slot: "Additional1", ExerciseName: "Leg Press"},
+		{Day: 1, Slot: "Additional2", ExerciseName: "Chest Fly"},
+		// Day B1
+		{Day: 2, Slot: "T1", ExerciseName: "Overhead Press"},
+		{Day: 2, Slot: "T2", ExerciseName: "Deadlift"},
+		{Day: 2, Slot: "T3", ExerciseName: "Bent Over Row"},
+		{Day: 2, Slot: "Additional1", ExerciseName: "Lateral Raise"},
+		{Day: 2, Slot: "Additional2", ExerciseName: "Leg Curl"},
+		// Day A2
+		{Day: 3, Slot: "T1", ExerciseName: "Bench Press"},
+		{Day: 3, Slot: "T2", ExerciseName: "Squat"},
+		{Day: 3, Slot: "T3", ExerciseName: "Lat Pulldown"},
+		{Day: 3, Slot: "Additional1", ExerciseName: "Chest Fly"},
+		{Day: 3, Slot: "Additional2", ExerciseName: "Leg Press"},
+		// Day B2
+		{Day: 4, Slot: "T1", ExerciseName: "Deadlift"},
+		{Day: 4, Slot: "T2", ExerciseName: "Overhead Press"},
+		{Day: 4, Slot: "T3", ExerciseName: "Bent Over Row"},
+		{Day: 4, Slot: "Additional1", ExerciseName: "Leg Curl"},
+		{Day: 4, Slot: "Additional2", ExerciseName: "Lateral Raise"},
+	}
+
+	for _, d := range defaults {
+		db.Exec("INSERT OR IGNORE INTO gzclp_day_exercises (day, slot, exercise_name) VALUES (?, ?, ?)",
+			d.Day, d.Slot, d.ExerciseName)
 	}
 }
 
 func getAllExercises() ([]ExerciseDB, error) {
 	var exercises []ExerciseDB
 
-	query := "SELECT id, name FROM exercise_library ORDER BY name"
+	query := "SELECT id, name, is_default FROM exercise_library ORDER BY name"
 
 	rows, err := db.Query(query)
 	if err != nil {
@@ -143,7 +182,7 @@ func getAllExercises() ([]ExerciseDB, error) {
 
 	for rows.Next() {
 		var exercise ExerciseDB
-		err := rows.Scan(&exercise.ID, &exercise.Name)
+		err := rows.Scan(&exercise.ID, &exercise.Name, &exercise.IsDefault)
 		if err != nil {
 			return nil, err
 		}
@@ -168,8 +207,11 @@ func main() {
 	http.HandleFunc("/gzclp/skip", skipGZCLPDay)               // Skip GZCLP workout day
 	http.HandleFunc("/workout/delete", deleteWorkout)          // Delete workout endpoint
 	http.HandleFunc("/statistics", statisticsPage)             // Statistics page
-	http.HandleFunc("/api/latest-exercise", getLatestExercise) // API endpoint for latest exercise data
-	http.HandleFunc("/api/statistics", getStatisticsData)      // API endpoint for statistics data
+	http.HandleFunc("/exercises", exercisesPage)                // Exercise management page
+	http.HandleFunc("/api/exercises", handleExercisesAPI)       // Exercise CRUD API
+	http.HandleFunc("/api/gzclp/config", handleGZCLPConfigAPI) // GZCLP day config API
+	http.HandleFunc("/api/latest-exercise", getLatestExercise)  // API endpoint for latest exercise data
+	http.HandleFunc("/api/statistics", getStatisticsData)       // API endpoint for statistics data
 
 	log.Println("Starting server on :8081")
 	err := http.ListenAndServe(":8081", nil)
@@ -531,18 +573,45 @@ func getNextGZCLPWorkoutDay() (int, error) {
 }
 
 func getGZCLPExercises(workoutDay int) (string, string, string, string, string) {
-	switch workoutDay {
-	case 1: // Day A1
-		return "Squat", "Bench Press", "Lat Pulldown", "Leg Press", "Chest Fly"
-	case 2: // Day B1
-		return "Overhead Press", "Deadlift", "Bent Over Row", "Lateral Raise", "Leg Curl"
-	case 3: // Day A2
-		return "Bench Press", "Squat", "Lat Pulldown", "Chest Fly", "Leg Press"
-	case 4: // Day B2
-		return "Deadlift", "Overhead Press", "Bent Over Row", "Leg Curl", "Lateral Raise"
-	default:
+	rows, err := db.Query("SELECT slot, exercise_name FROM gzclp_day_exercises WHERE day = ?", workoutDay)
+	if err != nil {
+		log.Printf("Error querying GZCLP day exercises: %v", err)
 		return "Squat", "Bench Press", "Lat Pulldown", "Leg Press", "Chest Fly"
 	}
+	defer rows.Close()
+
+	slotMap := make(map[string]string)
+	for rows.Next() {
+		var slot, name string
+		if err := rows.Scan(&slot, &name); err != nil {
+			continue
+		}
+		slotMap[slot] = name
+	}
+
+	if len(slotMap) == 0 {
+		return "Squat", "Bench Press", "Lat Pulldown", "Leg Press", "Chest Fly"
+	}
+
+	return slotMap["T1"], slotMap["T2"], slotMap["T3"], slotMap["Additional1"], slotMap["Additional2"]
+}
+
+func getGZCLPAllDayExercises() ([]GZCLPDayExercise, error) {
+	rows, err := db.Query("SELECT day, slot, exercise_name FROM gzclp_day_exercises ORDER BY day, slot")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var assignments []GZCLPDayExercise
+	for rows.Next() {
+		var a GZCLPDayExercise
+		if err := rows.Scan(&a.Day, &a.Slot, &a.ExerciseName); err != nil {
+			continue
+		}
+		assignments = append(assignments, a)
+	}
+	return assignments, nil
 }
 
 func gzclpForm(w http.ResponseWriter, r *http.Request) {
@@ -694,6 +763,156 @@ func deleteWorkout(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Successfully deleted workout ID: %d", workoutID)
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, "Workout deleted successfully")
+}
+
+func exercisesPage(w http.ResponseWriter, r *http.Request) {
+	tmpl, err := template.ParseFiles("templates/exercises.html")
+	if err != nil {
+		http.Error(w, "Template error", http.StatusInternalServerError)
+		log.Printf("Error parsing exercises template: %v", err)
+		return
+	}
+	tmpl.Execute(w, nil)
+}
+
+func handleExercisesAPI(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	switch r.Method {
+	case "GET":
+		exercises, err := getAllExercises()
+		if err != nil {
+			http.Error(w, "Database error", http.StatusInternalServerError)
+			return
+		}
+		if exercises == nil {
+			exercises = []ExerciseDB{}
+		}
+		json.NewEncoder(w).Encode(exercises)
+
+	case "POST":
+		var exercise ExerciseDB
+		if err := json.NewDecoder(r.Body).Decode(&exercise); err != nil {
+			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			return
+		}
+		if exercise.Name == "" {
+			http.Error(w, "Name is required", http.StatusBadRequest)
+			return
+		}
+		result, err := db.Exec("INSERT INTO exercise_library (name, is_default) VALUES (?, 0)", exercise.Name)
+		if err != nil {
+			http.Error(w, "Exercise already exists or database error", http.StatusConflict)
+			return
+		}
+		id, _ := result.LastInsertId()
+		exercise.ID = int(id)
+		json.NewEncoder(w).Encode(exercise)
+
+	case "PUT":
+		var exercise ExerciseDB
+		if err := json.NewDecoder(r.Body).Decode(&exercise); err != nil {
+			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			return
+		}
+		if exercise.ID == 0 || exercise.Name == "" {
+			http.Error(w, "ID and name are required", http.StatusBadRequest)
+			return
+		}
+		// Get old name to update references
+		var oldName string
+		var isDefault bool
+		db.QueryRow("SELECT name, is_default FROM exercise_library WHERE id = ?", exercise.ID).Scan(&oldName, &isDefault)
+		if isDefault {
+			http.Error(w, "Cannot edit default exercises", http.StatusForbidden)
+			return
+		}
+
+		_, err := db.Exec("UPDATE exercise_library SET name = ? WHERE id = ?",
+			exercise.Name, exercise.ID)
+		if err != nil {
+			http.Error(w, "Database error", http.StatusInternalServerError)
+			return
+		}
+		// Update GZCLP day assignments if name changed
+		if oldName != "" && oldName != exercise.Name {
+			db.Exec("UPDATE gzclp_day_exercises SET exercise_name = ? WHERE exercise_name = ?", exercise.Name, oldName)
+		}
+		json.NewEncoder(w).Encode(exercise)
+
+	case "DELETE":
+		idStr := r.URL.Query().Get("id")
+		if idStr == "" {
+			http.Error(w, "ID is required", http.StatusBadRequest)
+			return
+		}
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			http.Error(w, "Invalid ID", http.StatusBadRequest)
+			return
+		}
+		// Protect default exercises
+		var isDefaultEx bool
+		db.QueryRow("SELECT is_default FROM exercise_library WHERE id = ?", id).Scan(&isDefaultEx)
+		if isDefaultEx {
+			http.Error(w, "Cannot delete default exercises", http.StatusForbidden)
+			return
+		}
+		_, err = db.Exec("DELETE FROM exercise_library WHERE id = ?", id)
+		if err != nil {
+			http.Error(w, "Database error", http.StatusInternalServerError)
+			return
+		}
+		fmt.Fprintf(w, `{"success": true}`)
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func handleGZCLPConfigAPI(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	switch r.Method {
+	case "GET":
+		assignments, err := getGZCLPAllDayExercises()
+		if err != nil {
+			http.Error(w, "Database error", http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(assignments)
+
+	case "PUT":
+		var assignments []GZCLPDayExercise
+		if err := json.NewDecoder(r.Body).Decode(&assignments); err != nil {
+			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			return
+		}
+		tx, err := db.Begin()
+		if err != nil {
+			http.Error(w, "Database error", http.StatusInternalServerError)
+			return
+		}
+		defer tx.Rollback()
+
+		for _, a := range assignments {
+			_, err := tx.Exec(
+				"INSERT OR REPLACE INTO gzclp_day_exercises (day, slot, exercise_name) VALUES (?, ?, ?)",
+				a.Day, a.Slot, a.ExerciseName)
+			if err != nil {
+				http.Error(w, "Database error", http.StatusInternalServerError)
+				return
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			http.Error(w, "Database error", http.StatusInternalServerError)
+			return
+		}
+		fmt.Fprintf(w, `{"success": true}`)
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
 func statisticsPage(w http.ResponseWriter, r *http.Request) {

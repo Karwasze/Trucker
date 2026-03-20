@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Manage Exercises - Trucker</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @media (max-width: 767px) {
+            .nav-open { display: flex !important; flex-direction: column; position: absolute; top: 100%; left: 0; right: 0; background: #1e293b; padding: 0.5rem 0; box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans leading-relaxed text-gray-700 p-4 pt-20 md:max-w-4xl lg:max-w-6xl md:mx-auto md:px-8 md:pb-8">
+    <nav class="fixed top-0 left-0 right-0 z-50 bg-slate-800 px-4 py-3 shadow-md">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <a href="/" class="text-white text-lg font-bold no-underline flex items-center gap-2">
+                Trucker
+            </a>
+            <button class="md:hidden bg-transparent border-none text-white text-2xl cursor-pointer px-2 py-1 leading-none" onclick="document.getElementById('nav-links').classList.toggle('nav-open')">&#9776;</button>
+            <div id="nav-links" class="hidden md:flex gap-5 items-center">
+                <a href="/workout/new" class="text-gray-400 no-underline font-medium px-3 py-2 rounded transition-all duration-200 hover:text-white hover:bg-slate-700">Log Workout</a>
+                <a href="/gzclp" class="text-gray-400 no-underline font-medium px-3 py-2 rounded transition-all duration-200 hover:text-white hover:bg-slate-700">GZCLP</a>
+                <a href="/workouts" class="text-gray-400 no-underline font-medium px-3 py-2 rounded transition-all duration-200 hover:text-white hover:bg-slate-700">Workouts</a>
+                <a href="/statistics" class="text-gray-400 no-underline font-medium px-3 py-2 rounded transition-all duration-200 hover:text-white hover:bg-slate-700">Statistics</a>
+                <a href="/exercises" class="text-blue-400 bg-slate-700 no-underline font-medium px-3 py-2 rounded transition-all duration-200 hover:text-white hover:bg-slate-700">Exercises</a>
+            </div>
+        </div>
+    </nav>
+
+    <h1 class="text-2xl md:text-3xl mb-6 text-center text-slate-800">Manage Exercises</h1>
+
+    <!-- Add Exercise Form -->
+    <div class="bg-white rounded-lg p-4 mb-5 shadow">
+        <h3 class="text-lg mb-3 text-slate-800">Add New Exercise</h3>
+        <div class="flex flex-col md:flex-row gap-3">
+            <input type="text" id="newExerciseName" placeholder="Exercise name" class="flex-1 p-3 border border-gray-300 rounded-md text-base bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200">
+            <button onclick="addExercise()" class="py-3 px-6 bg-green-600 text-white border-none rounded-md text-base font-medium cursor-pointer transition-colors duration-200 hover:bg-green-700">Add</button>
+        </div>
+    </div>
+
+    <!-- Exercise List -->
+    <div id="exerciseList"></div>
+
+    <script>
+        let exercises = [];
+
+        async function loadExercises() {
+            try {
+                const response = await fetch('/api/exercises');
+                const data = await response.json();
+                exercises = data || [];
+                renderExercises();
+            } catch (error) {
+                console.error('Error loading exercises:', error);
+            }
+        }
+
+        function renderExercises() {
+            const container = document.getElementById('exerciseList');
+
+            if (!exercises || exercises.length === 0) {
+                container.innerHTML = '<div class="text-center my-8 text-gray-500">No exercises found</div>';
+                return;
+            }
+
+            let html = '';
+            exercises.forEach(exercise => {
+                const buttons = exercise.is_default
+                    ? ''
+                    : `<div class="flex gap-2">
+                        <button onclick="editExercise(${exercise.id})" class="py-2 px-4 bg-blue-500 text-white border-none rounded-md text-sm font-medium cursor-pointer transition-colors duration-200 hover:bg-blue-600">Edit</button>
+                        <button onclick="deleteExercise(${exercise.id}, '${exercise.name.replace(/'/g, "\\'")}')" class="py-2 px-4 bg-red-500 text-white border-none rounded-md text-sm font-medium cursor-pointer transition-colors duration-200 hover:bg-red-600">Delete</button>
+                    </div>`;
+
+                html += `
+                <div class="bg-white rounded-lg p-4 mb-3 shadow flex flex-col md:flex-row md:items-center gap-3" id="exercise-${exercise.id}">
+                    <div class="flex-1">
+                        <span class="font-semibold text-slate-800">${exercise.name}</span>
+                        ${exercise.is_default ? '<span class="ml-2 text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-500">Default</span>' : ''}
+                    </div>
+                    ${buttons}
+                </div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        async function addExercise() {
+            const name = document.getElementById('newExerciseName').value.trim();
+            if (!name) { alert('Please enter an exercise name'); return; }
+
+            try {
+                const response = await fetch('/api/exercises', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+                if (response.ok) {
+                    document.getElementById('newExerciseName').value = '';
+                    loadExercises();
+                } else {
+                    alert('Exercise already exists or failed to add.');
+                }
+            } catch (error) {
+                alert('Error adding exercise');
+            }
+        }
+
+        async function editExercise(id) {
+            const exercise = exercises.find(e => e.id === id);
+            if (!exercise) return;
+
+            const container = document.getElementById('exercise-' + id);
+            container.innerHTML = `
+                <div class="flex-1">
+                    <input type="text" id="edit-name-${id}" value="${exercise.name}" class="w-full p-2 border border-gray-300 rounded-md text-base bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200">
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="saveEdit(${id})" class="py-2 px-4 bg-green-600 text-white border-none rounded-md text-sm font-medium cursor-pointer transition-colors duration-200 hover:bg-green-700">Save</button>
+                    <button onclick="renderExercises()" class="py-2 px-4 bg-gray-400 text-white border-none rounded-md text-sm font-medium cursor-pointer transition-colors duration-200 hover:bg-gray-500">Cancel</button>
+                </div>
+            `;
+        }
+
+        async function saveEdit(id) {
+            const name = document.getElementById('edit-name-' + id).value.trim();
+            if (!name) { alert('Name cannot be empty'); return; }
+
+            try {
+                const response = await fetch('/api/exercises', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id, name })
+                });
+                if (response.ok) {
+                    loadExercises();
+                } else {
+                    alert('Failed to update exercise.');
+                }
+            } catch (error) {
+                alert('Error updating exercise');
+            }
+        }
+
+        async function deleteExercise(id, name) {
+            if (!confirm('Delete "' + name + '"? This only removes it from the exercise library, not from past workouts.')) return;
+
+            try {
+                const response = await fetch('/api/exercises?id=' + id, { method: 'DELETE' });
+                if (response.ok) {
+                    loadExercises();
+                } else {
+                    alert('Failed to delete exercise.');
+                }
+            } catch (error) {
+                alert('Error deleting exercise');
+            }
+        }
+
+        window.addEventListener('load', loadExercises);
+    </script>
+</body>
+</html>

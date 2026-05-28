@@ -56,14 +56,15 @@
                         <div class="font-semibold text-slate-800 text-sm min-w-[12px] shrink-0">Set 1</div>
                         <div class="flex gap-2 items-center ml-auto shrink-0">
                             <div class="flex items-center gap-1">
-                                <input type="number" name="weight_0_0" step="0.5" min="0" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded">
+                                <input type="number" name="weight_0_0" step="0.5" min="0" class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded">
                                 <label class="text-xs text-gray-500 font-medium whitespace-nowrap">kg</label>
                             </div>
                             <div class="flex items-center gap-1">
-                                <input type="number" name="reps_0_0" min="1" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded">
+                                <input type="number" name="reps_0_0" min="1" class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded">
                                 <label class="text-xs text-gray-500 font-medium whitespace-nowrap">reps</label>
                             </div>
                         </div>
+                        <button type="button" class="fill-btn hidden bg-transparent text-gray-400 text-sm p-0 m-0 border-none w-5 h-5 min-w-[20px] flex items-center justify-center rounded-sm shrink-0 hover:bg-gray-50 hover:text-blue-500 cursor-pointer" onclick="fillReps(this)" title="Fill suggested reps">&#9989;</button>
                         <button type="button" class="remove-btn bg-transparent text-gray-400 text-sm p-0 m-0 border-none w-5 h-5 min-w-[20px] flex items-center justify-center rounded-sm shrink-0 hover:bg-gray-50 hover:text-red-500 cursor-pointer" onclick="removeSet(this, 0)">&#10060;</button>
                     </div>
                 </div>
@@ -75,12 +76,26 @@
         </div>
 
         <button type="button" onclick="addExercise()" class="w-full md:w-auto py-3 px-4 my-2 bg-blue-500 text-white border-none rounded-md text-base font-medium cursor-pointer transition-colors duration-200 hover:bg-blue-600">Add Another Exercise</button>
-        <input type="submit" value="Log Workout" class="w-full py-4 mt-5 bg-green-600 text-white text-lg border-none rounded-md font-medium cursor-pointer transition-colors duration-200 hover:bg-green-700">
+        <button type="button" onclick="showReview()" class="w-full py-4 mt-5 bg-green-600 text-white text-lg border-none rounded-md font-medium cursor-pointer transition-colors duration-200 hover:bg-green-700">Log Workout</button>
+        <input type="submit" id="hidden-submit" class="hidden">
     </form>
+
+    <!-- Review Modal -->
+    <div id="review-modal" class="hidden fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6">
+            <h2 class="text-xl font-bold text-slate-800 mb-4">Review Workout</h2>
+            <div id="review-content"></div>
+            <div class="flex gap-3 mt-6">
+                <button type="button" onclick="closeReview()" class="flex-1 py-3 px-4 bg-gray-500 text-white border-none rounded-md text-base font-medium cursor-pointer hover:bg-gray-600">Go Back</button>
+                <button type="button" onclick="confirmSubmit()" class="flex-1 py-3 px-4 bg-green-600 text-white border-none rounded-md text-base font-medium cursor-pointer hover:bg-green-700">Confirm</button>
+            </div>
+        </div>
+    </div>
 
     <script>
     let exerciseCount = 1;
     let setCounts = [1];
+    let latestSets = {};
 
     function addExercise() {
         const exercisesDiv = document.getElementById('exercises');
@@ -106,9 +121,10 @@
                 '<div class="set mb-2 px-2.5 py-2 border border-gray-200 bg-white rounded-md flex items-center gap-2">' +
                     '<div class="font-semibold text-slate-800 text-sm min-w-[12px] shrink-0">Set 1</div>' +
                     '<div class="flex gap-2 items-center ml-auto shrink-0">' +
-                        '<div class="flex items-center gap-1"><input type="number" name="weight_' + exerciseCount + '_0" step="0.5" min="0" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded"><label class="text-xs text-gray-500 font-medium whitespace-nowrap">kg</label></div>' +
-                        '<div class="flex items-center gap-1"><input type="number" name="reps_' + exerciseCount + '_0" min="1" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded"><label class="text-xs text-gray-500 font-medium whitespace-nowrap">reps</label></div>' +
+                        '<div class="flex items-center gap-1"><input type="number" name="weight_' + exerciseCount + '_0" step="0.5" min="0" class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded"><label class="text-xs text-gray-500 font-medium whitespace-nowrap">kg</label></div>' +
+                        '<div class="flex items-center gap-1"><input type="number" name="reps_' + exerciseCount + '_0" min="1" class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded"><label class="text-xs text-gray-500 font-medium whitespace-nowrap">reps</label></div>' +
                     '</div>' +
+                    '<button type="button" class="fill-btn hidden bg-transparent text-gray-400 text-sm p-0 m-0 border-none w-5 h-5 min-w-[20px] flex items-center justify-center rounded-sm shrink-0 hover:bg-gray-50 hover:text-blue-500 cursor-pointer" onclick="fillReps(this)" title="Fill suggested reps">&#9989;</button>' +
                     '<button type="button" class="remove-btn bg-transparent text-gray-400 text-sm p-0 m-0 border-none w-5 h-5 min-w-[20px] flex items-center justify-center rounded-sm shrink-0 hover:bg-gray-50 hover:text-red-500 cursor-pointer" onclick="removeSet(this, ' + exerciseCount + ')">&#10060;</button>' +
                 '</div>' +
             '</div>' +
@@ -137,15 +153,25 @@
             '<div class="font-semibold text-slate-800 text-sm min-w-[12px] shrink-0">Set ' + (setNumber + 1) + '</div>' +
             '<div class="flex gap-2 items-center ml-auto shrink-0">' +
                 '<div class="flex items-center gap-1">' +
-                    '<input type="number" name="weight_' + exerciseIndex + '_' + setNumber + '" step="0.5" min="0" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded">' +
+                    '<input type="number" name="weight_' + exerciseIndex + '_' + setNumber + '" step="0.5" min="0" class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded">' +
                     '<label class="text-xs text-gray-500 font-medium whitespace-nowrap">kg</label>' +
                 '</div>' +
                 '<div class="flex items-center gap-1">' +
-                    '<input type="number" name="reps_' + exerciseIndex + '_' + setNumber + '" min="1" required class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded">' +
+                    '<input type="number" name="reps_' + exerciseIndex + '_' + setNumber + '" min="1" class="w-[60px] border border-gray-200 py-1.5 px-1 text-sm bg-gray-50 text-center rounded">' +
                     '<label class="text-xs text-gray-500 font-medium whitespace-nowrap">reps</label>' +
                 '</div>' +
             '</div>' +
+            '<button type="button" class="fill-btn hidden bg-transparent text-gray-400 text-sm p-0 m-0 border-none w-5 h-5 min-w-[20px] flex items-center justify-center rounded-sm shrink-0 hover:bg-gray-50 hover:text-blue-500 cursor-pointer" onclick="fillReps(this)" title="Fill suggested reps">&#9989;</button>' +
             '<button type="button" class="remove-btn bg-transparent text-gray-400 text-sm p-0 m-0 border-none w-5 h-5 min-w-[20px] flex items-center justify-center rounded-sm shrink-0 hover:bg-gray-50 hover:text-red-500 cursor-pointer" onclick="removeSet(this, ' + exerciseIndex + ')">&#10060;</button>';
+
+        // Set placeholder and show fill button from latest data if available
+        if (latestSets[exerciseIndex]) {
+            const repsInput = newSet.querySelector('[name^="reps_"]');
+            if (repsInput && latestSets[exerciseIndex][0]) {
+                repsInput.placeholder = latestSets[exerciseIndex][0].reps;
+            }
+            newSet.querySelector('.fill-btn').classList.remove('hidden');
+        }
 
         setsDiv.appendChild(newSet);
         setCounts[exerciseIndex]++;
@@ -198,6 +224,21 @@
                 const setsDiv = document.getElementById('latest_sets_' + exerciseIndex);
 
                 if (data.sets && data.sets.length > 0) {
+                    // Store sets data for suggestions
+                    latestSets[exerciseIndex] = data.sets;
+
+                    // Set placeholder on existing reps inputs and show fill buttons
+                    const setsContainer = document.getElementById('sets_' + exerciseIndex);
+                    const setDivs = setsContainer.querySelectorAll('.set');
+                    setDivs.forEach((setDiv, i) => {
+                        const repsInput = setDiv.querySelector('[name^="reps_"]');
+                        if (repsInput && !repsInput.value && data.sets[i]) {
+                            repsInput.placeholder = data.sets[i].reps;
+                        }
+                        const fillBtn = setDiv.querySelector('.fill-btn');
+                        if (fillBtn) fillBtn.classList.remove('hidden');
+                    });
+
                     let setsHtml = '<table class="w-full border-collapse text-sm">';
                     setsHtml += '<tr><th class="border border-gray-300 p-1 text-left bg-gray-100 font-semibold">Reps</th><th class="border border-gray-300 p-1 text-left bg-gray-100 font-semibold">Weight</th></tr>';
 
@@ -212,6 +253,10 @@
                     setsDiv.innerHTML = setsHtml;
                     latestDiv.classList.remove('hidden');
                 } else {
+                    delete latestSets[exerciseIndex];
+                    // Hide fill buttons
+                    const setsContainer = document.getElementById('sets_' + exerciseIndex);
+                    setsContainer.querySelectorAll('.fill-btn').forEach(btn => btn.classList.add('hidden'));
                     setsDiv.innerHTML = '<p class="m-0">No previous data for this exercise</p>';
                     latestDiv.classList.remove('hidden');
                 }
@@ -220,6 +265,18 @@
                 console.error('Error loading latest exercise data:', error);
                 document.getElementById('latest_data_' + exerciseIndex).classList.add('hidden');
             });
+    }
+
+    function fillReps(button) {
+        const setDiv = button.closest('.set');
+        const repsInput = setDiv.querySelector('[name^="reps_"]');
+        const weightInput = setDiv.querySelector('[name^="weight_"]');
+        if (repsInput && weightInput && weightInput.value && repsInput.placeholder) {
+            repsInput.value = repsInput.placeholder;
+            // Add another set automatically
+            const exerciseIndex = parseInt(weightInput.name.split('_')[1]);
+            addSet(exerciseIndex);
+        }
     }
 
     let formChanged = false;
@@ -240,6 +297,12 @@
 
         form.addEventListener('submit', function() {
             isSubmitting = true;
+            // Fill empty reps inputs with placeholder values
+            form.querySelectorAll('input[name^="reps_"]').forEach(input => {
+                if (!input.value && input.placeholder) {
+                    input.value = input.placeholder;
+                }
+            });
         });
     });
 
@@ -250,6 +313,83 @@
             return e.returnValue;
         }
     });
+
+    function showReview() {
+        const form = document.querySelector('form');
+        // Fill empty reps with placeholder values before review
+        form.querySelectorAll('input[name^="reps_"]').forEach(input => {
+            if (!input.value && input.placeholder) {
+                input.value = input.placeholder;
+            }
+        });
+
+        const exercises = document.querySelectorAll('.exercise');
+        let html = '';
+        let hasAnySets = false;
+
+        exercises.forEach((ex, exIdx) => {
+            const select = ex.querySelector('select');
+            const name = select ? select.options[select.selectedIndex].text : '';
+            if (!name || name === 'Select Exercise') return;
+
+            const sets = ex.querySelectorAll('.set');
+            let setsHtml = '';
+            let setCount = 0;
+            let skippedCount = 0;
+
+            sets.forEach((set) => {
+                const weight = set.querySelector('input[name^="weight_"]');
+                const reps = set.querySelector('input[name^="reps_"]');
+                const w = weight ? weight.value : '';
+                const r = reps ? reps.value : '';
+
+                if (w && r) {
+                    setCount++;
+                    setsHtml += '<tr><td class="border border-gray-200 py-1.5 px-3">' + setCount + '</td>' +
+                        '<td class="border border-gray-200 py-1.5 px-3">' + w + ' kg</td>' +
+                        '<td class="border border-gray-200 py-1.5 px-3">' + r + '</td></tr>';
+                } else {
+                    skippedCount++;
+                }
+            });
+
+            if (setCount > 0) {
+                hasAnySets = true;
+                html += '<div class="mb-4"><h3 class="font-semibold text-slate-800 mb-2">' + name + '</h3>';
+                html += '<table class="w-full border-collapse text-sm"><tr><th class="border border-gray-200 py-1.5 px-3 text-left bg-gray-50 font-semibold">Set</th><th class="border border-gray-200 py-1.5 px-3 text-left bg-gray-50 font-semibold">Weight</th><th class="border border-gray-200 py-1.5 px-3 text-left bg-gray-50 font-semibold">Reps</th></tr>';
+                html += setsHtml + '</table>';
+                if (skippedCount > 0) {
+                    html += '<p class="text-xs text-amber-600 mt-1">' + skippedCount + ' empty set(s) will be skipped</p>';
+                }
+                html += '</div>';
+            } else {
+                html += '<div class="mb-4"><h3 class="font-semibold text-slate-800 mb-2">' + name + '</h3>';
+                html += '<p class="text-sm text-gray-500 italic">All sets empty - exercise will be skipped</p></div>';
+            }
+        });
+
+        if (!hasAnySets) {
+            html = '<p class="text-red-600 font-medium">No valid sets to log. Please fill in at least one set.</p>';
+            document.querySelector('#review-modal .bg-green-600').classList.add('hidden');
+        } else {
+            document.querySelector('#review-modal .bg-green-600').classList.remove('hidden');
+        }
+
+        const dateInput = form.querySelector('input[name="date"]');
+        html = '<p class="text-sm text-gray-600 mb-4"><strong>Date:</strong> ' + dateInput.value + '</p>' + html;
+
+        document.getElementById('review-content').innerHTML = html;
+        document.getElementById('review-modal').classList.remove('hidden');
+    }
+
+    function closeReview() {
+        document.getElementById('review-modal').classList.add('hidden');
+    }
+
+    function confirmSubmit() {
+        isSubmitting = true;
+        document.querySelector('form').submit();
+    }
     </script>
 
 </body>

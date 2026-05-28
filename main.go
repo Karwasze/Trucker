@@ -295,14 +295,26 @@ func createWorkout(w http.ResponseWriter, r *http.Request) {
 			Sets: []Set{},
 		}
 
-		// Parse sets for this exercise
+		// Parse sets for this exercise, skipping empty ones
 		setIndex := 0
 		for {
-			repsStr := r.FormValue(fmt.Sprintf("reps_%d_%d", exerciseIndex, setIndex))
-			weightStr := r.FormValue(fmt.Sprintf("weight_%d_%d", exerciseIndex, setIndex))
+			repsKey := fmt.Sprintf("reps_%d_%d", exerciseIndex, setIndex)
+			weightKey := fmt.Sprintf("weight_%d_%d", exerciseIndex, setIndex)
 
-			if repsStr == "" || weightStr == "" {
+			// Check if these form fields exist at all
+			_, repsExists := r.Form[repsKey]
+			_, weightExists := r.Form[weightKey]
+			if !repsExists && !weightExists {
 				break // No more sets for this exercise
+			}
+
+			repsStr := r.FormValue(repsKey)
+			weightStr := r.FormValue(weightKey)
+
+			// Skip sets where either value is empty
+			if repsStr == "" || weightStr == "" {
+				setIndex++
+				continue
 			}
 
 			// Convert strings to numbers
@@ -318,17 +330,17 @@ func createWorkout(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			// Create set
-			set := Set{
+			exercise.Sets = append(exercise.Sets, Set{
 				Reps:   reps,
 				Weight: weight,
-			}
-
-			exercise.Sets = append(exercise.Sets, set)
+			})
 			setIndex++
 		}
 
-		workout.Exercises = append(workout.Exercises, exercise)
+		// Only add exercise if it has at least one valid set
+		if len(exercise.Sets) > 0 {
+			workout.Exercises = append(workout.Exercises, exercise)
+		}
 		exerciseIndex++
 	}
 
@@ -1041,7 +1053,7 @@ func getStatisticsData(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Convert map to sorted slice
-	var data []StatisticsData
+	data := []StatisticsData{}
 	for date, workoutData := range dateMap {
 		data = append(data, StatisticsData{
 			Date:         date,

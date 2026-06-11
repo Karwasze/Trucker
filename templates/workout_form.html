@@ -94,15 +94,12 @@
 
     <script>
     let exerciseCount = 1;
-    let setCounts = [1];
     let latestSets = {};
 
     function addExercise() {
         const exercisesDiv = document.getElementById('exercises');
         const newExercise = document.createElement('div');
         newExercise.className = 'exercise my-4 p-4 border-2 border-gray-800 bg-white rounded-lg shadow';
-
-        setCounts.push(1);
 
         newExercise.innerHTML =
             '<h3 class="text-lg mb-3 text-slate-800">Exercise ' + (exerciseCount + 1) + '</h3>' +
@@ -148,7 +145,7 @@
         const newSet = document.createElement('div');
         newSet.className = 'set mb-2 px-2.5 py-2 border border-gray-200 bg-white rounded-md flex items-center gap-2';
 
-        const setNumber = setCounts[exerciseIndex];
+        const setNumber = setsDiv.querySelectorAll('.set').length;
         newSet.innerHTML =
             '<div class="font-semibold text-slate-800 text-sm min-w-[12px] shrink-0">Set ' + (setNumber + 1) + '</div>' +
             '<div class="flex gap-2 items-center ml-auto shrink-0">' +
@@ -174,7 +171,6 @@
         }
 
         setsDiv.appendChild(newSet);
-        setCounts[exerciseIndex]++;
 
         const newInputs = newSet.querySelectorAll('input');
         newInputs.forEach(input => {
@@ -209,6 +205,16 @@
         }
 
         button.parentElement.remove();
+
+        // Renumber remaining sets (labels and input names)
+        const remainingSets = setsDiv.querySelectorAll('.set');
+        remainingSets.forEach((set, idx) => {
+            set.querySelector('div').textContent = 'Set ' + (idx + 1);
+            const weightInput = set.querySelector('input[name^="weight_"]');
+            const repsInput = set.querySelector('input[name^="reps_"]');
+            if (weightInput) weightInput.name = 'weight_' + exerciseIndex + '_' + idx;
+            if (repsInput) repsInput.name = 'reps_' + exerciseIndex + '_' + idx;
+        });
     }
 
     function loadLatestExercise(exerciseName, exerciseIndex) {

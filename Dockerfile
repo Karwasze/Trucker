@@ -1,5 +1,5 @@
 # Use official Go image as build stage
-FROM golang:1.25-alpine AS builder
+FROM golang:1.25.1-alpine3.22 AS builder
 
 # Set working directory
 WORKDIR /app
@@ -20,7 +20,7 @@ COPY . .
 RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o main .
 
 # Use alpine for the final image
-FROM alpine:latest
+FROM alpine:3.22
 
 # Install runtime dependencies
 RUN apk --no-cache add ca-certificates sqlite

@@ -1,0 +1,17 @@
+# Overrides for running trucker on microk8s (vs minikube).
+# Apply with:  helm ... -f values-microk8s.yaml
+#
+# microk8s runs on the host network, so a NodePort is directly reachable at
+# http://<host-ip>:30081 — no tunnel / no shared docker network needed.
+service:
+  type: NodePort
+  port: 8081
+  nodePort: 30081
+
+# Publish the app on host port 8081 (like the old Docker `8081:8081` mapping),
+# so http://<host>:8081 — e.g. http://trucker:8081 — keeps working.
+hostPort: 8081
+
+# storageclass created by the microk8s `hostpath-storage` addon.
+persistence:
+  storageClass: microk8s-hostpath

@@ -1,0 +1,40 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/karwasze/trucker
+  tag: 0.1.1
+  pullPolicy: IfNotPresent
+
+# Container listens on 8081 (see Dockerfile EXPOSE / main.go ListenAndServe)
+containerPort: 8081
+
+service:
+  # LoadBalancer works with `minikube tunnel` to get a host-routable IP,
+  # keeping the cluster off the docker-compose `proxy` network.
+  type: LoadBalancer
+  port: 8081
+  # nodePort only applies when type is NodePort (kept for easy fallback).
+  nodePort: 30081
+
+# SQLite database lives at /database/workouts.db inside the container.
+# A PersistentVolumeClaim keeps it across pod restarts / redeploys.
+persistence:
+  enabled: true
+  storageClass: standard
+  accessMode: ReadWriteOnce
+  size: 1Gi
+  mountPath: /database
+
+env:
+  - name: DOCKER_ENV
+    value: "true"
+  - name: TZ
+    value: "Europe/Warsaw"
+
+resources:
+  requests:
+    cpu: 25m
+    memory: 32Mi
+  limits:
+    cpu: 250m
+    memory: 128

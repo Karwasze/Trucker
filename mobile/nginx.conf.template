@@ -1,0 +1,32 @@
+server {
+    listen 8080;
+    server_name _;
+
+    root /usr/share/nginx/html;
+
+    # Same-origin proxy to the Go API, which sends no CORS headers.
+    location /api/ {
+        proxy_pass ${API_UPSTREAM};
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Liveness/readiness for this container only; does not depend on the API.
+    location = /nginx-health {
+        access_log off;
+        return 200 "ok\n";
+    }
+
+    # Hashed bundles never change, so cache them hard.
+    location /_expo/static/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Pre-rendered routes are exported as <route>.html; anything else falls
+    # back to the SPA shell and expo-router resolves it client-side.
+    location / {
+        try_files $uri $uri.html $uri/index.html /index.html;
+    }
+}

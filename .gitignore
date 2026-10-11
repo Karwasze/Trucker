@@ -50,9 +50,9 @@ Thumbs.db
 tmp/
 
 # Build artifacts
-main
-trucker
-Trucker
+/main
+/trucker
+/Trucker
 
 # Environment files
 .env

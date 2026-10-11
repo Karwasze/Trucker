@@ -1,0 +1,32 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/karwasze/trucker-mobile
+  tag: 0.1.1
+  pullPolicy: IfNotPresent
+
+# nginx listens on 8080 (see mobile/Dockerfile EXPOSE / nginx.conf.template)
+containerPort: 8080
+
+service:
+  # LoadBalancer works with `minikube tunnel` to get a host-routable IP.
+  type: LoadBalancer
+  port: 8082
+  # nodePort only applies when type is NodePort (kept for easy fallback).
+  nodePort: 30082
+
+# The web app talks to the API on its own origin; nginx proxies /api/ here.
+# Default matches the Service of the `trucker` chart installed as release "trucker".
+apiUpstream: http://trucker:8081
+
+env:
+  - name: TZ
+    value: "Europe/Warsaw"
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 16Mi
+  limits:
+    cpu: 100m
+    memory: 64Mi

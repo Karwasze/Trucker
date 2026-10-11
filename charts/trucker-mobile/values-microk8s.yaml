@@ -1,0 +1,12 @@
+# Overrides for running trucker-mobile on microk8s (vs minikube).
+# Apply with:  helm ... -f values-microk8s.yaml
+#
+# microk8s runs on the host network, so a NodePort is directly reachable at
+# http://<host-ip>:30082 — no tunnel needed.
+service:
+  type: NodePort
+  port: 8082
+  nodePort: 30082
+
+# Publish the web app on host port 8082, next to the API on 8081.
+hostPort: 8082

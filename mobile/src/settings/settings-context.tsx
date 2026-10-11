@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { createContext, use, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Platform } from 'react-native';
 
 import { createApi, type Api } from '@/api/client';
 
@@ -50,12 +51,22 @@ function defaultDevUrl() {
   return `http://${host ?? 'localhost'}:${API_PORT}`;
 }
 
+/**
+ * Picks a starting production URL: EXPO_PUBLIC_PROD_API_URL if set; on the web,
+ * the page's own origin (nginx proxies /api/ to the server); otherwise PROD_URL.
+ */
+function defaultProdUrl() {
+  if (process.env.EXPO_PUBLIC_PROD_API_URL) return process.env.EXPO_PUBLIC_PROD_API_URL;
+  if (Platform.OS === 'web' && typeof window !== 'undefined') return window.location.origin;
+  return PROD_URL;
+}
+
 const defaults: Settings = {
   // Release builds start on production; dev builds on the local API.
   environment: __DEV__ ? 'dev' : 'prod',
   servers: {
     dev: { url: defaultDevUrl(), planId: null },
-    prod: { url: process.env.EXPO_PUBLIC_PROD_API_URL ?? PROD_URL, planId: null },
+    prod: { url: defaultProdUrl(), planId: null },
   },
 };
 

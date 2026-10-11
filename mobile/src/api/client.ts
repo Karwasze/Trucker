@@ -59,6 +59,14 @@ export function createApi(baseUrl: string) {
       request<{ success: boolean }>(`/api/exercises?id=${id}`, { method: 'DELETE' }),
 
     listPlans: async () => (await request<TrainingPlan[] | null>('/api/plans')) ?? [],
+    getPlan: (id: number) => request<TrainingPlan>(`/api/plans?id=${id}`),
+    createPlan: ({ id: _id, ...plan }: TrainingPlan) =>
+      request<TrainingPlan>('/api/plans', { method: 'POST', body: JSON.stringify(plan) }),
+    /** Replaces the plan; the server resets every exercise's miss counter. */
+    updatePlan: (plan: TrainingPlan) =>
+      request<TrainingPlan>('/api/plans', { method: 'PUT', body: JSON.stringify(plan) }),
+    deletePlan: (id: number) =>
+      request<{ success: boolean }>(`/api/plans?id=${id}`, { method: 'DELETE' }),
     planToday: async (planId: number, date: string) => {
       const day = await request<PlanToday>(`/api/plans/today?id=${planId}&date=${q(date)}`);
       return { ...day, exercises: day.exercises ?? [] };

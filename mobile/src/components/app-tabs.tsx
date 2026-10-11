@@ -17,6 +17,11 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Icon sf="figure.strengthtraining.traditional" md="fitness_center" />
       </NativeTabs.Trigger>
 
+      <NativeTabs.Trigger name="plans">
+        <NativeTabs.Trigger.Label>Training plan</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="list.bullet.clipboard" md="assignment" />
+      </NativeTabs.Trigger>
+
       <NativeTabs.Trigger name="history">
         <NativeTabs.Trigger.Label>History</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="clock.arrow.circlepath" md="history" />

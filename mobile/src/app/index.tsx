@@ -14,6 +14,7 @@ import {
   completedSetCount,
   draftExercise,
   draftFromPlan,
+  planFingerprint,
   toWorkout,
   useDraft,
   type Draft,
@@ -47,7 +48,14 @@ export default function TodayScreen() {
     const stale =
       draft === null ||
       (draft.logged && draft.date !== today) ||
-      (!hasProgress(draft) && (draft.date !== today || draft.basedOn !== planId));
+      (!hasProgress(draft) &&
+        (draft.date !== today ||
+          draft.basedOn !== planId ||
+          // The plan was edited; skip drafts not built from it ("start another").
+          // Logging progresses the plan, so a logged draft never counts as edited.
+          (!draft.logged &&
+            draft.source !== undefined &&
+            draft.source !== planFingerprint(planDay.data?.exercises ?? []))));
     if (stale) setDraft(draftFromPlan(today, planId, planDay.data?.exercises ?? []));
   }, [draft, planReady, planId, today, planDay.data, setDraft]);
 
@@ -130,7 +138,7 @@ export default function TodayScreen() {
               <ThemedText type="small" themeColor="textSecondary">
                 Pick a plan in Settings to get today&apos;s targets, or add exercises freely.
               </ThemedText>
-              <Button title="Choose plan" variant="secondary" compact onPress={() => router.navigate('/settings')} />
+              <Button title="Choose plan" variant="secondary" compact onPress={() => router.navigate('/plans')} />
             </Card>
           )}
           {isRestDay && draft?.exercises.length === 0 && (

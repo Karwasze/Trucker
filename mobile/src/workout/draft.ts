@@ -22,6 +22,8 @@ export type Draft = {
   planId: number | null;
   /** The active plan setting this draft was built from. */
   basedOn: number | null;
+  /** Fingerprint of the plan targets it was built from, to notice plan edits. */
+  source?: string;
   exercises: DraftExercise[];
   /** Set once the workout has been posted to the server. */
   logged?: CreatedWorkout;
@@ -44,11 +46,15 @@ export function draftExercise(name: string, sets: Set[], target?: string): Draft
   return { key: newKey(), name, target, sets: toDraftSets(sets) };
 }
 
+export const planFingerprint = (exercises: PlanExercise[]) =>
+  JSON.stringify(exercises.map((e) => [e.name, e.sets]));
+
 export function draftFromPlan(date: string, planId: number | null, exercises: PlanExercise[]): Draft {
   return {
     date,
     planId,
     basedOn: planId,
+    source: planFingerprint(exercises),
     exercises: exercises.map((e) => draftExercise(e.name, e.sets, describeSets(e.sets))),
   };
 }

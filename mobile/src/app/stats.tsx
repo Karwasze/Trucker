@@ -1,21 +1,38 @@
 import { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
+import { localDate } from '@/api/client';
 import type { StatisticsData } from '@/api/types';
+import { LineChart } from '@/components/line-chart';
 import { ThemedText } from '@/components/themed-text';
 import { Card, Chip, Message, Screen, SectionLabel } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useQuery } from '@/hooks/use-query';
-import { useTheme } from '@/hooks/use-theme';
 import { useSettings } from '@/settings/settings-context';
 import { formatDate, formatKg } from '@/workout/format';
 
-const CHART_SESSIONS = 12;
-const CHART_HEIGHT = 140;
+const TIMESPANS = [
+  { key: 'all', label: 'From beginning', months: null },
+  { key: '1y', label: '1 year', months: 12 },
+  { key: '6m', label: '6 months', months: 6 },
+  { key: '3m', label: '3 months', months: 3 },
+  { key: '1m', label: '1 month', months: 1 },
+] as const;
+
+type Timespan = (typeof TIMESPANS)[number];
+
+/** First date (YYYY-MM-DD) inside the timespan, or null for all time. */
+function timespanStart(span: Timespan) {
+  if (span.months === null) return null;
+  const d = new Date();
+  d.setMonth(d.getMonth() - span.months);
+  return localDate(d);
+}
 
 export default function StatsScreen() {
   const { api, serverUrl } = useSettings();
   const [selected, setSelected] = useState<string | null>(null);
+  const [timespan, setTimespan] = useState<Timespan>(TIMESPANS[0]);
   const names = useQuery(`stats:${serverUrl}`, async () => (await api.statistics()).exercises);
 
   const exercises = names.data ?? [];
@@ -47,10 +64,20 @@ export default function StatsScreen() {
               <Chip key={name} label={name} selected={name === exercise} onPress={() => setSelected(name)} />
             ))}
           </ScrollView>
+          <View style={styles.timespans}>
+            {TIMESPANS.map((t) => (
+              <Chip
+                key={t.key}
+                label={t.label}
+                selected={t.key === timespan.key}
+                onPress={() => setTimespan(t)}
+              />
+            ))}
+          </View>
           {!series.data || series.data.length === 0 ? (
             <Message loading={!series.error} error={series.error} />
           ) : (
-            <ExerciseStats data={series.data} />
+            <ExerciseStats data={series.data} timespan={timespan} />
           )}
         </>
       )}
@@ -58,7 +85,13 @@ export default function StatsScreen() {
   );
 }
 
-function ExerciseStats({ data }: { data: StatisticsData[] }) {
+function ExerciseStats({ data: all, timespan }: { data: StatisticsData[]; timespan: Timespan }) {
+  const start = timespanStart(timespan);
+  const data = start ? all.filter((d) => d.date >= start) : all;
+  if (data.length === 0) {
+    return <Message>No sessions in the last {timespan.label}.</Message>;
+  }
+
   const latest = data.at(-1)!;
   const best = Math.max(...data.map((d) => d.estimated_1rm));
   const first = data[0].estimated_1rm;
@@ -77,7 +110,12 @@ function ExerciseStats({ data }: { data: StatisticsData[] }) {
 
       <Card>
         <ThemedText type="smallBold">Estimated 1RM</ThemedText>
-        <BarChart data={data.slice(-CHART_SESSIONS)} />
+        <LineChart
+          points={data.map((d) => ({ date: d.date, value: d.estimated_1rm }))}
+          from={start ?? data[0].date}
+          to={localDate()}
+          unit="kg"
+        />
       </Card>
 
       <SectionLabel>Sessions</SectionLabel>
@@ -109,43 +147,6 @@ function Tile({ label, value }: { label: string; value: string }) {
   );
 }
 
-function BarChart({ data }: { data: StatisticsData[] }) {
-  const theme = useTheme();
-  const values = data.map((d) => d.estimated_1rm);
-  const max = Math.max(...values);
-  // Start the axis below the lowest value so changes are visible.
-  const min = Math.max(0, Math.min(...values) * 0.8);
-  const span = max - min || 1;
-
-  return (
-    <View>
-      <View style={[styles.bars, { height: CHART_HEIGHT }]}>
-        {data.map((d, i) => (
-          <View
-            key={d.date}
-            accessibilityLabel={`${formatDate(d.date)}: ${d.estimated_1rm.toFixed(1)} kg`}
-            style={[
-              styles.bar,
-              {
-                height: Math.max(4, ((d.estimated_1rm - min) / span) * CHART_HEIGHT),
-                backgroundColor: i === data.length - 1 ? theme.accent : theme.backgroundSelected,
-              },
-            ]}
-          />
-        ))}
-      </View>
-      <View style={styles.axis}>
-        <ThemedText type="small" themeColor="textSecondary">
-          {formatDate(data[0].date, { month: 'short', day: 'numeric' })}
-        </ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          {formatDate(data.at(-1)!.date, { month: 'short', day: 'numeric' })}
-        </ThemedText>
-      </View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   chipScroller: {
     marginHorizontal: -Spacing.three,
@@ -164,19 +165,10 @@ const styles = StyleSheet.create({
     gap: Spacing.one,
     padding: Spacing.three,
   },
-  bars: {
+  timespans: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: Spacing.one,
-  },
-  bar: {
-    flex: 1,
-    borderRadius: 4,
-  },
-  axis: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: Spacing.one,
+    flexWrap: 'wrap',
+    gap: Spacing.two,
   },
   sessionRow: {
     flexDirection: 'row',

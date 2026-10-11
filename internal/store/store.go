@@ -45,3 +45,8 @@ func (s *Store) DB() *sql.DB {
 func (s *Store) SeedDefaults() error {
 	return s.SeedDefaultExercises()
 }
+
+// Ping reports whether the database is reachable.
+func (s *Store) Ping() error {
+	return s.db.Ping()
+}

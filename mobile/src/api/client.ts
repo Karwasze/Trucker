@@ -1,6 +1,9 @@
 import type {
+  BodyweightEntry,
   CreatedWorkout,
   ExerciseDB,
+  Insights,
+  MuscleTarget,
   NewWorkout,
   PlanToday,
   Set,
@@ -53,11 +56,43 @@ export function createApi(baseUrl: string) {
     deleteWorkout: (id: number) =>
       request<{ success: boolean }>(`/api/workouts?id=${id}`, { method: 'DELETE' }),
 
-    listExercises: async () => (await request<ExerciseDB[] | null>('/api/exercises')) ?? [],
+    listExercises: async () =>
+      ((await request<ExerciseDB[] | null>('/api/exercises')) ?? []).map((e) => ({
+        ...e,
+        muscles: e.muscles ?? [],
+      })),
     createExercise: (name: string) =>
       request<ExerciseDB>('/api/exercises', { method: 'POST', body: JSON.stringify({ name }) }),
     deleteExercise: (id: number) =>
       request<{ success: boolean }>(`/api/exercises?id=${id}`, { method: 'DELETE' }),
+    /** Muscle tags of every tagged exercise, keyed by name. */
+    exerciseMuscles: async () =>
+      (await request<Record<string, MuscleTarget[]> | null>('/api/exercise-muscles')) ?? {},
+    /** Replaces an exercise's muscle tags; works for built-in exercises too. */
+    setExerciseMuscles: (name: string, muscles: MuscleTarget[]) =>
+      request<{ name: string; muscles: MuscleTarget[] }>('/api/exercise-muscles', {
+        method: 'PUT',
+        body: JSON.stringify({ name, muscles }),
+      }),
+
+    listBodyweight: async () => (await request<BodyweightEntry[] | null>('/api/bodyweight')) ?? [],
+    /** Records the bodyweight for a date, replacing that date's entry. */
+    saveBodyweight: (entry: BodyweightEntry) =>
+      request<BodyweightEntry>('/api/bodyweight', { method: 'POST', body: JSON.stringify(entry) }),
+    deleteBodyweight: (date: string) =>
+      request<{ success: boolean }>(`/api/bodyweight?date=${q(date)}`, { method: 'DELETE' }),
+
+    insights: async (date: string) => {
+      const res = await request<Insights>(`/api/insights?date=${q(date)}`);
+      return {
+        ...res,
+        muscles: res.muscles ?? [],
+        strength: res.strength ?? [],
+        stalled: res.stalled ?? [],
+        untagged: res.untagged ?? [],
+        recommendations: res.recommendations ?? [],
+      };
+    },
 
     listPlans: async () => (await request<TrainingPlan[] | null>('/api/plans')) ?? [],
     getPlan: (id: number) => request<TrainingPlan>(`/api/plans?id=${id}`),

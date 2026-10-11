@@ -44,6 +44,20 @@ func (s *Store) GetAllExercises() ([]ExerciseDB, error) {
 		}
 		exercises = append(exercises, exercise)
 	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+
+	muscles, err := s.GetExerciseMuscles()
+	if err != nil {
+		return nil, err
+	}
+	for i := range exercises {
+		exercises[i].Muscles = muscles[exercises[i].Name]
+		if exercises[i].Muscles == nil {
+			exercises[i].Muscles = []MuscleTarget{}
+		}
+	}
 
 	return exercises, nil
 }
@@ -60,7 +74,7 @@ func (s *Store) CreateExercise(name string) (ExerciseDB, error) {
 		return ExerciseDB{}, err
 	}
 
-	return ExerciseDB{ID: int(id), Name: name}, nil
+	return ExerciseDB{ID: int(id), Name: name, Muscles: []MuscleTarget{}}, nil
 }
 
 // UpdateExercise renames an exercise and propagates the new name to any
@@ -81,6 +95,9 @@ func (s *Store) UpdateExercise(id int, name string) (ExerciseDB, error) {
 
 	if oldName != "" && oldName != name {
 		if _, err := s.db.Exec("UPDATE training_plan_exercises SET exercise_name = ? WHERE exercise_name = ?", name, oldName); err != nil {
+			return ExerciseDB{}, err
+		}
+		if _, err := s.db.Exec("UPDATE exercise_muscles SET exercise_name = ? WHERE exercise_name = ?", name, oldName); err != nil {
 			return ExerciseDB{}, err
 		}
 	}

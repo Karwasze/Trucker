@@ -26,10 +26,44 @@ export type ProgressionResult = {
 
 export type CreatedWorkout = Workout & { progression?: ProgressionResult[] };
 
+export type Muscle =
+  | 'chest'
+  | 'back'
+  | 'shoulders'
+  | 'biceps'
+  | 'triceps'
+  | 'quads'
+  | 'hamstrings'
+  | 'glutes'
+  | 'calves'
+  | 'core';
+
+/** Mirrors store.Muscles, in display order. */
+export const MUSCLES: Muscle[] = [
+  'chest',
+  'back',
+  'shoulders',
+  'biceps',
+  'triceps',
+  'quads',
+  'hamstrings',
+  'glutes',
+  'calves',
+  'core',
+];
+
+export type MuscleRole = 'primary' | 'secondary';
+
+export type MuscleTarget = {
+  muscle: Muscle;
+  role: MuscleRole;
+};
+
 export type ExerciseDB = {
   id: number;
   name: string;
   is_default: boolean;
+  muscles: MuscleTarget[];
 };
 
 export type PlanExercise = {
@@ -69,4 +103,57 @@ export type StatisticsData = {
 export type StatisticsResponse = {
   exercises: string[];
   data: StatisticsData[];
+};
+
+export type BodyweightEntry = {
+  date: string;
+  weight: number;
+};
+
+export type BodyweightTrend = BodyweightEntry & {
+  change?: number;
+  change_since?: string;
+};
+
+export type VolumeStatus = 'untrained' | 'low' | 'optimal' | 'high';
+
+export type MuscleVolume = {
+  muscle: Muscle;
+  weekly_sets: number;
+  days_per_week: number;
+  last_trained?: string;
+  status: VolumeStatus;
+};
+
+export type StrengthLevel = {
+  exercise: string;
+  best_1rm: number;
+  ratio: number;
+  /** Empty below beginner. */
+  level: string;
+  /** Empty at elite. */
+  next_level: string;
+  next_level_kg: number;
+};
+
+export type StalledLift = {
+  exercise: string;
+  recent_1rm: number;
+  previous_1rm: number;
+};
+
+export type Recommendation = {
+  kind: 'warning' | 'info' | 'good';
+  text: string;
+};
+
+export type Insights = {
+  date: string;
+  bodyweight: BodyweightTrend | null;
+  sessions_per_week: number;
+  muscles: MuscleVolume[];
+  strength: StrengthLevel[];
+  stalled: StalledLift[];
+  untagged: string[];
+  recommendations: Recommendation[];
 };

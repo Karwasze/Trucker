@@ -89,3 +89,52 @@ func (h *Handlers) ExercisesAPI(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
+
+// ExerciseMusclesAPI lists the muscle tags of every exercise by name (GET),
+// or replaces one exercise's tags, built-in ones included (PUT).
+func (h *Handlers) ExerciseMusclesAPI(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	switch r.Method {
+	case "GET":
+		muscles, err := h.store.GetExerciseMuscles()
+		if err != nil {
+			http.Error(w, "Database error", http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(muscles)
+	case "PUT":
+		h.setExerciseMuscles(w, r)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (h *Handlers) setExerciseMuscles(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Name    string               `json:"name"`
+		Muscles []store.MuscleTarget `json:"muscles"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if body.Name == "" {
+		http.Error(w, "Name is required", http.StatusBadRequest)
+		return
+	}
+	if body.Muscles == nil {
+		body.Muscles = []store.MuscleTarget{}
+	}
+
+	err := h.store.SetExerciseMuscles(body.Name, body.Muscles)
+	if errors.Is(err, store.ErrInvalidMuscle) {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(body)
+}

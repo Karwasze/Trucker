@@ -8,6 +8,7 @@ import { Button, Card, Chip, Message, Screen, SectionLabel } from '@/components/
 import { Spacing } from '@/constants/theme';
 import { useQuery } from '@/hooks/use-query';
 import { useTheme } from '@/hooks/use-theme';
+import { ExerciseMuscles } from '@/settings/exercise-muscles';
 import { ENVIRONMENT_NAMES, useSettings, type Environment } from '@/settings/settings-context';
 
 export default function SettingsScreen() {
@@ -90,6 +91,10 @@ export default function SettingsScreen() {
           Built-in exercises can&apos;t be removed.
         </ThemedText>
       )}
+
+      <SectionLabel>Muscles</SectionLabel>
+      {/* Keyed so a different server starts with its own tags. */}
+      <ExerciseMuscles key={serverUrl} />
     </Screen>
   );
 }

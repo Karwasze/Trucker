@@ -206,3 +206,82 @@ func TestExercisesAPI_UnsupportedMethod(t *testing.T) {
 		t.Errorf("expected 405, got %d", w.Code)
 	}
 }
+
+func TestExerciseMusclesAPI_PUT(t *testing.T) {
+	h, s := newTestHandlers(t)
+
+	body := `{"name":"Hip Thrust","muscles":[{"muscle":"glutes","role":"primary"},{"muscle":"hamstrings","role":"secondary"}]}`
+	req := httptest.NewRequest("PUT", "/api/exercise-muscles", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	h.ExerciseMusclesAPI(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	muscles, _ := s.GetExerciseMuscles()
+	if len(muscles["Hip Thrust"]) != 2 {
+		t.Errorf("expected 2 tags saved, got %+v", muscles["Hip Thrust"])
+	}
+}
+
+func TestExerciseMusclesAPI_PUT_DefaultExerciseAllowed(t *testing.T) {
+	h, s := newTestHandlers(t)
+	s.SeedDefaultExercises()
+
+	body := `{"name":"Squat","muscles":[{"muscle":"quads","role":"primary"}]}`
+	req := httptest.NewRequest("PUT", "/api/exercise-muscles", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	h.ExerciseMusclesAPI(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestExerciseMusclesAPI_PUT_Invalid(t *testing.T) {
+	h, _ := newTestHandlers(t)
+
+	for _, body := range []string{
+		`not json`,
+		`{"muscles":[]}`,
+		`{"name":"Dip","muscles":[{"muscle":"forearms","role":"primary"}]}`,
+	} {
+		req := httptest.NewRequest("PUT", "/api/exercise-muscles", strings.NewReader(body))
+		w := httptest.NewRecorder()
+		h.ExerciseMusclesAPI(w, req)
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("%s: expected 400, got %d", body, w.Code)
+		}
+	}
+}
+
+func TestExerciseMusclesAPI_MethodNotAllowed(t *testing.T) {
+	h, _ := newTestHandlers(t)
+
+	req := httptest.NewRequest("DELETE", "/api/exercise-muscles", nil)
+	w := httptest.NewRecorder()
+	h.ExerciseMusclesAPI(w, req)
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405, got %d", w.Code)
+	}
+}
+
+func TestExerciseMusclesAPI_GET(t *testing.T) {
+	h, s := newTestHandlers(t)
+	s.SetExerciseMuscles("Hip Thrust", []store.MuscleTarget{{Muscle: "glutes", Role: store.RolePrimary}})
+
+	req := httptest.NewRequest("GET", "/api/exercise-muscles", nil)
+	w := httptest.NewRecorder()
+	h.ExerciseMusclesAPI(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var muscles map[string][]store.MuscleTarget
+	json.NewDecoder(w.Body).Decode(&muscles)
+	if len(muscles["Hip Thrust"]) != 1 {
+		t.Errorf("expected Hip Thrust tags, got %+v", muscles["Hip Thrust"])
+	}
+	if len(muscles["Squat"]) == 0 {
+		t.Error("expected default Squat tags")
+	}
+}

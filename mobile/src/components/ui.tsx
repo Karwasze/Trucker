@@ -108,19 +108,32 @@ export function Chip({
   label,
   selected,
   onPress,
+  variant = 'primary',
+  accessibilityLabel,
 }: {
   label: string;
   selected: boolean;
   onPress: () => void;
+  /** A secondary chip is selected with a tint instead of a solid fill. */
+  variant?: 'primary' | 'secondary';
+  accessibilityLabel?: string;
 }) {
   const theme = useTheme();
+  const secondary = selected && variant === 'secondary';
+  const background = !selected
+    ? theme.backgroundElement
+    : secondary
+      ? `${theme.accent}33`
+      : theme.accent;
+  const color = !selected ? theme.text : secondary ? theme.accent : theme.onAccent;
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ selected }}
+      accessibilityLabel={accessibilityLabel}
       onPress={onPress}
-      style={[styles.chip, { backgroundColor: selected ? theme.accent : theme.backgroundElement }]}>
-      <ThemedText type="small" style={{ color: selected ? theme.onAccent : theme.text }}>
+      style={[styles.chip, { backgroundColor: background }]}>
+      <ThemedText type="small" style={{ color }}>
         {label}
       </ThemedText>
     </Pressable>

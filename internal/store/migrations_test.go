@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"fmt"
 	"path/filepath"
 	"testing"
 )
@@ -12,6 +13,7 @@ func TestMigrate_CreatesSchema(t *testing.T) {
 	tables := []string{
 		"workouts", "exercise_library", "exercises", "sets", "schema_migrations",
 		"training_plans", "training_plan_exercises", "training_plan_sets",
+		"bodyweight", "exercise_muscles",
 	}
 	for _, table := range tables {
 		var name string
@@ -42,8 +44,8 @@ func TestMigrate_IsIdempotent(t *testing.T) {
 	if err := s.db.QueryRow("SELECT COUNT(*) FROM schema_migrations").Scan(&count); err != nil {
 		t.Fatalf("failed to count schema_migrations: %v", err)
 	}
-	if count != 3 {
-		t.Errorf("expected 3 applied migrations, got %d", count)
+	if count != 4 {
+		t.Errorf("expected 4 applied migrations, got %d", count)
 	}
 }
 
@@ -137,5 +139,61 @@ func TestMigrate_UpgradeFromV1PreservesWorkouts(t *testing.T) {
 	// New workouts still save after the upgrade.
 	if _, err := s.SaveWorkout(Workout{Date: "2026-03-16"}); err != nil {
 		t.Errorf("failed to save workout after upgrade: %v", err)
+	}
+}
+
+func TestMigrate_UpgradeFromV3PreservesData(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "v3.db")
+
+	// Build a database with migrations 0001-0003 applied and some data.
+	db, err := sql.Open("sqlite3", path)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	stmts := []string{"CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)"}
+	for i, name := range []string{"0001_initial_schema.sql", "0002_remove_gzclp.sql", "0003_add_training_plans.sql"} {
+		contents, err := migrationsFS.ReadFile("migrations/" + name)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", name, err)
+		}
+		stmts = append(stmts, string(contents),
+			fmt.Sprintf("INSERT INTO schema_migrations (version, applied_at) VALUES (%d, '2026-01-01T00:00:00Z')", i+1))
+	}
+	stmts = append(stmts,
+		"INSERT INTO exercise_library (name, is_default) VALUES ('Hip Thrust', 0)",
+		"INSERT INTO workouts (id, date) VALUES (1, '2026-03-15')",
+		"INSERT INTO exercises (id, workout_id, name) VALUES (1, 1, 'Hip Thrust')",
+		"INSERT INTO sets (exercise_id, reps, weight) VALUES (1, 10, 120)",
+	)
+	for _, stmt := range stmts {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatalf("failed to build v3 database: %v", err)
+		}
+	}
+	db.Close()
+
+	s, err := Open(path)
+	if err != nil {
+		t.Fatalf("failed to open and migrate v3 database: %v", err)
+	}
+	defer s.Close()
+
+	workouts, err := s.GetWorkouts()
+	if err != nil {
+		t.Fatalf("failed to get workouts: %v", err)
+	}
+	if len(workouts) != 1 || len(workouts[0].Exercises) != 1 || workouts[0].Exercises[0].Sets[0].Weight != 120 {
+		t.Fatalf("expected workout preserved after upgrade, got %+v", workouts)
+	}
+
+	muscles, err := s.GetExerciseMuscles()
+	if err != nil {
+		t.Fatalf("failed to get muscles: %v", err)
+	}
+	if len(muscles["Squat"]) == 0 {
+		t.Error("expected default tags after upgrade")
+	}
+	if err := s.SaveBodyweight("2026-03-15", 80); err != nil {
+		t.Errorf("failed to save bodyweight after upgrade: %v", err)
 	}
 }

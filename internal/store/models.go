@@ -13,9 +13,23 @@ type Exercise struct {
 }
 
 type ExerciseDB struct {
-	ID        int    `json:"id"`
-	Name      string `json:"name"`
-	IsDefault bool   `json:"is_default"`
+	ID        int            `json:"id"`
+	Name      string         `json:"name"`
+	IsDefault bool           `json:"is_default"`
+	Muscles   []MuscleTarget `json:"muscles"`
+}
+
+// MuscleTarget is a muscle an exercise works, as RolePrimary or
+// RoleSecondary.
+type MuscleTarget struct {
+	Muscle string `json:"muscle"`
+	Role   string `json:"role"`
+}
+
+// BodyweightEntry is the bodyweight in kg recorded for a date.
+type BodyweightEntry struct {
+	Date   string  `json:"date"`
+	Weight float64 `json:"weight"`
 }
 
 type Set struct {
@@ -65,4 +79,61 @@ type PlanExercise struct {
 type ProgressionResult struct {
 	Exercise string `json:"exercise"`
 	Result   string `json:"result"`
+}
+
+// Insights summarises recent training: volume per muscle, strength relative
+// to bodyweight, stalled lifts and the resulting recommendations.
+type Insights struct {
+	Date            string           `json:"date"`
+	Bodyweight      *BodyweightTrend `json:"bodyweight"`
+	SessionsPerWeek float64          `json:"sessions_per_week"`
+	Muscles         []MuscleVolume   `json:"muscles"`
+	Strength        []StrengthLevel  `json:"strength"`
+	Stalled         []StalledLift    `json:"stalled"`
+	Untagged        []string         `json:"untagged"`
+	Recommendations []Recommendation `json:"recommendations"`
+}
+
+// BodyweightTrend is the latest bodyweight and, when an earlier entry from
+// the preceding 30 days exists, the change since then.
+type BodyweightTrend struct {
+	Date        string   `json:"date"`
+	Weight      float64  `json:"weight"`
+	Change      *float64 `json:"change,omitempty"`
+	ChangeSince string   `json:"change_since,omitempty"`
+}
+
+// MuscleVolume is the average weekly training a muscle got over the last
+// four weeks.
+type MuscleVolume struct {
+	Muscle      string  `json:"muscle"`
+	WeeklySets  float64 `json:"weekly_sets"`
+	DaysPerWeek float64 `json:"days_per_week"`
+	LastTrained string  `json:"last_trained,omitempty"`
+	Status      string  `json:"status"`
+}
+
+// StrengthLevel compares a main lift's best estimated 1RM to bodyweight
+// standards. Level is empty below beginner; NextLevel is empty at elite.
+type StrengthLevel struct {
+	Exercise    string  `json:"exercise"`
+	Best1RM     float64 `json:"best_1rm"`
+	Ratio       float64 `json:"ratio"`
+	Level       string  `json:"level"`
+	NextLevel   string  `json:"next_level"`
+	NextLevelKg float64 `json:"next_level_kg"`
+}
+
+// StalledLift is an exercise whose best estimated 1RM over the last four
+// weeks did not beat the four weeks before.
+type StalledLift struct {
+	Exercise    string  `json:"exercise"`
+	Recent1RM   float64 `json:"recent_1rm"`
+	Previous1RM float64 `json:"previous_1rm"`
+}
+
+// Recommendation is one piece of advice. Kind is "warning", "info" or "good".
+type Recommendation struct {
+	Kind string `json:"kind"`
+	Text string `json:"text"`
 }

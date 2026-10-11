@@ -1,38 +1,66 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { localDate } from '@/api/client';
 import type { StatisticsData } from '@/api/types';
 import { LineChart } from '@/components/line-chart';
 import { ThemedText } from '@/components/themed-text';
+import { TIMESPANS, TimespanChips, timespanStart, type Timespan } from '@/components/timespan';
 import { Card, Chip, Message, Screen, SectionLabel } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useQuery } from '@/hooks/use-query';
+import { InsightsView } from '@/insights/insights-view';
 import { useSettings } from '@/settings/settings-context';
 import { formatDate, formatKg } from '@/workout/format';
 
-const TIMESPANS = [
-  { key: 'all', label: 'From beginning', months: null },
-  { key: '1y', label: '1 year', months: 12 },
-  { key: '6m', label: '6 months', months: 6 },
-  { key: '3m', label: '3 months', months: 3 },
-  { key: '1m', label: '1 month', months: 1 },
+const VIEWS = [
+  { key: 'charts', label: 'Charts' },
+  { key: 'insights', label: 'Insights' },
 ] as const;
 
-type Timespan = (typeof TIMESPANS)[number];
-
-/** First date (YYYY-MM-DD) inside the timespan, or null for all time. */
-function timespanStart(span: Timespan) {
-  if (span.months === null) return null;
-  const d = new Date();
-  d.setMonth(d.getMonth() - span.months);
-  return localDate(d);
-}
+type ProgressView = (typeof VIEWS)[number]['key'];
 
 export default function StatsScreen() {
-  const { api, serverUrl } = useSettings();
+  const [view, setView] = useState<ProgressView>('charts');
+  // Kept here so the chart selection survives switching to Insights and back.
   const [selected, setSelected] = useState<string | null>(null);
   const [timespan, setTimespan] = useState<Timespan>(TIMESPANS[0]);
+
+  const switcher = (
+    <View style={styles.chips}>
+      {VIEWS.map((v) => (
+        <Chip key={v.key} label={v.label} selected={v.key === view} onPress={() => setView(v.key)} />
+      ))}
+    </View>
+  );
+
+  return view === 'insights' ? (
+    <InsightsView header={switcher} />
+  ) : (
+    <ProgressCharts
+      header={switcher}
+      selected={selected}
+      onSelect={setSelected}
+      timespan={timespan}
+      onTimespan={setTimespan}
+    />
+  );
+}
+
+function ProgressCharts({
+  header,
+  selected,
+  onSelect: setSelected,
+  timespan,
+  onTimespan: setTimespan,
+}: {
+  header: ReactNode;
+  selected: string | null;
+  onSelect: (name: string) => void;
+  timespan: Timespan;
+  onTimespan: (timespan: Timespan) => void;
+}) {
+  const { api, serverUrl } = useSettings();
   const names = useQuery(`stats:${serverUrl}`, async () => (await api.statistics()).exercises);
 
   const exercises = names.data ?? [];
@@ -49,6 +77,7 @@ export default function StatsScreen() {
         names.refresh();
         series.refresh();
       }}>
+      {header}
       {!names.data ? (
         <Message loading={!names.error} error={names.error} />
       ) : exercises.length === 0 ? (
@@ -60,16 +89,7 @@ export default function StatsScreen() {
               <Chip key={name} label={name} selected={name === exercise} onPress={() => setSelected(name)} />
             ))}
           </View>
-          <View style={styles.chips}>
-            {TIMESPANS.map((t) => (
-              <Chip
-                key={t.key}
-                label={t.label}
-                selected={t.key === timespan.key}
-                onPress={() => setTimespan(t)}
-              />
-            ))}
-          </View>
+          <TimespanChips value={timespan} onChange={setTimespan} />
           {!series.data || series.data.length === 0 ? (
             <Message loading={!series.error} error={series.error} />
           ) : (

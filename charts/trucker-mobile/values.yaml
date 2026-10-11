@@ -5,19 +5,25 @@ image:
   tag: 0.1.4
   pullPolicy: IfNotPresent
 
-# nginx listens on 8080 (see mobile/Dockerfile EXPOSE / nginx.conf.template)
-containerPort: 8080
+# Metro listens here. It advertises <hostname>:<port> to Expo Go, so the
+# Service exposes the same port number.
+port: 8081
 
+# Address Expo Go uses to reach Metro (the host in the exp:// URL).
+# Must resolve on the phone and match the Service below.
+hostname: trucker-metro.tail135e5e.ts.net
+
+# API the app talks to in dev mode; Metro inlines it as EXPO_PUBLIC_API_URL.
+apiUrl: https://trucker.tail135e5e.ts.net
+
+# Expo Go needs plain HTTP on the Metro port, so expose it as a Tailscale
+# LoadBalancer (a tailnet device named by tailscale.com/hostname) rather than
+# an HTTPS Ingress.
 service:
-  # LoadBalancer works with `minikube tunnel` to get a host-routable IP.
   type: LoadBalancer
-  port: 8082
-  # nodePort only applies when type is NodePort (kept for easy fallback).
-  nodePort: 30082
-
-# The web app talks to the API on its own origin; nginx proxies /api/ here.
-# Default matches the Service of the `trucker` chart installed as release "trucker".
-apiUpstream: http://trucker:8081
+  loadBalancerClass: tailscale
+  annotations:
+    tailscale.com/hostname: trucker-metro
 
 env:
   - name: TZ
@@ -25,8 +31,8 @@ env:
 
 resources:
   requests:
-    cpu: 10m
-    memory: 16Mi
-  limits:
     cpu: 100m
-    memory: 64Mi
+    memory: 512Mi
+  limits:
+    cpu: "2"
+    memory: 2Gi

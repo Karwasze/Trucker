@@ -4,14 +4,18 @@ metadata:
   name: {{ include "trucker-mobile.fullname" . }}
   labels:
     {{- include "trucker-mobile.labels" . | nindent 4 }}
+  {{- with .Values.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
   type: {{ .Values.service.type }}
+  {{- with .Values.service.loadBalancerClass }}
+  loadBalancerClass: {{ . }}
+  {{- end }}
   selector:
     {{- include "trucker-mobile.selectorLabels" . | nindent 4 }}
   ports:
-    - name: http
-      port: {{ .Values.service.port }}
-      targetPort: http
-      {{- if and (eq .Values.service.type "NodePort") .Values.service.nodePort }}
-      nodePort: {{ .Values.service.nodePort }}
-      {{- end }}
+    - name: metro
+      port: {{ .Values.port }}
+      targetPort: metro

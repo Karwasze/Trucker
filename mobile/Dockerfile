@@ -1,5 +1,7 @@
-# Build the Expo web bundle (app.json: web.output = "static")
-FROM node:24-alpine AS builder
+# Metro dev server, so Expo Go on a phone can load the app.
+# REACT_NATIVE_PACKAGER_HOSTNAME must be set to an address the phone can reach
+# on METRO_PORT; it ends up in the exp:// URL Expo Go opens.
+FROM node:24-alpine
 
 WORKDIR /app
 
@@ -10,19 +12,11 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Export the static web build to /app/dist
-RUN npx expo export --platform web --output-dir dist
-
-# Serve the bundle with nginx
-FROM nginx:1.29-alpine
-
-# The official image runs envsubst over /etc/nginx/templates/*.template on
-# startup, so API_UPSTREAM can be set per deployment.
-COPY nginx.conf.template /etc/nginx/templates/default.conf.template
-COPY --from=builder /app/dist /usr/share/nginx/html
-
-# Where /api/ requests are proxied to (the Go API from the root Dockerfile).
-ENV API_UPSTREAM=http://trucker:8081
+# CI=1: no interactive prompts and no file watching (the source is baked in).
+ENV CI=1
+ENV METRO_PORT=8081
 
 # Expose port
-EXPOSE 8080
+EXPOSE 8081
+
+CMD ["sh", "-c", "exec npx expo start --port \"$METRO_PORT\""]

@@ -36,6 +36,15 @@ server; change it under Settings, or set `EXPO_PUBLIC_API_URL` before
 (reachable over Tailscale); set `EXPO_PUBLIC_PROD_API_URL` to override it.
 Dev builds start on the development server, release builds on production.
 
+### From the cluster
+
+The `trucker-mobile` image (this directory's Dockerfile) runs Metro, and the
+`trucker-mobile` Helm chart deploys it. It is exposed on the tailnet as
+`trucker-metro` by the Tailscale operator, so with the phone on Tailscale open
+`exp://trucker-metro.tail135e5e.ts.net:8081` in Expo Go. That bundle runs the
+code from the image tag, with no live reload, and its development server is
+the chart's `apiUrl`.
+
 ## Checks
 
 ```sh

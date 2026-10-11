@@ -71,10 +71,13 @@ jobs:
       contents: write
 
     steps:
-      - name: Checkout main
+      # Bump on top of the tagged commit so the tag itself carries the new
+      # chart version (the tag is moved to the bump commit below).
+      - name: Checkout tag
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.ref }}
+          fetch-depth: 0
 
       - name: Bump chart versions and image tags
         run: |
@@ -96,4 +99,17 @@ jobs:
             exit 0
           fi
           git commit -m "Bump Helm charts to ${GITHUB_REF_NAME#v}"
-          git push origin main
+
+          # Re-point the release tag at the bump commit. Tags pushed with
+          # GITHUB_TOKEN don't trigger workflows, so this doesn't loop.
+          git tag -f "${GITHUB_REF_NAME}"
+          git push -f origin "refs/tags/${GITHUB_REF_NAME}"
+
+          # Fast-forward main when it is still at the tagged commit; otherwise
+          # merge the bump in on top of whatever landed since.
+          if ! git push origin HEAD:main; then
+            git fetch origin main
+            git checkout -B main origin/main
+            git merge --no-edit "${GITHUB_REF_NAME}"
+            git push origin main
+          fi

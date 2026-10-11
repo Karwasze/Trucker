@@ -11,10 +11,12 @@ var defaultExerciseNames = []string{
 	"Front Squat", "Sumo Deadlift", "Lat Pulldown", "Bent Over Row",
 	"Leg Curl", "Leg Extension", "Leg Press", "Tricep Pushdown",
 	"Bicep Curl", "Calf Raise", "Lateral Raise", "Chest Fly",
+	"Skullcrushers", "Romanian Deadlift",
 }
 
 // SeedDefaultExercises ensures the built-in exercises exist in the exercise
-// library and are marked as default. It is safe to call repeatedly.
+// library and are marked as default. A custom exercise with a built-in name
+// becomes built-in, keeping its id. It is safe to call repeatedly.
 func (s *Store) SeedDefaultExercises() error {
 	for _, name := range defaultExerciseNames {
 		if _, err := s.db.Exec("INSERT OR IGNORE INTO exercise_library (name, is_default) VALUES (?, 1)", name); err != nil {

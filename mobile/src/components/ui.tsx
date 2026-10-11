@@ -109,6 +109,7 @@ export function Chip({
   selected,
   onPress,
   variant = 'primary',
+  inCard,
   accessibilityLabel,
 }: {
   label: string;
@@ -116,12 +117,16 @@ export function Chip({
   onPress: () => void;
   /** A secondary chip is selected with a tint instead of a solid fill. */
   variant?: 'primary' | 'secondary';
+  /** Set when placed on a Card, which shares the unselected chip color. */
+  inCard?: boolean;
   accessibilityLabel?: string;
 }) {
   const theme = useTheme();
   const secondary = selected && variant === 'secondary';
   const background = !selected
-    ? theme.backgroundElement
+    ? inCard
+      ? theme.backgroundSelected
+      : theme.backgroundElement
     : secondary
       ? `${theme.accent}33`
       : theme.accent;

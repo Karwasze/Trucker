@@ -44,8 +44,8 @@ func TestMigrate_IsIdempotent(t *testing.T) {
 	if err := s.db.QueryRow("SELECT COUNT(*) FROM schema_migrations").Scan(&count); err != nil {
 		t.Fatalf("failed to count schema_migrations: %v", err)
 	}
-	if count != 4 {
-		t.Errorf("expected 4 applied migrations, got %d", count)
+	if count != 5 {
+		t.Errorf("expected 5 applied migrations, got %d", count)
 	}
 }
 
@@ -195,5 +195,55 @@ func TestMigrate_UpgradeFromV3PreservesData(t *testing.T) {
 	}
 	if err := s.SaveBodyweight("2026-03-15", 80); err != nil {
 		t.Errorf("failed to save bodyweight after upgrade: %v", err)
+	}
+}
+
+func TestMigrate_NewDefaultTagsKeepUserTags(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "v4.db")
+
+	// Build a database at migration 0004 where Romanian Deadlift is a custom
+	// exercise the user already tagged.
+	db, err := sql.Open("sqlite3", path)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	stmts := []string{"CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)"}
+	for i, name := range []string{
+		"0001_initial_schema.sql", "0002_remove_gzclp.sql", "0003_add_training_plans.sql", "0004_add_insights.sql",
+	} {
+		contents, err := migrationsFS.ReadFile("migrations/" + name)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", name, err)
+		}
+		stmts = append(stmts, string(contents),
+			fmt.Sprintf("INSERT INTO schema_migrations (version, applied_at) VALUES (%d, '2026-01-01T00:00:00Z')", i+1))
+	}
+	stmts = append(stmts,
+		"INSERT INTO exercise_library (name, is_default) VALUES ('Romanian Deadlift', 0)",
+		"INSERT INTO exercise_muscles (exercise_name, muscle, role) VALUES ('Romanian Deadlift', 'hamstrings', 'primary')",
+	)
+	for _, stmt := range stmts {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatalf("failed to build v4 database: %v", err)
+		}
+	}
+	db.Close()
+
+	s, err := Open(path)
+	if err != nil {
+		t.Fatalf("failed to open and migrate v4 database: %v", err)
+	}
+	defer s.Close()
+
+	muscles, err := s.GetExerciseMuscles()
+	if err != nil {
+		t.Fatalf("failed to get muscles: %v", err)
+	}
+	rdl := muscles["Romanian Deadlift"]
+	if len(rdl) != 1 || rdl[0] != (MuscleTarget{Muscle: "hamstrings", Role: RolePrimary}) {
+		t.Errorf("expected user's Romanian Deadlift tags kept, got %+v", rdl)
+	}
+	if len(muscles["Skullcrushers"]) == 0 {
+		t.Error("expected Skullcrushers to get default tags")
 	}
 }

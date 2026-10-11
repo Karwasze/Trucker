@@ -3,7 +3,7 @@ import { Alert, Pressable, StyleSheet, View } from 'react-native';
 
 import { MUSCLES, type Muscle, type MuscleTarget } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
-import { Card, Chip, Message } from '@/components/ui';
+import { Button, Card, Chip, Message } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useQuery } from '@/hooks/use-query';
 import { useTheme } from '@/hooks/use-theme';
@@ -33,46 +33,60 @@ export function ExerciseMuscles() {
     const names = [...new Set([...library.map((e) => e.name), ...stats.exercises])];
     return { names: names.sort((a, b) => a.localeCompare(b)), tags };
   });
-  // Edits shown before the server confirms them.
-  const [edits, setEdits] = useState<Record<string, MuscleTarget[]>>({});
-  const [expanded, setExpanded] = useState<string | null>(null);
+  // Tags saved since the list loaded.
+  const [saved, setSaved] = useState<Record<string, MuscleTarget[]>>({});
+  // Unsaved changes to the expanded exercise; discarded unless saved.
+  const [draft, setDraft] = useState<{ name: string; tags: MuscleTarget[] } | null>(null);
+  const [saving, setSaving] = useState(false);
 
   if (!data.data) return <Message loading={!data.error} error={data.error} />;
 
-  const tagsOf = (name: string) => edits[name] ?? data.data?.tags[name] ?? [];
+  const savedTags = (name: string) => saved[name] ?? data.data?.tags[name] ?? [];
 
-  const toggle = async (name: string, muscle: Muscle) => {
-    const current = tagsOf(name);
-    const role = current.find((t) => t.muscle === muscle)?.role ?? 'none';
+  const toggle = (muscle: Muscle) => {
+    if (!draft) return;
+    const role = draft.tags.find((t) => t.muscle === muscle)?.role ?? 'none';
     const next = NEXT_ROLE[role];
-    const others = current.filter((t) => t.muscle !== muscle);
-    const updated = (next === 'none' ? others : [...others, { muscle, role: next }]).sort(
+    const others = draft.tags.filter((t) => t.muscle !== muscle);
+    const tags = (next === 'none' ? others : [...others, { muscle, role: next }]).sort(
       (a, b) => MUSCLES.indexOf(a.muscle) - MUSCLES.indexOf(b.muscle)
     );
-    setEdits((e) => ({ ...e, [name]: updated }));
+    setDraft({ ...draft, tags });
+  };
+
+  const save = async () => {
+    if (!draft) return;
+    setSaving(true);
     try {
-      await api.setExerciseMuscles(name, updated);
+      await api.setExerciseMuscles(draft.name, draft.tags);
+      setSaved((s) => ({ ...s, [draft.name]: draft.tags }));
+      setDraft(null);
     } catch (e) {
-      setEdits((prev) => ({ ...prev, [name]: current }));
       Alert.alert("Couldn't save muscles", (e as Error).message);
+    } finally {
+      setSaving(false);
     }
   };
 
   return (
     <>
       <ThemedText type="small" themeColor="textSecondary">
-        Tap an exercise, then tap a muscle once for primary and again for secondary. Secondary
-        muscles count half a set in Insights.
+        Tap an exercise, then tap a muscle once for primary and again for secondary, and Save.
+        Secondary muscles count half a set in Insights.
       </ThemedText>
       <Card style={{ gap: 0, paddingVertical: Spacing.one }}>
         {data.data.names.map((name) => (
           <ExerciseRow
             key={name}
             name={name}
-            tags={tagsOf(name)}
-            expanded={expanded === name}
-            onPress={() => setExpanded(expanded === name ? null : name)}
-            onToggle={(muscle) => toggle(name, muscle)}
+            tags={savedTags(name)}
+            draft={draft?.name === name ? draft.tags : null}
+            saving={saving}
+            // Opening another exercise or closing this one discards unsaved changes.
+            onPress={() => setDraft(draft?.name === name ? null : { name, tags: savedTags(name) })}
+            onToggle={toggle}
+            onSave={save}
+            onCancel={() => setDraft(null)}
           />
         ))}
       </Card>
@@ -80,20 +94,33 @@ export function ExerciseMuscles() {
   );
 }
 
+const sameTags = (a: MuscleTarget[], b: MuscleTarget[]) =>
+  a.length === b.length && a.every((t) => b.some((u) => u.muscle === t.muscle && u.role === t.role));
+
 function ExerciseRow({
   name,
-  tags,
-  expanded,
+  tags: savedTags,
+  draft,
+  saving,
   onPress,
   onToggle,
+  onSave,
+  onCancel,
 }: {
   name: string;
   tags: MuscleTarget[];
-  expanded: boolean;
+  /** Unsaved tags while the exercise is expanded, otherwise null. */
+  draft: MuscleTarget[] | null;
+  saving: boolean;
   onPress: () => void;
   onToggle: (muscle: Muscle) => void;
+  onSave: () => void;
+  onCancel: () => void;
 }) {
   const theme = useTheme();
+  const expanded = draft !== null;
+  const tags = draft ?? savedTags;
+  const changed = draft !== null && !sameTags(draft, savedTags);
   const primary = tags.filter((t) => t.role === 'primary').map((t) => t.muscle);
   const secondary = tags.filter((t) => t.role === 'secondary').map((t) => t.muscle);
 
@@ -109,27 +136,37 @@ function ExerciseRow({
           type="small"
           numberOfLines={1}
           style={{ flexShrink: 1, color: tags.length ? theme.textSecondary : theme.warning }}>
-          {tags.length === 0
-            ? 'Untagged'
-            : [primary.map(capitalize).join(', '), secondary.join(', ')].filter(Boolean).join(' · ')}
+          {(changed ? 'Unsaved: ' : '') +
+            (tags.length === 0
+              ? 'Untagged'
+              : [primary.map(capitalize).join(', '), secondary.join(', ')]
+                  .filter(Boolean)
+                  .join(' · '))}
         </ThemedText>
       </Pressable>
       {expanded && (
-        <View style={styles.chips}>
-          {MUSCLES.map((muscle) => {
-            const role = tags.find((t) => t.muscle === muscle)?.role;
-            return (
-              <Chip
-                key={muscle}
-                label={role === 'secondary' ? `${capitalize(muscle)} ½` : capitalize(muscle)}
-                selected={!!role}
-                variant={role === 'secondary' ? 'secondary' : 'primary'}
-                onPress={() => onToggle(muscle)}
-                accessibilityLabel={`${muscle}: ${role ?? 'not worked'}`}
-              />
-            );
-          })}
-        </View>
+        <>
+          <View style={styles.chips}>
+            {MUSCLES.map((muscle) => {
+              const role = tags.find((t) => t.muscle === muscle)?.role;
+              return (
+                <Chip
+                  key={muscle}
+                  label={role === 'secondary' ? `${capitalize(muscle)} ½` : capitalize(muscle)}
+                  selected={!!role}
+                  variant={role === 'secondary' ? 'secondary' : 'primary'}
+                  inCard
+                  onPress={() => onToggle(muscle)}
+                  accessibilityLabel={`${muscle}: ${role ?? 'not worked'}`}
+                />
+              );
+            })}
+          </View>
+          <View style={styles.actions}>
+            <Button title="Cancel" variant="secondary" compact disabled={saving} onPress={onCancel} />
+            <Button title="Save" compact disabled={!changed} loading={saving} onPress={onSave} />
+          </View>
+        </>
       )}
     </View>
   );
@@ -148,6 +185,11 @@ const styles = StyleSheet.create({
   chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    gap: Spacing.two,
+  },
+  actions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
     gap: Spacing.two,
   },
 });

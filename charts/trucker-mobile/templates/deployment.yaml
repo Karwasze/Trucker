@@ -28,6 +28,16 @@ spec:
               value: {{ required "hostname is required" .Values.hostname | quote }}
             - name: EXPO_PUBLIC_API_URL
               value: {{ .Values.apiUrl | quote }}
+            {{- with .Values.expoToken.secretName }}
+            - name: EXPO_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ . }}
+                  key: {{ $.Values.expoToken.key }}
+            # Expo CLI never registers a development session in CI mode.
+            - name: CI
+              value: "false"
+            {{- end }}
             {{- with .Values.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

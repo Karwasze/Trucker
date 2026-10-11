@@ -25,6 +25,15 @@ service:
   annotations:
     tailscale.com/hostname: trucker-metro
 
+# Expo account Metro registers with, so the server shows up under
+# "Development servers" in Expo Go for that account. Create an access token at
+# https://expo.dev/settings/access-tokens, store it in a Secret:
+#   kubectl create secret generic trucker-mobile-expo -n trucker --from-literal=token=<token>
+# and set secretName. Empty: not registered; open the exp:// URL by hand.
+expoToken:
+  secretName: ""
+  key: token
+
 env:
   - name: TZ
     value: "Europe/Warsaw"

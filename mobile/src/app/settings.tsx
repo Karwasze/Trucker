@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { createApi } from '@/api/client';
-import type { TrainingPlan } from '@/api/types';
+import type { ExerciseDB, TrainingPlan } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Message, Screen, SectionLabel } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
@@ -25,6 +25,35 @@ export default function SettingsScreen() {
   const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
   const [testing, setTesting] = useState(false);
   const plans = useQuery(`plans:${serverUrl}`, api.listPlans);
+  const exercises = useQuery(`exercises:${serverUrl}`, api.listExercises);
+  const [removing, setRemoving] = useState<number | null>(null);
+  const customExercises = (exercises.data ?? [])
+    .filter((e) => !e.is_default)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const confirmRemove = (exercise: ExerciseDB) =>
+    Alert.alert(
+      `Remove ${exercise.name}?`,
+      'It will no longer be offered when adding exercises. Logged workouts are kept.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            setRemoving(exercise.id);
+            try {
+              await api.deleteExercise(exercise.id);
+              exercises.refresh();
+            } catch (e) {
+              Alert.alert("Couldn't remove exercise", (e as Error).message);
+            } finally {
+              setRemoving(null);
+            }
+          },
+        },
+      ]
+    );
 
   const saveAndTest = async () => {
     const url = urlInput.trim().replace(/\/+$/, '');
@@ -43,7 +72,13 @@ export default function SettingsScreen() {
   };
 
   return (
-    <Screen title="Settings" refreshing={plans.refreshing} onRefresh={plans.refresh}>
+    <Screen
+      title="Settings"
+      refreshing={plans.refreshing || exercises.refreshing}
+      onRefresh={() => {
+        plans.refresh();
+        exercises.refresh();
+      }}>
       <SectionLabel>Server</SectionLabel>
       <Card>
         <TextInput
@@ -93,6 +128,36 @@ export default function SettingsScreen() {
             />
           ))}
         </Card>
+      )}
+
+      <SectionLabel>Exercises</SectionLabel>
+      {!exercises.data ? (
+        <Message loading={!exercises.error} error={exercises.error} />
+      ) : customExercises.length === 0 ? (
+        <Message>
+          No custom exercises. Exercises you create while logging a workout show up here.
+        </Message>
+      ) : (
+        <Card style={{ gap: 0, paddingVertical: Spacing.one }}>
+          {customExercises.map((exercise) => (
+            <View key={exercise.id} style={styles.option}>
+              <ThemedText style={{ flex: 1 }}>{exercise.name}</ThemedText>
+              <Button
+                title="Remove"
+                variant="secondary"
+                compact
+                loading={removing === exercise.id}
+                onPress={() => confirmRemove(exercise)}
+                accessibilityLabel={`Remove ${exercise.name}`}
+              />
+            </View>
+          ))}
+        </Card>
+      )}
+      {customExercises.length > 0 && (
+        <ThemedText type="small" themeColor="textSecondary">
+          Built-in exercises can&apos;t be removed.
+        </ThemedText>
       )}
     </Screen>
   );

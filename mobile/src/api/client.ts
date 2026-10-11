@@ -55,6 +55,8 @@ export function createApi(baseUrl: string) {
     listExercises: async () => (await request<ExerciseDB[] | null>('/api/exercises')) ?? [],
     createExercise: (name: string) =>
       request<ExerciseDB>('/api/exercises', { method: 'POST', body: JSON.stringify({ name }) }),
+    deleteExercise: (id: number) =>
+      request<{ success: boolean }>(`/api/exercises?id=${id}`, { method: 'DELETE' }),
 
     listPlans: async () => (await request<TrainingPlan[] | null>('/api/plans')) ?? [],
     planToday: async (planId: number, date: string) => {

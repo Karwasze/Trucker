@@ -11,18 +11,6 @@ import (
 	"trucker/internal/store"
 )
 
-func TestExercisesPageHandler(t *testing.T) {
-	h, _ := newTestHandlers(t)
-
-	req := httptest.NewRequest("GET", "/exercises", nil)
-	w := httptest.NewRecorder()
-	h.ExercisesPage(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", w.Code)
-	}
-}
-
 func TestExercisesAPI_GET(t *testing.T) {
 	h, s := newTestHandlers(t)
 	s.SeedDefaultExercises()
@@ -155,34 +143,6 @@ func TestExercisesAPI_PUT_DefaultProtected(t *testing.T) {
 
 	if w.Code != http.StatusForbidden {
 		t.Errorf("expected 403 for editing default exercise, got %d", w.Code)
-	}
-}
-
-func TestExercisesAPI_PUT_UpdatesGZCLPReferences(t *testing.T) {
-	h, s := newTestHandlers(t)
-
-	// Insert custom exercise and assign to GZCLP
-	s.DB().Exec("INSERT INTO exercise_library (name, is_default) VALUES ('Custom Lift', 0)")
-	s.DB().Exec("INSERT INTO gzclp_day_exercises (day, slot, exercise_name) VALUES (1, 'T1', 'Custom Lift')")
-
-	var id int
-	s.DB().QueryRow("SELECT id FROM exercise_library WHERE name = 'Custom Lift'").Scan(&id)
-
-	body := fmt.Sprintf(`{"id": %d, "name": "Renamed Lift"}`, id)
-	req := httptest.NewRequest("PUT", "/api/exercises", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	h.ExercisesAPI(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", w.Code)
-	}
-
-	// Verify GZCLP reference updated
-	var gzclpName string
-	s.DB().QueryRow("SELECT exercise_name FROM gzclp_day_exercises WHERE day = 1 AND slot = 'T1'").Scan(&gzclpName)
-	if gzclpName != "Renamed Lift" {
-		t.Errorf("expected GZCLP reference to update to 'Renamed Lift', got %q", gzclpName)
 	}
 }
 

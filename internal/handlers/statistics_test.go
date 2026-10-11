@@ -9,22 +9,10 @@ import (
 	"trucker/internal/store"
 )
 
-func TestStatisticsPageHandler(t *testing.T) {
-	h, _ := newTestHandlers(t)
-
-	req := httptest.NewRequest("GET", "/statistics", nil)
-	w := httptest.NewRecorder()
-	h.StatisticsPage(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", w.Code)
-	}
-}
-
 func TestStatisticsAPI_ExerciseList(t *testing.T) {
 	h, s := newTestHandlers(t)
 
-	seedWorkout(t, s, "2026-03-15", "custom", 0, []store.Exercise{
+	seedWorkout(t, s, "2026-03-15", []store.Exercise{
 		{Name: "Squat", Sets: []store.Set{{Weight: 100, Reps: 5}}},
 		{Name: "Bench Press", Sets: []store.Set{{Weight: 80, Reps: 8}}},
 	})
@@ -47,10 +35,10 @@ func TestStatisticsAPI_ExerciseList(t *testing.T) {
 func TestStatisticsAPI_ExerciseData(t *testing.T) {
 	h, s := newTestHandlers(t)
 
-	seedWorkout(t, s, "2026-03-10", "custom", 0, []store.Exercise{
+	seedWorkout(t, s, "2026-03-10", []store.Exercise{
 		{Name: "Squat", Sets: []store.Set{{Weight: 100, Reps: 5}, {Weight: 80, Reps: 10}}},
 	})
-	seedWorkout(t, s, "2026-03-15", "custom", 0, []store.Exercise{
+	seedWorkout(t, s, "2026-03-15", []store.Exercise{
 		{Name: "Squat", Sets: []store.Set{{Weight: 110, Reps: 5}}},
 	})
 

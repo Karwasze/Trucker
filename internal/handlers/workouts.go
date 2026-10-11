@@ -1,8 +1,9 @@
 package handlers
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
-	"html/template"
 	"log"
 	"net/http"
 	"strconv"
@@ -11,163 +12,107 @@ import (
 	"trucker/internal/store"
 )
 
-func (h *Handlers) NewWorkoutForm(w http.ResponseWriter, r *http.Request) {
-	exercises, err := h.store.GetAllExercises()
-	if err != nil {
-		log.Printf("Error loading exercises: %v", err)
-		exercises = []store.ExerciseDB{}
-	}
+func (h *Handlers) WorkoutsAPI(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
 
-	tmpl := template.Must(template.ParseFiles(h.tmplPath("workout_form.html")))
-	data := struct {
-		Today     string
-		Exercises []store.ExerciseDB
-	}{
-		Today:     time.Now().Format("2006-01-02"),
-		Exercises: exercises,
+	switch r.Method {
+	case "GET":
+		h.listWorkouts(w)
+	case "POST":
+		h.createWorkout(w, r)
+	case "DELETE":
+		h.deleteWorkout(w, r)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
-	tmpl.Execute(w, data)
 }
 
-func (h *Handlers) CreateWorkout(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "POST" {
-		http.Redirect(w, r, "/workout/new", http.StatusSeeOther)
-		return
-	}
-
-	r.ParseForm()
-
-	date := r.FormValue("date")
-	workoutType := r.FormValue("workout_type")
-	if workoutType == "" {
-		workoutType = "custom"
-	}
-
-	workoutDayStr := r.FormValue("workout_day")
-	workoutDay := 0
-	if workoutDayStr != "" {
-		workoutDay, _ = strconv.Atoi(workoutDayStr)
-	}
-
-	workout := store.Workout{
-		Date:        date,
-		WorkoutType: workoutType,
-		WorkoutDay:  workoutDay,
-		Exercises:   []store.Exercise{},
-	}
-
-	exerciseIndex := 0
-	for {
-		exerciseName := r.FormValue(fmt.Sprintf("exercise_%d", exerciseIndex))
-		if exerciseName == "" {
-			break // No more exercises
-		}
-
-		exercise := store.Exercise{
-			Name: exerciseName,
-			Sets: []store.Set{},
-		}
-
-		setIndex := 0
-		for {
-			repsKey := fmt.Sprintf("reps_%d_%d", exerciseIndex, setIndex)
-			weightKey := fmt.Sprintf("weight_%d_%d", exerciseIndex, setIndex)
-
-			_, repsExists := r.Form[repsKey]
-			_, weightExists := r.Form[weightKey]
-			if !repsExists && !weightExists {
-				break // No more sets for this exercise
-			}
-
-			repsStr := r.FormValue(repsKey)
-			weightStr := r.FormValue(weightKey)
-
-			if repsStr == "" || weightStr == "" {
-				setIndex++
-				continue
-			}
-
-			reps, err := strconv.Atoi(repsStr)
-			if err != nil {
-				http.Error(w, "Invalid reps value", http.StatusBadRequest)
-				return
-			}
-
-			weight, err := strconv.ParseFloat(weightStr, 64)
-			if err != nil {
-				http.Error(w, "Invalid weight value", http.StatusBadRequest)
-				return
-			}
-
-			exercise.Sets = append(exercise.Sets, store.Set{
-				Reps:   reps,
-				Weight: weight,
-			})
-			setIndex++
-		}
-
-		if len(exercise.Sets) > 0 {
-			workout.Exercises = append(workout.Exercises, exercise)
-		}
-		exerciseIndex++
-	}
-
-	if err := h.store.SaveWorkout(workout); err != nil {
-		http.Error(w, "Failed to save workout", http.StatusInternalServerError)
-		log.Printf("Error saving workout: %v", err)
-		return
-	}
-
-	if workout.WorkoutType == "gzclp" {
-		currentDay := workout.WorkoutDay
-		nextDay := store.NextGZCLPDay(currentDay)
-		if err := h.store.SetGZCLPCurrentDay(nextDay); err != nil {
-			log.Printf("Error advancing GZCLP day: %v", err)
-		} else {
-			log.Printf("Advanced GZCLP from day %d to day %d", currentDay, nextDay)
-		}
-	}
-
-	http.Redirect(w, r, "/", http.StatusSeeOther)
-}
-
-func (h *Handlers) ListWorkouts(w http.ResponseWriter, r *http.Request) {
-	tmpl := template.Must(template.ParseFiles(h.tmplPath("workouts_list.html")))
-
+func (h *Handlers) listWorkouts(w http.ResponseWriter) {
 	workouts, err := h.store.GetWorkouts()
 	if err != nil {
 		http.Error(w, "Failed to load workouts", http.StatusInternalServerError)
 		log.Printf("Error loading workouts: %v", err)
 		return
 	}
-
-	data := struct {
-		Workouts []store.Workout
-	}{
-		Workouts: workouts,
+	if workouts == nil {
+		workouts = []store.Workout{}
 	}
-
-	log.Printf("Number of workouts: %d", len(workouts))
-	if err := tmpl.Execute(w, data); err != nil {
-		log.Printf("Template execution error: %v", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
+	json.NewEncoder(w).Encode(workouts)
 }
 
-func (h *Handlers) DeleteWorkout(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "POST" {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+func (h *Handlers) createWorkout(w http.ResponseWriter, r *http.Request) {
+	var input store.Workout
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if _, err := time.Parse("2006-01-02", input.Date); err != nil {
+		http.Error(w, "Date is required in YYYY-MM-DD format", http.StatusBadRequest)
 		return
 	}
 
-	r.ParseForm()
-	workoutIDStr := r.FormValue("id")
-	if workoutIDStr == "" {
+	if input.PlanID != nil {
+		_, err := h.store.GetPlan(*input.PlanID)
+		if errors.Is(err, store.ErrPlanNotFound) {
+			http.Error(w, "Unknown plan_id", http.StatusBadRequest)
+			return
+		}
+		if err != nil {
+			http.Error(w, "Database error", http.StatusInternalServerError)
+			log.Printf("Error loading plan: %v", err)
+			return
+		}
+	}
+
+	workout := store.Workout{
+		Date:      input.Date,
+		PlanID:    input.PlanID,
+		Exercises: []store.Exercise{},
+	}
+
+	// Exercises without a name or without any sets are not worth storing.
+	for _, exercise := range input.Exercises {
+		if exercise.Name != "" && len(exercise.Sets) > 0 {
+			workout.Exercises = append(workout.Exercises, exercise)
+		}
+	}
+
+	id, err := h.store.SaveWorkout(workout)
+	if err != nil {
+		http.Error(w, "Failed to save workout", http.StatusInternalServerError)
+		log.Printf("Error saving workout: %v", err)
+		return
+	}
+	workout.ID = id
+
+	response := struct {
+		store.Workout
+		Progression []store.ProgressionResult `json:"progression,omitempty"`
+	}{Workout: workout}
+
+	// The workout is already saved, so a progression failure is logged
+	// rather than failing the request.
+	if workout.PlanID != nil {
+		progression, err := h.store.ApplyProgression(*workout.PlanID, workout.Date, workout.Exercises)
+		if err != nil {
+			log.Printf("Error applying plan progression: %v", err)
+		} else {
+			response.Progression = progression
+		}
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(response)
+}
+
+func (h *Handlers) deleteWorkout(w http.ResponseWriter, r *http.Request) {
+	idStr := r.URL.Query().Get("id")
+	if idStr == "" {
 		http.Error(w, "Workout ID required", http.StatusBadRequest)
 		return
 	}
 
-	workoutID, err := strconv.Atoi(workoutIDStr)
+	workoutID, err := strconv.Atoi(idStr)
 	if err != nil {
 		http.Error(w, "Invalid workout ID", http.StatusBadRequest)
 		return
@@ -186,8 +131,7 @@ func (h *Handlers) DeleteWorkout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("Successfully deleted workout ID: %d", workoutID)
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "Workout deleted successfully")
+	fmt.Fprintf(w, `{"success": true}`)
 }
 
 func (h *Handlers) LatestExercise(w http.ResponseWriter, r *http.Request) {

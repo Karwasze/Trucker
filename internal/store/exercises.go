@@ -64,8 +64,8 @@ func (s *Store) CreateExercise(name string) (ExerciseDB, error) {
 }
 
 // UpdateExercise renames an exercise and propagates the new name to any
-// GZCLP day assignments that referenced it. It returns ErrDefaultExercise if
-// the exercise is a default one.
+// training plans that referenced it. It returns ErrDefaultExercise if the
+// exercise is a default one.
 func (s *Store) UpdateExercise(id int, name string) (ExerciseDB, error) {
 	var oldName string
 	var isDefault bool
@@ -80,7 +80,9 @@ func (s *Store) UpdateExercise(id int, name string) (ExerciseDB, error) {
 	}
 
 	if oldName != "" && oldName != name {
-		s.db.Exec("UPDATE gzclp_day_exercises SET exercise_name = ? WHERE exercise_name = ?", name, oldName)
+		if _, err := s.db.Exec("UPDATE training_plan_exercises SET exercise_name = ? WHERE exercise_name = ?", name, oldName); err != nil {
+			return ExerciseDB{}, err
+		}
 	}
 
 	return ExerciseDB{ID: id, Name: name}, nil

@@ -27,10 +27,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	h := handlers.New(st, "templates")
+	h := handlers.New(st)
 
 	mux := http.NewServeMux()
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static/"))))
 	h.RegisterRoutes(mux)
 
 	log.Println("Starting server on :8081")

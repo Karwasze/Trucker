@@ -12,7 +12,7 @@ type Store struct {
 }
 
 // Open connects to the SQLite database at dataSourceName, applies any
-// pending schema migrations, and ensures required singleton rows exist.
+// pending schema migrations.
 func Open(dataSourceName string) (*Store, error) {
 	db, err := sql.Open("sqlite3", dataSourceName)
 	if err != nil {
@@ -22,11 +22,6 @@ func Open(dataSourceName string) (*Store, error) {
 	s := &Store{db: db}
 
 	if err := s.migrate(); err != nil {
-		db.Close()
-		return nil, err
-	}
-
-	if _, err := db.Exec("INSERT OR IGNORE INTO gzclp_settings (id, current_day, skipped_days) VALUES (1, 1, 0)"); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -45,11 +40,8 @@ func (s *Store) DB() *sql.DB {
 	return s.db
 }
 
-// SeedDefaults populates the database with default exercises and GZCLP day
-// assignments. It is safe to call repeatedly.
+// SeedDefaults populates the database with default exercises. It is safe to
+// call repeatedly.
 func (s *Store) SeedDefaults() error {
-	if err := s.SeedDefaultExercises(); err != nil {
-		return err
-	}
-	return s.SeedDefaultGZCLPDayExercises()
+	return s.SeedDefaultExercises()
 }

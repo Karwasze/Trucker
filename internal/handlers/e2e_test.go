@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strings"
 	"testing"
 
@@ -16,36 +15,28 @@ func TestE2E_CreateAndDeleteWorkout(t *testing.T) {
 	h, s := newTestHandlers(t)
 
 	// Create a workout
-	form := url.Values{}
-	form.Set("date", "2026-03-15")
-	form.Set("workout_type", "custom")
-	form.Set("exercise_0", "Squat")
-	form.Set("reps_0_0", "5")
-	form.Set("weight_0_0", "100")
-
-	req := httptest.NewRequest("POST", "/workout/create", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	w := httptest.NewRecorder()
-	h.CreateWorkout(w, req)
-
-	if w.Code != http.StatusSeeOther {
+	w := postWorkout(t, h, `{"date": "2026-03-15",
+		"exercises": [{"name": "Squat", "sets": [{"reps": 5, "weight": 100}]}]}`)
+	if w.Code != http.StatusCreated {
 		t.Fatalf("create failed: %d", w.Code)
 	}
+	var created store.Workout
+	json.NewDecoder(w.Body).Decode(&created)
 
-	// Get the workout ID
-	workouts, _ := s.GetWorkouts()
-	if len(workouts) != 1 {
-		t.Fatalf("expected 1 workout, got %d", len(workouts))
+	// List it
+	req := httptest.NewRequest("GET", "/api/workouts", nil)
+	w = httptest.NewRecorder()
+	h.WorkoutsAPI(w, req)
+	var workouts []store.Workout
+	json.NewDecoder(w.Body).Decode(&workouts)
+	if len(workouts) != 1 || workouts[0].ID != created.ID {
+		t.Fatalf("expected the created workout in the list, got %+v", workouts)
 	}
-	id := workouts[0].ID
 
 	// Delete it
-	delForm := url.Values{}
-	delForm.Set("id", fmt.Sprintf("%d", id))
-	req = httptest.NewRequest("POST", "/workout/delete", strings.NewReader(delForm.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = httptest.NewRequest("DELETE", fmt.Sprintf("/api/workouts?id=%d", created.ID), nil)
 	w = httptest.NewRecorder()
-	h.DeleteWorkout(w, req)
+	h.WorkoutsAPI(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("delete failed: %d", w.Code)
@@ -55,43 +46,6 @@ func TestE2E_CreateAndDeleteWorkout(t *testing.T) {
 	workouts, _ = s.GetWorkouts()
 	if len(workouts) != 0 {
 		t.Errorf("expected 0 workouts, got %d", len(workouts))
-	}
-}
-
-func TestE2E_GZCLPFullDayCycle(t *testing.T) {
-	h, s := newTestHandlers(t)
-	s.SeedDefaultExercises()
-	s.SeedDefaultGZCLPDayExercises()
-
-	for expectedDay := 1; expectedDay <= 4; expectedDay++ {
-		day, _ := s.GetGZCLPCurrentDay()
-		if day != expectedDay {
-			t.Fatalf("before workout %d: expected day %d, got %d", expectedDay, expectedDay, day)
-		}
-
-		// Log a GZCLP workout
-		form := url.Values{}
-		form.Set("date", fmt.Sprintf("2026-03-%02d", 10+expectedDay))
-		form.Set("workout_type", "gzclp")
-		form.Set("workout_day", fmt.Sprintf("%d", expectedDay))
-		form.Set("exercise_0", "Squat")
-		form.Set("reps_0_0", "5")
-		form.Set("weight_0_0", "100")
-
-		req := httptest.NewRequest("POST", "/workout/create", strings.NewReader(form.Encode()))
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		w := httptest.NewRecorder()
-		h.CreateWorkout(w, req)
-
-		if w.Code != http.StatusSeeOther {
-			t.Fatalf("workout %d create failed: %d", expectedDay, w.Code)
-		}
-	}
-
-	// After 4 workouts, should be back to day 1
-	day, _ := s.GetGZCLPCurrentDay()
-	if day != 1 {
-		t.Errorf("expected day 1 after full cycle, got %d", day)
 	}
 }
 
@@ -164,11 +118,11 @@ func TestE2E_LatestExerciseAfterMultipleWorkouts(t *testing.T) {
 	h, s := newTestHandlers(t)
 
 	// Seed older workout
-	seedWorkout(t, s, "2026-03-01", "custom", 0, []store.Exercise{
+	seedWorkout(t, s, "2026-03-01", []store.Exercise{
 		{Name: "Bench Press", Sets: []store.Set{{Weight: 60, Reps: 10}}},
 	})
 	// Seed newer workout
-	seedWorkout(t, s, "2026-03-15", "custom", 0, []store.Exercise{
+	seedWorkout(t, s, "2026-03-15", []store.Exercise{
 		{Name: "Bench Press", Sets: []store.Set{{Weight: 80, Reps: 5}, {Weight: 85, Reps: 3}}},
 	})
 

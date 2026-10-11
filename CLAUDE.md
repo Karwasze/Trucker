@@ -23,3 +23,5 @@ sequence number, e.g. 0002_add_notes.sql). It is applied automatically on
 startup via (*Store).migrate() in internal/store/migrations.go - do not edit
 internal/store/migrations/0001_initial_schema.sql or earlier files, since they
 may already be applied to existing databases.
+
+Make sure changes can be applied to an existing database without a loss of data.

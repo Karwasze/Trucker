@@ -6,9 +6,7 @@ func TestSaveAndGetWorkouts(t *testing.T) {
 	s := newTestStore(t)
 
 	workout := Workout{
-		Date:        "2026-03-15",
-		WorkoutType: "custom",
-		WorkoutDay:  0,
+		Date: "2026-03-15",
 		Exercises: []Exercise{
 			{
 				Name: "Squat",
@@ -26,7 +24,8 @@ func TestSaveAndGetWorkouts(t *testing.T) {
 		},
 	}
 
-	if err := s.SaveWorkout(workout); err != nil {
+	id, err := s.SaveWorkout(workout)
+	if err != nil {
 		t.Fatalf("failed to save workout: %v", err)
 	}
 
@@ -40,11 +39,11 @@ func TestSaveAndGetWorkouts(t *testing.T) {
 	}
 
 	w := workouts[0]
+	if w.ID != id {
+		t.Errorf("expected returned id %d to match saved workout id %d", id, w.ID)
+	}
 	if w.Date != "2026-03-15" {
 		t.Errorf("expected date 2026-03-15, got %s", w.Date)
-	}
-	if w.WorkoutType != "custom" {
-		t.Errorf("expected workout_type custom, got %s", w.WorkoutType)
 	}
 	if len(w.Exercises) != 2 {
 		t.Fatalf("expected 2 exercises, got %d", len(w.Exercises))
@@ -67,41 +66,13 @@ func TestSaveAndGetWorkouts(t *testing.T) {
 	}
 }
 
-func TestSaveWorkout_GZCLPType(t *testing.T) {
-	s := newTestStore(t)
-
-	workout := Workout{
-		Date:        "2026-03-15",
-		WorkoutType: "gzclp",
-		WorkoutDay:  2,
-		Exercises: []Exercise{
-			{Name: "Squat", Sets: []Set{{Weight: 100, Reps: 5}}},
-		},
-	}
-
-	if err := s.SaveWorkout(workout); err != nil {
-		t.Fatalf("failed to save workout: %v", err)
-	}
-
-	workouts, err := s.GetWorkouts()
-	if err != nil {
-		t.Fatalf("failed to get workouts: %v", err)
-	}
-	if workouts[0].WorkoutType != "gzclp" {
-		t.Errorf("expected gzclp type, got %s", workouts[0].WorkoutType)
-	}
-	if workouts[0].WorkoutDay != 2 {
-		t.Errorf("expected workout day 2, got %d", workouts[0].WorkoutDay)
-	}
-}
-
 func TestGetWorkouts_MultipleWorkouts_OrderedByDateDesc(t *testing.T) {
 	s := newTestStore(t)
 
-	seedWorkout(t, s, "2026-03-10", "custom", 0, []Exercise{
+	seedWorkout(t, s, "2026-03-10", []Exercise{
 		{Name: "Squat", Sets: []Set{{Weight: 80, Reps: 5}}},
 	})
-	seedWorkout(t, s, "2026-03-15", "custom", 0, []Exercise{
+	seedWorkout(t, s, "2026-03-15", []Exercise{
 		{Name: "Deadlift", Sets: []Set{{Weight: 120, Reps: 3}}},
 	})
 
@@ -111,5 +82,35 @@ func TestGetWorkouts_MultipleWorkouts_OrderedByDateDesc(t *testing.T) {
 	}
 	if len(workouts) != 2 {
 		t.Fatalf("expected 2 workouts, got %d", len(workouts))
+	}
+}
+
+func TestGetWorkouts_WorkoutWithoutExercisesOrSets(t *testing.T) {
+	s := newTestStore(t)
+
+	seedWorkout(t, s, "2026-03-10", nil)
+	seedWorkout(t, s, "2026-03-15", []Exercise{{Name: "Squat"}})
+	seedWorkout(t, s, "2026-03-20", []Exercise{{Name: "Bench Press", Sets: []Set{{Weight: 80, Reps: 5}}}})
+
+	workouts, err := s.GetWorkouts()
+	if err != nil {
+		t.Fatalf("failed to get workouts: %v", err)
+	}
+	if len(workouts) != 3 {
+		t.Fatalf("expected 3 workouts, got %d", len(workouts))
+	}
+
+	byDate := map[string]Workout{}
+	for _, w := range workouts {
+		byDate[w.Date] = w
+	}
+	if ex := byDate["2026-03-10"].Exercises; ex == nil || len(ex) != 0 {
+		t.Errorf("expected empty exercises, got %+v", ex)
+	}
+	if ex := byDate["2026-03-15"].Exercises; len(ex) != 1 || ex[0].Sets == nil || len(ex[0].Sets) != 0 {
+		t.Errorf("expected one exercise with no sets, got %+v", ex)
+	}
+	if ex := byDate["2026-03-20"].Exercises; len(ex) != 1 || len(ex[0].Sets) != 1 {
+		t.Errorf("expected bench press with one set, got %+v", ex)
 	}
 }

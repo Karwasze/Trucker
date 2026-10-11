@@ -1,50 +1,55 @@
 package store
 
-// SaveWorkout persists a workout along with its exercises and sets.
-func (s *Store) SaveWorkout(workout Workout) error {
+import "database/sql"
+
+// SaveWorkout persists a workout along with its exercises and sets, returning
+// the new workout's ID.
+func (s *Store) SaveWorkout(workout Workout) (int, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer tx.Rollback()
 
-	result, err := tx.Exec("INSERT INTO workouts (date, workout_type, workout_day) VALUES (?, ?, ?)",
-		workout.Date, workout.WorkoutType, workout.WorkoutDay)
+	result, err := tx.Exec("INSERT INTO workouts (date, plan_id) VALUES (?, ?)", workout.Date, workout.PlanID)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	workoutID, err := result.LastInsertId()
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	for _, exercise := range workout.Exercises {
 		exerciseResult, err := tx.Exec("INSERT INTO exercises (workout_id, name) VALUES (?, ?)", workoutID, exercise.Name)
 		if err != nil {
-			return err
+			return 0, err
 		}
 
 		exerciseID, err := exerciseResult.LastInsertId()
 		if err != nil {
-			return err
+			return 0, err
 		}
 
 		for _, set := range exercise.Sets {
 			if _, err := tx.Exec("INSERT INTO sets (exercise_id, reps, weight) VALUES (?, ?, ?)", exerciseID, set.Reps, set.Weight); err != nil {
-				return err
+				return 0, err
 			}
 		}
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return int(workoutID), nil
 }
 
 // GetWorkouts returns all workouts with their exercises and sets, ordered by
 // date descending.
 func (s *Store) GetWorkouts() ([]Workout, error) {
 	rows, err := s.db.Query(`
-		SELECT w.id, w.date, w.workout_type, w.workout_day, e.id, e.name, s.reps, s.weight
+		SELECT w.id, w.date, w.plan_id, e.id, e.name, s.reps, s.weight
 		FROM workouts w
 		LEFT JOIN exercises e ON w.id = e.workout_id
 		LEFT JOIN sets s ON e.id = s.exercise_id
@@ -59,40 +64,53 @@ func (s *Store) GetWorkouts() ([]Workout, error) {
 	exerciseMap := make(map[int]*Exercise)
 
 	for rows.Next() {
-		var workoutID, exerciseID, workoutDay int
-		var date, exerciseName, workoutType string
-		var reps int
-		var weight float64
+		// Exercise and set columns are NULL for workouts without exercises
+		// and exercises without sets, because of the LEFT JOINs.
+		var workoutID int
+		var date string
+		var planID, exerciseID, reps sql.NullInt64
+		var exerciseName sql.NullString
+		var weight sql.NullFloat64
 
-		if err := rows.Scan(&workoutID, &date, &workoutType, &workoutDay, &exerciseID, &exerciseName, &reps, &weight); err != nil {
+		if err := rows.Scan(&workoutID, &date, &planID, &exerciseID, &exerciseName, &reps, &weight); err != nil {
 			return nil, err
 		}
 
 		if _, exists := workoutMap[workoutID]; !exists {
 			workoutMap[workoutID] = &Workout{
-				ID:          workoutID,
-				Date:        date,
-				WorkoutType: workoutType,
-				WorkoutDay:  workoutDay,
-				Exercises:   []Exercise{},
+				ID:        workoutID,
+				Date:      date,
+				Exercises: []Exercise{},
+			}
+			if planID.Valid {
+				id := int(planID.Int64)
+				workoutMap[workoutID].PlanID = &id
 			}
 		}
 
-		if _, exists := exerciseMap[exerciseID]; !exists {
+		if !exerciseID.Valid {
+			continue
+		}
+
+		if _, exists := exerciseMap[int(exerciseID.Int64)]; !exists {
 			exercise := Exercise{
-				Name: exerciseName,
+				Name: exerciseName.String,
 				Sets: []Set{},
 			}
-			exerciseMap[exerciseID] = &exercise
+			exerciseMap[int(exerciseID.Int64)] = &exercise
 			workoutMap[workoutID].Exercises = append(workoutMap[workoutID].Exercises, exercise)
 		}
 
+		if !reps.Valid {
+			continue
+		}
+
 		set := Set{
-			Reps:   reps,
-			Weight: weight,
+			Reps:   int(reps.Int64),
+			Weight: weight.Float64,
 		}
 		for i := range workoutMap[workoutID].Exercises {
-			if workoutMap[workoutID].Exercises[i].Name == exerciseName {
+			if workoutMap[workoutID].Exercises[i].Name == exerciseName.String {
 				workoutMap[workoutID].Exercises[i].Sets = append(workoutMap[workoutID].Exercises[i].Sets, set)
 				break
 			}

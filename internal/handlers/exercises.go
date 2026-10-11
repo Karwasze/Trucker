@@ -4,23 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"html/template"
-	"log"
 	"net/http"
 	"strconv"
 
 	"trucker/internal/store"
 )
-
-func (h *Handlers) ExercisesPage(w http.ResponseWriter, r *http.Request) {
-	tmpl, err := template.ParseFiles(h.tmplPath("exercises.html"))
-	if err != nil {
-		http.Error(w, "Template error", http.StatusInternalServerError)
-		log.Printf("Error parsing exercises template: %v", err)
-		return
-	}
-	tmpl.Execute(w, nil)
-}
 
 func (h *Handlers) ExercisesAPI(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")

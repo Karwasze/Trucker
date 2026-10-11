@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { localDate } from '@/api/client';
 import type { StatisticsData } from '@/api/types';
@@ -55,16 +55,12 @@ export default function StatsScreen() {
         <Message>Log a workout to see your progress.</Message>
       ) : (
         <>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.chips}
-            style={styles.chipScroller}>
+          <View style={styles.chips}>
             {exercises.map((name) => (
               <Chip key={name} label={name} selected={name === exercise} onPress={() => setSelected(name)} />
             ))}
-          </ScrollView>
-          <View style={styles.timespans}>
+          </View>
+          <View style={styles.chips}>
             {TIMESPANS.map((t) => (
               <Chip
                 key={t.key}
@@ -148,14 +144,6 @@ function Tile({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  chipScroller: {
-    marginHorizontal: -Spacing.three,
-    flexGrow: 0,
-  },
-  chips: {
-    gap: Spacing.two,
-    paddingHorizontal: Spacing.three,
-  },
   tiles: {
     flexDirection: 'row',
     gap: Spacing.two,
@@ -165,7 +153,7 @@ const styles = StyleSheet.create({
     gap: Spacing.one,
     padding: Spacing.three,
   },
-  timespans: {
+  chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.two,

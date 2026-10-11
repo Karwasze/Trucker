@@ -7,6 +7,7 @@ import { Button, Card, Message, Screen } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useQuery } from '@/hooks/use-query';
 import { useSettings } from '@/settings/settings-context';
+import { confirmDeleteWorkout } from '@/workout/confirm-delete';
 import { formatDate, formatKg, volumeOf } from '@/workout/format';
 
 export default function WorkoutDetailScreen() {
@@ -18,27 +19,16 @@ export default function WorkoutDetailScreen() {
   const workout = workouts.data?.find((w) => w.id === Number(id));
 
   const confirmDelete = () =>
-    Alert.alert(
-      'Delete workout?',
-      'This removes the logged sets. Plan progression already applied is not undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            setDeleting(true);
-            try {
-              await api.deleteWorkout(Number(id));
-              router.back();
-            } catch (e) {
-              Alert.alert("Couldn't delete workout", (e as Error).message);
-              setDeleting(false);
-            }
-          },
-        },
-      ]
-    );
+    confirmDeleteWorkout(async () => {
+      setDeleting(true);
+      try {
+        await api.deleteWorkout(Number(id));
+        router.back();
+      } catch (e) {
+        Alert.alert("Couldn't delete workout", (e as Error).message);
+        setDeleting(false);
+      }
+    });
 
   return (
     <Screen hasHeader>

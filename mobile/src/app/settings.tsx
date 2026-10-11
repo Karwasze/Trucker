@@ -4,18 +4,14 @@ import { Alert, StyleSheet, TextInput, View } from 'react-native';
 import { createApi } from '@/api/client';
 import type { ExerciseDB } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
-import { Button, Card, Message, Screen, SectionLabel } from '@/components/ui';
+import { Button, Card, Chip, Message, Screen, SectionLabel } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useQuery } from '@/hooks/use-query';
 import { useTheme } from '@/hooks/use-theme';
-import { useSettings } from '@/settings/settings-context';
+import { ENVIRONMENT_NAMES, useSettings, type Environment } from '@/settings/settings-context';
 
 export default function SettingsScreen() {
-  const theme = useTheme();
-  const { api, serverUrl, update } = useSettings();
-  const [urlInput, setUrlInput] = useState(serverUrl);
-  const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
-  const [testing, setTesting] = useState(false);
+  const { api, serverUrl, environment, selectEnvironment } = useSettings();
   const exercises = useQuery(`exercises:${serverUrl}`, api.listExercises);
   const [removing, setRemoving] = useState<number | null>(null);
   const customExercises = (exercises.data ?? [])
@@ -46,54 +42,24 @@ export default function SettingsScreen() {
       ]
     );
 
-  const saveAndTest = async () => {
-    const url = urlInput.trim().replace(/\/+$/, '');
-    setUrlInput(url);
-    setTesting(true);
-    setStatus(null);
-    try {
-      const exercises = await createApi(url).listExercises();
-      setStatus({ ok: true, text: `Connected · ${exercises.length} exercises` });
-    } catch (e) {
-      setStatus({ ok: false, text: (e as Error).message });
-    } finally {
-      setTesting(false);
-      if (url !== serverUrl) update({ serverUrl: url, planId: null });
-    }
-  };
-
   return (
     <Screen
       title="Settings"
       refreshing={exercises.refreshing}
       onRefresh={exercises.refresh}>
       <SectionLabel>Server</SectionLabel>
-      <Card>
-        <TextInput
-          value={urlInput}
-          onChangeText={setUrlInput}
-          onSubmitEditing={saveAndTest}
-          placeholder="http://192.168.1.10:8081"
-          placeholderTextColor={theme.textSecondary}
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="url"
-          returnKeyType="done"
-          style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundSelected }]}
-        />
-        {status && (
-          <ThemedText type="small" style={{ color: status.ok ? theme.success : theme.danger }}>
-            {status.text}
-          </ThemedText>
-        )}
-        <Button
-          title={urlInput.trim() === serverUrl ? 'Test connection' : 'Save & test'}
-          variant="secondary"
-          compact
-          loading={testing}
-          onPress={saveAndTest}
-        />
-      </Card>
+      <View style={styles.chips}>
+        {ENVIRONMENTS.map((env) => (
+          <Chip
+            key={env}
+            label={ENVIRONMENT_NAMES[env]}
+            selected={env === environment}
+            onPress={() => selectEnvironment(env)}
+          />
+        ))}
+      </View>
+      {/* Keyed so the input and status start fresh for each server. */}
+      <ServerCard key={environment} />
 
       <SectionLabel>Exercises</SectionLabel>
       {!exercises.data ? (
@@ -128,12 +94,83 @@ export default function SettingsScreen() {
   );
 }
 
+const ENVIRONMENTS: Environment[] = ['dev', 'prod'];
+
+/** Edits and checks the active server's URL. */
+function ServerCard() {
+  const theme = useTheme();
+  const { environment, serverUrl, setServerUrl } = useSettings();
+  const [urlInput, setUrlInput] = useState(serverUrl);
+  const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
+  const [testing, setTesting] = useState(false);
+
+  const saveAndTest = async () => {
+    const url = urlInput.trim().replace(/\/+$/, '');
+    setUrlInput(url);
+    if (!url) {
+      setStatus({ ok: false, text: 'Enter a server URL.' });
+      return;
+    }
+    setTesting(true);
+    setStatus(null);
+    try {
+      const exercises = await createApi(url).listExercises();
+      setStatus({ ok: true, text: `Connected · ${exercises.length} exercises` });
+    } catch (e) {
+      setStatus({ ok: false, text: (e as Error).message });
+    } finally {
+      setTesting(false);
+      setServerUrl(environment, url);
+    }
+  };
+
+  return (
+    <Card>
+      <TextInput
+        value={urlInput}
+        onChangeText={setUrlInput}
+        onSubmitEditing={saveAndTest}
+        placeholder={environment === 'prod' ? 'https://trucker.example.com' : 'http://192.168.1.10:8081'}
+        placeholderTextColor={theme.textSecondary}
+        autoCapitalize="none"
+        autoCorrect={false}
+        keyboardType="url"
+        returnKeyType="done"
+        accessibilityLabel={`${ENVIRONMENT_NAMES[environment]} server URL`}
+        style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundSelected }]}
+      />
+      {status ? (
+        <ThemedText type="small" style={{ color: status.ok ? theme.success : theme.danger }}>
+          {status.text}
+        </ThemedText>
+      ) : (
+        !serverUrl && (
+          <ThemedText type="small" themeColor="textSecondary">
+            No {ENVIRONMENT_NAMES[environment].toLowerCase()} server set yet.
+          </ThemedText>
+        )
+      )}
+      <Button
+        title={urlInput.trim() === serverUrl ? 'Test connection' : 'Save & test'}
+        variant="secondary"
+        compact
+        loading={testing}
+        onPress={saveAndTest}
+      />
+    </Card>
+  );
+}
+
 const styles = StyleSheet.create({
   input: {
     height: 44,
     borderRadius: 10,
     paddingHorizontal: Spacing.three,
     fontSize: 16,
+  },
+  chips: {
+    flexDirection: 'row',
+    gap: Spacing.two,
   },
   option: {
     flexDirection: 'row',

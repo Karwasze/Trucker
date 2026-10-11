@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { EnvironmentBadge } from '@/components/environment-badge';
 import { ThemedText } from '@/components/themed-text';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -49,7 +50,10 @@ export function Screen({ title, subtitle, children, refreshing, onRefresh, hasHe
       ]}>
       {title && (
         <View style={styles.header}>
-          <ThemedText style={styles.title}>{title}</ThemedText>
+          <View style={styles.titleRow}>
+            <ThemedText style={styles.title}>{title}</ThemedText>
+            <EnvironmentBadge />
+          </View>
           {subtitle && <ThemedText themeColor="textSecondary">{subtitle}</ThemedText>}
         </View>
       )}
@@ -164,7 +168,13 @@ const styles = StyleSheet.create({
     gap: Spacing.one,
     marginBottom: Spacing.two,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
   title: {
+    flexShrink: 1,
     fontSize: 34,
     lineHeight: 41,
     fontWeight: 700,

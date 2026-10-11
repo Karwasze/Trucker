@@ -2,6 +2,7 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import AppTabs from '@/components/app-tabs';
 import { SettingsProvider, useSettings } from '@/settings/settings-context';
@@ -19,11 +20,13 @@ function HideSplashWhenReady() {
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <SettingsProvider>
-        <HideSplashWhenReady />
-        <AppTabs />
-      </SettingsProvider>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <SettingsProvider>
+          <HideSplashWhenReady />
+          <AppTabs />
+        </SettingsProvider>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }

@@ -75,13 +75,53 @@ func TestGetWorkouts_MultipleWorkouts_OrderedByDateDesc(t *testing.T) {
 	seedWorkout(t, s, "2026-03-15", []Exercise{
 		{Name: "Deadlift", Sets: []Set{{Weight: 120, Reps: 3}}},
 	})
+	seedWorkout(t, s, "2026-03-01", []Exercise{
+		{Name: "Bench Press", Sets: []Set{{Weight: 60, Reps: 5}}},
+	})
+	seedWorkout(t, s, "2026-03-12", nil)
+	seedWorkout(t, s, "2026-03-15", []Exercise{
+		{Name: "Row", Sets: []Set{{Weight: 50, Reps: 8}}},
+	})
+
+	// Map iteration is random, so repeat to catch unstable ordering.
+	for i := 0; i < 20; i++ {
+		workouts, err := s.GetWorkouts()
+		if err != nil {
+			t.Fatalf("failed to get workouts: %v", err)
+		}
+		if len(workouts) != 5 {
+			t.Fatalf("expected 5 workouts, got %d", len(workouts))
+		}
+
+		// Newest date first; same-day workouts newest-logged first.
+		want := []string{"2026-03-15/Row", "2026-03-15/Deadlift", "2026-03-12/", "2026-03-10/Squat", "2026-03-01/Bench Press"}
+		for j, w := range workouts {
+			got := w.Date + "/"
+			if len(w.Exercises) > 0 {
+				got += w.Exercises[0].Name
+			}
+			if got != want[j] {
+				t.Fatalf("position %d: expected %s, got %s", j, want[j], got)
+			}
+		}
+	}
+}
+
+func TestGetWorkouts_DuplicateExerciseNamesKeepTheirSets(t *testing.T) {
+	s := newTestStore(t)
+
+	seedWorkout(t, s, "2026-03-10", []Exercise{
+		{Name: "Squat", Sets: []Set{{Weight: 100, Reps: 5}}},
+		{Name: "Squat", Sets: []Set{{Weight: 80, Reps: 8}, {Weight: 80, Reps: 8}}},
+	})
 
 	workouts, err := s.GetWorkouts()
 	if err != nil {
 		t.Fatalf("failed to get workouts: %v", err)
 	}
-	if len(workouts) != 2 {
-		t.Fatalf("expected 2 workouts, got %d", len(workouts))
+	ex := workouts[0].Exercises
+	if len(ex) != 2 || len(ex[0].Sets) != 1 || len(ex[1].Sets) != 2 {
+		t.Fatalf("unexpected exercises: %+v", ex)
 	}
 }
 

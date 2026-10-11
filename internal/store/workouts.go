@@ -45,23 +45,25 @@ func (s *Store) SaveWorkout(workout Workout) (int, error) {
 	return int(workoutID), nil
 }
 
-// GetWorkouts returns all workouts with their exercises and sets, ordered by
-// date descending.
+// GetWorkouts returns all workouts with their exercises and sets, newest
+// first. Workouts on the same date are ordered by most recently logged.
 func (s *Store) GetWorkouts() ([]Workout, error) {
 	rows, err := s.db.Query(`
 		SELECT w.id, w.date, w.plan_id, e.id, e.name, s.reps, s.weight
 		FROM workouts w
 		LEFT JOIN exercises e ON w.id = e.workout_id
 		LEFT JOIN sets s ON e.id = s.exercise_id
-		ORDER BY w.date DESC, e.id, s.id
+		ORDER BY w.date DESC, w.id DESC, e.id, s.id
 	`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	workoutMap := make(map[int]*Workout)
-	exerciseMap := make(map[int]*Exercise)
+	// Rows arrive grouped by workout and then by exercise, so appending as
+	// IDs change preserves the query's ordering.
+	var workouts []Workout
+	lastWorkoutID, lastExerciseID := -1, int64(-1)
 
 	for rows.Next() {
 		// Exercise and set columns are NULL for workouts without exercises
@@ -76,53 +78,45 @@ func (s *Store) GetWorkouts() ([]Workout, error) {
 			return nil, err
 		}
 
-		if _, exists := workoutMap[workoutID]; !exists {
-			workoutMap[workoutID] = &Workout{
+		if workoutID != lastWorkoutID {
+			workout := Workout{
 				ID:        workoutID,
 				Date:      date,
 				Exercises: []Exercise{},
 			}
 			if planID.Valid {
 				id := int(planID.Int64)
-				workoutMap[workoutID].PlanID = &id
+				workout.PlanID = &id
 			}
+			workouts = append(workouts, workout)
+			lastWorkoutID = workoutID
 		}
+		workout := &workouts[len(workouts)-1]
 
 		if !exerciseID.Valid {
 			continue
 		}
 
-		if _, exists := exerciseMap[int(exerciseID.Int64)]; !exists {
-			exercise := Exercise{
+		if exerciseID.Int64 != lastExerciseID {
+			workout.Exercises = append(workout.Exercises, Exercise{
 				Name: exerciseName.String,
 				Sets: []Set{},
-			}
-			exerciseMap[int(exerciseID.Int64)] = &exercise
-			workoutMap[workoutID].Exercises = append(workoutMap[workoutID].Exercises, exercise)
+			})
+			lastExerciseID = exerciseID.Int64
 		}
 
 		if !reps.Valid {
 			continue
 		}
 
-		set := Set{
+		exercise := &workout.Exercises[len(workout.Exercises)-1]
+		exercise.Sets = append(exercise.Sets, Set{
 			Reps:   int(reps.Int64),
 			Weight: weight.Float64,
-		}
-		for i := range workoutMap[workoutID].Exercises {
-			if workoutMap[workoutID].Exercises[i].Name == exerciseName.String {
-				workoutMap[workoutID].Exercises[i].Sets = append(workoutMap[workoutID].Exercises[i].Sets, set)
-				break
-			}
-		}
+		})
 	}
 
-	var workouts []Workout
-	for _, workout := range workoutMap {
-		workouts = append(workouts, *workout)
-	}
-
-	return workouts, nil
+	return workouts, rows.Err()
 }
 
 // DeleteWorkout removes a workout and all of its exercises and sets. It

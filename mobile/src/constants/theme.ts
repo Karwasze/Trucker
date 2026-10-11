@@ -17,6 +17,7 @@ export const Colors = {
     accent: '#208AEF',
     onAccent: '#ffffff',
     success: '#2E9E5B',
+    warning: '#F5A524',
     danger: '#D93B3B',
   },
   dark: {
@@ -28,6 +29,7 @@ export const Colors = {
     accent: '#3D9BF5',
     onAccent: '#ffffff',
     success: '#3FBF73',
+    warning: '#F7B750',
     danger: '#F05A5A',
   },
 } as const;

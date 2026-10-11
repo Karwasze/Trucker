@@ -23,6 +23,7 @@ export function createApi(baseUrl: string) {
   const root = baseUrl.replace(/\/+$/, '');
 
   async function request<T>(path: string, init?: RequestInit): Promise<T> {
+    if (!root) throw new ApiError('No server set. Add its URL in Settings.');
     let res: Response;
     try {
       res = await fetch(root + path, {

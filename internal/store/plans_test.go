@@ -475,3 +475,41 @@ func TestSaveWorkout_WithPlanID(t *testing.T) {
 		t.Errorf("expected tuesday workout without plan_id, got %d", *p)
 	}
 }
+
+func TestGetPlanWorkout(t *testing.T) {
+	s := newTestStore(t)
+	planID := mustCreatePlan(t, s, samplePlan()).ID
+	other := mustCreatePlan(t, s, TrainingPlan{Name: "Other"}).ID
+	monday := "2026-10-12"
+
+	got, err := s.GetPlanWorkout(planID, monday)
+	if err != nil || got != nil {
+		t.Fatalf("expected no workout before logging, got %+v, %v", got, err)
+	}
+
+	// Workouts without the plan, from another plan or on another day don't count.
+	seedWorkout(t, s, monday, []Exercise{{Name: "Curl", Sets: []Set{{Reps: 10, Weight: 10}}}})
+	if _, err := s.SaveWorkout(Workout{Date: monday, PlanID: &other}); err != nil {
+		t.Fatalf("failed to save workout: %v", err)
+	}
+	if _, err := s.SaveWorkout(Workout{Date: "2026-10-05", PlanID: &planID}); err != nil {
+		t.Fatalf("failed to save workout: %v", err)
+	}
+	if got, _ := s.GetPlanWorkout(planID, monday); got != nil {
+		t.Fatalf("expected no plan workout on %s, got %+v", monday, got)
+	}
+
+	exercises := []Exercise{{Name: "Squat", Sets: []Set{{Reps: 5, Weight: 100}}}}
+	id, err := s.SaveWorkout(Workout{Date: monday, PlanID: &planID, Exercises: exercises})
+	if err != nil {
+		t.Fatalf("failed to save workout: %v", err)
+	}
+	got, err = s.GetPlanWorkout(planID, monday)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil || got.ID != id || got.Date != monday || got.PlanID == nil || *got.PlanID != planID ||
+		!reflect.DeepEqual(got.Exercises, exercises) {
+		t.Errorf("expected workout %d with %+v, got %+v", id, exercises, got)
+	}
+}

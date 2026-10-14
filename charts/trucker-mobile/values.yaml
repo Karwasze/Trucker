@@ -13,8 +13,14 @@ port: 8081
 # Must resolve on the phone and match the Service below.
 hostname: trucker-metro.tail135e5e.ts.net
 
-# API the app talks to in dev mode; Metro inlines it as EXPO_PUBLIC_API_URL.
+# Production API the app talks to; Metro inlines it as EXPO_PUBLIC_FIXED_API_URL,
+# which locks the app to it (no development server, URL not editable).
 apiUrl: https://trucker.tail135e5e.ts.net
+
+# Fixes the scope Expo Go keeps the app's storage under (active plan,
+# workout draft). Without it every new pod gets a random scope and the phone
+# starts with empty storage. Any UUID works; changing it resets that storage.
+scopeId: 95cf9cbb-f541-4621-ad28-ba3fafce7a8b
 
 # App name shown in Expo Go (overrides "name" in app.json via APP_NAME).
 # Empty: use the name from app.json.

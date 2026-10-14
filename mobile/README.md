@@ -12,7 +12,8 @@ Expo (React Native) app for the Trucker API. Targets iOS; Android should work to
 - **History** – logged workouts; tap one for details, swipe left to delete it.
 - **Progress** – estimated 1RM and volume per exercise.
 - **Settings** – switch between the development and production server, and
-  remove custom exercises. Every tab shows a DEV or PROD badge next to its title.
+  remove custom exercises. Every tab shows a DEV or PROD badge next to its
+  title. Deployed bundles are fixed to production, with no switch or badge.
 - **Rest timer** – ticking off a set starts it (or restarts it), counting up from
   0:00 to the target. It shows at the top of every screen in a Dynamic Island
   style: on a notched iPhone the notch grows to show the time, with the status
@@ -50,8 +51,9 @@ The `trucker-mobile` image (this directory's Dockerfile) runs Metro, and the
 `trucker-mobile` Helm chart deploys it. It is exposed on the tailnet as
 `trucker-metro` by the Tailscale operator, so with the phone on Tailscale open
 `exp://trucker-metro.tail135e5e.ts.net:8081` in Expo Go. That bundle runs the
-code from the image tag, with no live reload, and its development server is
-the chart's `apiUrl`.
+code from the image tag, with no live reload, and only talks to the chart's
+`apiUrl` as its production server: `EXPO_PUBLIC_FIXED_API_URL` hides the
+development server and makes the URL read-only in Settings.
 
 ## Checks
 

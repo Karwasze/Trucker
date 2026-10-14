@@ -61,6 +61,29 @@ func TestNextTarget(t *testing.T) {
 			wantOutcome: ResultProgressed,
 		},
 		{
+			// Picking a new working weight (e.g. starting a plan) isn't a
+			// plate increment.
+			name: "big jumps in weight don't count as a step",
+			sessions: [][]Set{
+				setList(1, 100),
+				setList(5, 60, 5, 60, 5, 60),
+				setList(5, 80, 5, 80, 5, 80),
+			},
+			wantSets:    setList(5, 82.5, 5, 82.5, 5, 82.5),
+			wantReason:  "Weight up 2.5 kg: you completed 3 × 5 @ 80 kg last time.",
+			wantOutcome: ResultProgressed,
+		},
+		{
+			name: "jumps up to 5 kg count as a step on light weights",
+			sessions: [][]Set{
+				setList(5, 10, 5, 10, 5, 10),
+				setList(5, 12, 5, 12, 5, 12),
+			},
+			wantSets:    setList(5, 14, 5, 14, 5, 14),
+			wantReason:  "Weight up 2 kg: you completed 3 × 5 @ 12 kg last time.",
+			wantOutcome: ResultProgressed,
+		},
+		{
 			name:        "extra reps, extra sets and lighter warm-ups still hit",
 			sessions:    [][]Set{setList(5, 60, 6, 100, 5, 100, 5, 100, 3, 100)},
 			wantSets:    setList(5, 102.5, 5, 102.5, 5, 102.5),

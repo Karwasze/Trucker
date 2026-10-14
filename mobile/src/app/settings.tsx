@@ -21,7 +21,7 @@ import {
 } from '@/timer/timer-model';
 
 export default function SettingsScreen() {
-  const { api, serverUrl, environment, selectEnvironment } = useSettings();
+  const { api, serverUrl, environment, serverLocked, selectEnvironment } = useSettings();
   const exercises = useQuery(`exercises:${serverUrl}`, api.listExercises);
   const [removing, setRemoving] = useState<number | null>(null);
   const customExercises = (exercises.data ?? [])
@@ -58,16 +58,18 @@ export default function SettingsScreen() {
       refreshing={exercises.refreshing}
       onRefresh={exercises.refresh}>
       <SectionLabel>Server</SectionLabel>
-      <View style={styles.chips}>
-        {ENVIRONMENTS.map((env) => (
-          <Chip
-            key={env}
-            label={ENVIRONMENT_NAMES[env]}
-            selected={env === environment}
-            onPress={() => selectEnvironment(env)}
-          />
-        ))}
-      </View>
+      {!serverLocked && (
+        <View style={styles.chips}>
+          {ENVIRONMENTS.map((env) => (
+            <Chip
+              key={env}
+              label={ENVIRONMENT_NAMES[env]}
+              selected={env === environment}
+              onPress={() => selectEnvironment(env)}
+            />
+          ))}
+        </View>
+      )}
       {/* Keyed so the input and status start fresh for each server. */}
       <ServerCard key={environment} />
 
@@ -113,10 +115,10 @@ export default function SettingsScreen() {
 
 const ENVIRONMENTS: Environment[] = ['dev', 'prod'];
 
-/** Edits and checks the active server's URL. */
+/** Edits and checks the active server's URL; a locked server can only be checked. */
 function ServerCard() {
   const theme = useTheme();
-  const { environment, serverUrl, setServerUrl } = useSettings();
+  const { environment, serverUrl, serverLocked, setServerUrl } = useSettings();
   const [urlInput, setUrlInput] = useState(serverUrl);
   const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
   const [testing, setTesting] = useState(false);
@@ -143,19 +145,25 @@ function ServerCard() {
 
   return (
     <Card>
-      <TextInput
-        value={urlInput}
-        onChangeText={setUrlInput}
-        onSubmitEditing={saveAndTest}
-        placeholder={environment === 'prod' ? 'https://trucker.example.com' : 'http://192.168.1.10:8081'}
-        placeholderTextColor={theme.textSecondary}
-        autoCapitalize="none"
-        autoCorrect={false}
-        keyboardType="url"
-        returnKeyType="done"
-        accessibilityLabel={`${ENVIRONMENT_NAMES[environment]} server URL`}
-        style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundSelected }]}
-      />
+      {serverLocked ? (
+        <ThemedText selectable accessibilityLabel={`${ENVIRONMENT_NAMES[environment]} server URL`}>
+          {serverUrl}
+        </ThemedText>
+      ) : (
+        <TextInput
+          value={urlInput}
+          onChangeText={setUrlInput}
+          onSubmitEditing={saveAndTest}
+          placeholder={environment === 'prod' ? 'https://trucker.example.com' : 'http://192.168.1.10:8081'}
+          placeholderTextColor={theme.textSecondary}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="url"
+          returnKeyType="done"
+          accessibilityLabel={`${ENVIRONMENT_NAMES[environment]} server URL`}
+          style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundSelected }]}
+        />
+      )}
       {status ? (
         <ThemedText type="small" style={{ color: status.ok ? theme.success : theme.danger }}>
           {status.text}

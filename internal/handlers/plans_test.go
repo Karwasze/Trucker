@@ -276,6 +276,44 @@ func TestPlanTodayAPI(t *testing.T) {
 	}
 }
 
+// After the plan's workout for the day is logged, the day returns it, so
+// the app doesn't offer the same workout again (e.g. after losing its draft).
+func TestPlanTodayAPI_LoggedWorkout(t *testing.T) {
+	h, s := newTestHandlers(t)
+	created := createTestPlan(t, h)
+	target := fmt.Sprintf("/api/plans/today?id=%d&date=2026-10-12", created.ID)
+
+	var before map[string]json.RawMessage
+	json.NewDecoder(todayRequest(h, "GET", target).Body).Decode(&before)
+	if _, ok := before["workout"]; ok {
+		t.Errorf("expected no workout before logging, got %s", before["workout"])
+	}
+
+	planID := created.ID
+	id, err := s.SaveWorkout(store.Workout{Date: "2026-10-12", PlanID: &planID, Exercises: []store.Exercise{
+		{Name: "Squat", Sets: []store.Set{{Reps: 5, Weight: 100}}},
+	}})
+	if err != nil {
+		t.Fatalf("failed to save workout: %v", err)
+	}
+
+	w := todayRequest(h, "GET", target)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var after struct {
+		Exercises []store.ExerciseTarget `json:"exercises"`
+		Workout   *store.Workout         `json:"workout"`
+	}
+	json.NewDecoder(w.Body).Decode(&after)
+	if after.Workout == nil || after.Workout.ID != id || len(after.Workout.Exercises) != 1 {
+		t.Errorf("expected logged workout %d, got %+v", id, after.Workout)
+	}
+	if len(after.Exercises) != 2 {
+		t.Errorf("expected the plan's targets alongside the workout, got %+v", after.Exercises)
+	}
+}
+
 func TestPlanTodayAPI_DefaultsToToday(t *testing.T) {
 	h, _ := newTestHandlers(t)
 	created := createTestPlan(t, h)

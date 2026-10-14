@@ -23,6 +23,11 @@ const (
 	// deload of deloadFraction.
 	deloadAfterMisses = 3
 	deloadFraction    = 0.10
+	// A weight increase only counts towards the step if it is at most
+	// maxStepFraction of the previous weight or maxStepKg, whichever is
+	// larger; bigger jumps are a new starting weight, not a plate increment.
+	maxStepFraction = 0.10
+	maxStepKg       = 5
 )
 
 // layoffs are how much lighter to go after time away from an exercise,
@@ -224,11 +229,14 @@ func hitScheme(sets []Set, weight float64, scheme PlanExercise) bool {
 
 // weightStep returns the most common increase between consecutive sessions'
 // working weights, preferring the smaller step on a tie, or
-// defaultWeightStep when the weight has never gone up.
+// defaultWeightStep when the weight has never gone up. Jumps too big to be a
+// plate increment (see maxStepFraction) are left out.
 func weightStep(sessions [][]Set) float64 {
 	counts := make(map[float64]int)
 	for i := 1; i < len(sessions); i++ {
-		if increase := roundWeight(workingWeight(sessions[i]) - workingWeight(sessions[i-1])); increase > 0 {
+		previous := workingWeight(sessions[i-1])
+		increase := roundWeight(workingWeight(sessions[i]) - previous)
+		if increase > 0 && increase <= math.Max(previous*maxStepFraction, maxStepKg) {
 			counts[increase]++
 		}
 	}

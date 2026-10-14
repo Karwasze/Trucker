@@ -97,6 +97,8 @@ export type PlanToday = {
   date: string;
   weekday: string;
   exercises: ExerciseTarget[];
+  /** The workout already logged from the plan on this date, if any. */
+  workout?: Workout;
 };
 
 export type StatisticsData = {

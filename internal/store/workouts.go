@@ -105,13 +105,31 @@ func deleteExercises(tx *sql.Tx, workoutID int) error {
 // GetWorkouts returns all workouts with their exercises and sets, newest
 // first. Workouts on the same date are ordered by most recently logged.
 func (s *Store) GetWorkouts() ([]Workout, error) {
+	return s.queryWorkouts("1 = 1")
+}
+
+// GetPlanWorkout returns the most recently logged workout from the plan on
+// date (YYYY-MM-DD), or nil if there is none.
+func (s *Store) GetPlanWorkout(planID int, date string) (*Workout, error) {
+	workouts, err := s.queryWorkouts("w.plan_id = ? AND w.date = ?", planID, date)
+	if err != nil || len(workouts) == 0 {
+		return nil, err
+	}
+	return &workouts[0], nil
+}
+
+// queryWorkouts returns the workouts matching where (a condition on the
+// workouts table, aliased w) with their exercises and sets, ordered like
+// GetWorkouts.
+func (s *Store) queryWorkouts(where string, args ...any) ([]Workout, error) {
 	rows, err := s.db.Query(`
 		SELECT w.id, w.date, w.plan_id, e.id, e.name, s.reps, s.weight
 		FROM workouts w
 		LEFT JOIN exercises e ON w.id = e.workout_id
 		LEFT JOIN sets s ON e.id = s.exercise_id
+		WHERE `+where+`
 		ORDER BY w.date DESC, w.id DESC, e.id, s.id
-	`)
+	`, args...)
 	if err != nil {
 		return nil, err
 	}

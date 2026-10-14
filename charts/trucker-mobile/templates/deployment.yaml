@@ -26,8 +26,12 @@ spec:
               value: {{ .Values.port | quote }}
             - name: REACT_NATIVE_PACKAGER_HOSTNAME
               value: {{ required "hostname is required" .Values.hostname | quote }}
-            - name: EXPO_PUBLIC_API_URL
-              value: {{ .Values.apiUrl | quote }}
+            - name: EXPO_PUBLIC_FIXED_API_URL
+              value: {{ required "apiUrl is required" .Values.apiUrl | quote }}
+            {{- with .Values.scopeId }}
+            - name: EXPO_SCOPE_ID
+              value: {{ . | quote }}
+            {{- end }}
             {{- with .Values.appName }}
             - name: APP_NAME
               value: {{ . | quote }}

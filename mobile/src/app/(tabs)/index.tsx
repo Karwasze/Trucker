@@ -76,6 +76,8 @@ export default function TodayScreen() {
   );
 
   // Start a fresh draft from the plan unless there is unsaved work to keep.
+  // If the plan's workout for today is already logged (e.g. the stored draft
+  // was lost), show it as logged instead of offering it again.
   useEffect(() => {
     if (draft === undefined || !planReady) return;
     const stale =
@@ -89,8 +91,17 @@ export default function TodayScreen() {
           (!draft.logged &&
             draft.source !== undefined &&
             draft.source !== planFingerprint(planDay.data?.exercises ?? []))));
-    if (stale) setDraft(draftFromPlan(today, planId, planDay.data?.exercises ?? []));
-  }, [draft, planReady, planId, today, planDay.data, setDraft]);
+    if (!stale) return;
+    // Wait for a refetch on focus, so a workout just deleted in History isn't
+    // brought back from the previous response.
+    if (planDay.loading) return;
+    const logged = planDay.data?.workout;
+    setDraft(
+      logged
+        ? { date: today, planId, basedOn: planId, exercises: [], logged }
+        : draftFromPlan(today, planId, planDay.data?.exercises ?? [])
+    );
+  }, [draft, planReady, planId, today, planDay.data, planDay.loading, setDraft]);
 
   // Pull-to-refresh rebuilds a plan draft nothing has been ticked in from the
   // refreshed targets, bringing back exercises removed from it.

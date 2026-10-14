@@ -19,4 +19,4 @@ ENV METRO_PORT=8081
 # Expose port
 EXPOSE 8081
 
-CMD ["sh", "-c", "exec npx expo start --port \"$METRO_PORT\""]
+CMD ["sh", "scripts/start-metro.sh"]

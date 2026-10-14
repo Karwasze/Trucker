@@ -118,7 +118,8 @@ func (h *Handlers) getPlan(w http.ResponseWriter, r *http.Request) {
 }
 
 // PlanTodayAPI returns what a plan schedules for a date (today by default),
-// with target weights worked out from logged workouts.
+// with target weights worked out from logged workouts, and the workout
+// already logged from the plan that day, if any.
 func (h *Handlers) PlanTodayAPI(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -158,17 +159,26 @@ func (h *Handlers) PlanTodayAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	logged, err := h.store.GetPlanWorkout(id, date.Format("2006-01-02"))
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		log.Printf("Error loading logged plan workout: %v", err)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(struct {
 		PlanID    int                    `json:"plan_id"`
 		Date      string                 `json:"date"`
 		Weekday   string                 `json:"weekday"`
 		Exercises []store.ExerciseTarget `json:"exercises"`
+		Workout   *store.Workout         `json:"workout,omitempty"`
 	}{
 		PlanID:    id,
 		Date:      date.Format("2006-01-02"),
 		Weekday:   day.Weekday,
 		Exercises: targets,
+		Workout:   logged,
 	})
 }
 

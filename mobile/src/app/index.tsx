@@ -1,5 +1,5 @@
-import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
 
 import { localDate } from '@/api/client';
@@ -12,9 +12,11 @@ import { useTheme } from '@/hooks/use-theme';
 import { useSettings } from '@/settings/settings-context';
 import {
   completedSetCount,
+  describeSets,
   draftExercise,
   draftFromPlan,
   planFingerprint,
+  toExercises,
   toWorkout,
   useDraft,
   type Draft,
@@ -42,6 +44,36 @@ export default function TodayScreen() {
   const planName = plans.data?.find((p) => p.id === planId)?.name;
   const planReady = planId === null || planDay.data?.plan_id === planId;
 
+  // A logged workout, or an untouched "start another" draft after one, only
+  // stands while today's workout exists: deleting it in History brings back
+  // the plan. Checked on focus against a fresh workout list, never a cached
+  // one, so a workout that was just logged isn't mistaken for a deleted one.
+  const afterLogging =
+    !!draft &&
+    draft.date === today &&
+    (!!draft.logged || (draft.source === undefined && !hasProgress(draft)));
+  useFocusEffect(
+    useCallback(() => {
+      if (!afterLogging) return;
+      let cancelled = false;
+      api
+        .listWorkouts()
+        .then((workouts) => {
+          if (cancelled) return;
+          const ids = workouts.filter((w) => w.date === today).map((w) => w.id);
+          setDraft((d) => {
+            if (d.date !== today) return d;
+            if (d.logged) return ids.includes(d.logged.id) ? d : null;
+            return d.source === undefined && !hasProgress(d) && ids.length === 0 ? null : d;
+          });
+        })
+        .catch(() => {});
+      return () => {
+        cancelled = true;
+      };
+    }, [afterLogging, api, today, setDraft])
+  );
+
   // Start a fresh draft from the plan unless there is unsaved work to keep.
   useEffect(() => {
     if (draft === undefined || !planReady) return;
@@ -68,8 +100,12 @@ export default function TodayScreen() {
     ]);
 
   const addExercise = async (name: string) => {
-    const sets = await api.latestSets(name).catch(() => []);
-    const exercise = draftExercise(name, sets.length ? sets : [{ weight: 0, reps: 0 }]);
+    const { sets, reason } = await api
+      .exerciseTarget(name, draft?.date ?? today)
+      .catch(() => ({ sets: [], reason: undefined }));
+    const exercise = sets.length
+      ? draftExercise(name, sets, describeSets(sets), reason)
+      : draftExercise(name, [{ weight: 0, reps: 0 }]);
     setDraft((d) => ({ ...d, exercises: [...d.exercises, exercise] }));
   };
 
@@ -84,6 +120,22 @@ export default function TodayScreen() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const confirmFinish = () => {
+    if (!draft) return;
+    const done = completedSetCount(draft);
+    const skipped =
+      toExercises(draft.exercises, false).reduce((n, e) => n + e.sets.length, 0) - done;
+    Alert.alert(
+      'Finish workout?',
+      `${done} ${done === 1 ? 'set' : 'sets'} will be logged.` +
+        (skipped > 0 ? ` ${skipped} unticked ${skipped === 1 ? 'set' : 'sets'} will be left out.` : ''),
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Finish', onPress: finish },
+      ]
+    );
   };
 
   const subtitle = [formatDay(draft?.date ?? today), planName].filter(Boolean).join(' · ');
@@ -169,7 +221,7 @@ export default function TodayScreen() {
                 title={doneSets ? `Finish workout · ${doneSets} sets` : 'Tick off sets as you go'}
                 disabled={doneSets === 0}
                 loading={saving}
-                onPress={finish}
+                onPress={confirmFinish}
               />
               <Button title="Discard" variant="secondary" compact onPress={confirmReset} />
             </View>
@@ -184,9 +236,18 @@ export default function TodayScreen() {
 
 const RESULT_LABEL: Record<ProgressionResult['result'], string> = {
   progressed: 'Weight goes up next time',
-  missed: 'Missed — same target next time',
-  deloaded: 'Deloaded — target reduced',
+  missed: 'Missed — same weight, one more rep next time',
+  deloaded: 'Deloaded — 10% lighter next time',
 };
+
+/** Bodyweight exercises progress by reps, not weight. */
+const isBodyweight = (exercises: Exercise[], name: string) =>
+  exercises.filter((e) => e.name === name).every((e) => e.sets.every((s) => s.weight === 0));
+
+const resultLabel = (p: ProgressionResult, exercises: Exercise[]) =>
+  p.result === 'progressed' && isBodyweight(exercises, p.exercise)
+    ? 'One more rep next time'
+    : RESULT_LABEL[p.result];
 
 function LoggedSummary({
   progression,
@@ -215,7 +276,7 @@ function LoggedSummary({
             <View key={p.exercise} style={styles.progressionRow}>
               <ThemedText style={{ flex: 1 }}>{p.exercise}</ThemedText>
               <ThemedText type="small" style={{ color: colorFor(p.result) }}>
-                {RESULT_LABEL[p.result]}
+                {resultLabel(p, exercises)}
               </ThemedText>
             </View>
           ))}

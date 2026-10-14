@@ -127,9 +127,8 @@ func (s *Store) GetPlans() ([]TrainingPlan, error) {
 	return plans, nil
 }
 
-// UpdatePlan replaces a plan's name and days. Progression state (miss
-// counters) is reset, since every day is re-created. It returns
-// ErrPlanNotFound if the plan does not exist.
+// UpdatePlan replaces a plan's name and days. It returns ErrPlanNotFound if
+// the plan does not exist.
 func (s *Store) UpdatePlan(plan TrainingPlan) (TrainingPlan, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -235,27 +234,21 @@ func getPlan(q querier, id int) (TrainingPlan, error) {
 	}
 
 	rows, err := q.Query(`
-		SELECT e.id, e.weekday, e.exercise_name, e.weight_increment, e.reps_increment,
-			e.deload_after, e.deload_percent, e.consecutive_misses, s.reps, s.weight
-		FROM training_plan_exercises e
-		LEFT JOIN training_plan_sets s ON s.plan_exercise_id = e.id
-		WHERE e.plan_id = ?
-		ORDER BY e.weekday, e.position, s.position
+		SELECT weekday, exercise_name, set_count, reps
+		FROM training_plan_exercises
+		WHERE plan_id = ?
+		ORDER BY weekday, position
 	`, id)
 	if err != nil {
 		return TrainingPlan{}, err
 	}
 	defer rows.Close()
 
-	lastWeekday, lastExerciseID := 0, 0
+	lastWeekday := 0
 	for rows.Next() {
-		var exerciseID, weekday int
+		var weekday int
 		var ex PlanExercise
-		var reps sql.NullInt64
-		var weight sql.NullFloat64
-
-		if err := rows.Scan(&exerciseID, &weekday, &ex.Name, &ex.WeightIncrement, &ex.RepsIncrement,
-			&ex.DeloadAfter, &ex.DeloadPercent, &ex.ConsecutiveMisses, &reps, &weight); err != nil {
+		if err := rows.Scan(&weekday, &ex.Name, &ex.Sets, &ex.Reps); err != nil {
 			return TrainingPlan{}, err
 		}
 
@@ -264,17 +257,7 @@ func getPlan(q querier, id int) (TrainingPlan, error) {
 			lastWeekday = weekday
 		}
 		day := &plan.Days[len(plan.Days)-1]
-
-		if exerciseID != lastExerciseID {
-			ex.Sets = []Set{}
-			day.Exercises = append(day.Exercises, ex)
-			lastExerciseID = exerciseID
-		}
-
-		if reps.Valid {
-			current := &day.Exercises[len(day.Exercises)-1]
-			current.Sets = append(current.Sets, Set{Reps: int(reps.Int64), Weight: weight.Float64})
-		}
+		day.Exercises = append(day.Exercises, ex)
 	}
 
 	return plan, rows.Err()
@@ -288,31 +271,19 @@ func insertPlanDays(q querier, planID int, days []PlanDay) error {
 		}
 
 		for position, ex := range day.Exercises {
-			result, err := q.Exec(`
-				INSERT INTO training_plan_exercises
-					(plan_id, weekday, position, exercise_name, weight_increment, reps_increment, deload_after, deload_percent)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-			`, planID, weekday, position, ex.Name, ex.WeightIncrement, ex.RepsIncrement, ex.DeloadAfter, ex.DeloadPercent)
-			if err != nil {
+			if _, err := q.Exec(`
+				INSERT INTO training_plan_exercises (plan_id, weekday, position, exercise_name, set_count, reps)
+				VALUES (?, ?, ?, ?, ?, ?)
+			`, planID, weekday, position, ex.Name, ex.Sets, ex.Reps); err != nil {
 				return err
-			}
-
-			exerciseID, err := result.LastInsertId()
-			if err != nil {
-				return err
-			}
-
-			for setPosition, set := range ex.Sets {
-				if _, err := q.Exec("INSERT INTO training_plan_sets (plan_exercise_id, position, reps, weight) VALUES (?, ?, ?, ?)",
-					exerciseID, setPosition, set.Reps, set.Weight); err != nil {
-					return err
-				}
 			}
 		}
 	}
 	return nil
 }
 
+// deletePlanDays removes a plan's exercises, along with any target sets
+// stored for them before plans held only sets × reps.
 func deletePlanDays(q querier, planID int) error {
 	if _, err := q.Exec(`
 		DELETE FROM training_plan_sets

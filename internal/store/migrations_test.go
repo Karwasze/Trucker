@@ -3,7 +3,9 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"io/fs"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -44,8 +46,8 @@ func TestMigrate_IsIdempotent(t *testing.T) {
 	if err := s.db.QueryRow("SELECT COUNT(*) FROM schema_migrations").Scan(&count); err != nil {
 		t.Fatalf("failed to count schema_migrations: %v", err)
 	}
-	if count != 5 {
-		t.Errorf("expected 5 applied migrations, got %d", count)
+	if count != 7 {
+		t.Errorf("expected 7 applied migrations, got %d", count)
 	}
 }
 
@@ -245,5 +247,141 @@ func TestMigrate_NewDefaultTagsKeepUserTags(t *testing.T) {
 	}
 	if len(muscles["Skullcrushers"]) == 0 {
 		t.Error("expected Skullcrushers to get default tags")
+	}
+}
+
+func TestMigrate_UpgradeFromV5BackfillsPlanSchemes(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "v5.db")
+
+	// Build a database with migrations 0001-0005 applied and a plan whose
+	// exercises still carry target sets and progression settings.
+	db, err := sql.Open("sqlite3", path)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	stmts := []string{"CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)"}
+	for i := 1; i <= 5; i++ {
+		matches, err := fs.Glob(migrationsFS, fmt.Sprintf("migrations/%04d_*.sql", i))
+		if err != nil || len(matches) != 1 {
+			t.Fatalf("failed to find migration %d: %v", i, err)
+		}
+		contents, err := migrationsFS.ReadFile(matches[0])
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", matches[0], err)
+		}
+		stmts = append(stmts, string(contents),
+			fmt.Sprintf("INSERT INTO schema_migrations (version, applied_at) VALUES (%d, '2026-01-01T00:00:00Z')", i))
+	}
+	stmts = append(stmts,
+		"INSERT INTO training_plans (id, name) VALUES (1, '5x5')",
+		`INSERT INTO training_plan_exercises (id, plan_id, weekday, position, exercise_name, weight_increment, deload_after, deload_percent)
+			VALUES (1, 1, 1, 0, 'Squat', 2.5, 3, 10), (2, 1, 1, 1, 'Plank', 0, 0, 0)`,
+		`INSERT INTO training_plan_sets (plan_exercise_id, position, reps, weight)
+			VALUES (1, 0, 5, 100), (1, 1, 5, 100), (1, 2, 4, 100), (1, 3, 5, 100)`,
+	)
+	for _, stmt := range stmts {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatalf("failed to build v5 database: %v", err)
+		}
+	}
+	db.Close()
+
+	s, err := Open(path)
+	if err != nil {
+		t.Fatalf("failed to open and migrate v5 database: %v", err)
+	}
+	defer s.Close()
+
+	plan, err := s.GetPlan(1)
+	if err != nil {
+		t.Fatalf("failed to get plan: %v", err)
+	}
+	want := []PlanExercise{
+		{Name: "Squat", Sets: 4, Reps: 5},
+		// No target sets to backfill from, so the column defaults apply.
+		{Name: "Plank", Sets: 3, Reps: 5},
+	}
+	if len(plan.Days) != 1 || !reflect.DeepEqual(plan.Days[0].Exercises, want) {
+		t.Errorf("expected exercises %+v, got %+v", want, plan.Days)
+	}
+
+	var setCount int
+	s.db.QueryRow("SELECT COUNT(*) FROM training_plan_sets").Scan(&setCount)
+	if setCount != 4 {
+		t.Errorf("expected old target sets to be kept, got %d", setCount)
+	}
+}
+
+func TestMigrate_UpgradeFromV6AddsPressAndPullUpDefaults(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "v6.db")
+
+	// Build a database at migration 0006 where the new built-ins already
+	// exist as custom exercises, one of them tagged and logged by the user.
+	db, err := sql.Open("sqlite3", path)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	stmts := []string{"CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)"}
+	for i := 1; i <= 6; i++ {
+		matches, err := fs.Glob(migrationsFS, fmt.Sprintf("migrations/%04d_*.sql", i))
+		if err != nil || len(matches) != 1 {
+			t.Fatalf("failed to find migration %d: %v", i, err)
+		}
+		contents, err := migrationsFS.ReadFile(matches[0])
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", matches[0], err)
+		}
+		stmts = append(stmts, string(contents),
+			fmt.Sprintf("INSERT INTO schema_migrations (version, applied_at) VALUES (%d, '2026-01-01T00:00:00Z')", i))
+	}
+	stmts = append(stmts,
+		"INSERT INTO exercise_library (id, name, is_default) VALUES (100, 'Pull-up', 0), (101, 'Incline Bench Press', 0), (102, 'Incline Dumbbell Press', 0)",
+		"INSERT INTO exercise_muscles (exercise_name, muscle, role) VALUES ('Pull-up', 'back', 'primary')",
+		"INSERT INTO workouts (id, date) VALUES (1, '2026-10-01')",
+		"INSERT INTO exercises (id, workout_id, name) VALUES (1, 1, 'Pull-up')",
+		"INSERT INTO sets (exercise_id, reps, weight) VALUES (1, 8, 0)",
+	)
+	for _, stmt := range stmts {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatalf("failed to build v6 database: %v", err)
+		}
+	}
+	db.Close()
+
+	s, err := Open(path)
+	if err != nil {
+		t.Fatalf("failed to open and migrate v6 database: %v", err)
+	}
+	defer s.Close()
+	if err := s.SeedDefaultExercises(); err != nil {
+		t.Fatalf("failed to seed: %v", err)
+	}
+
+	for id, name := range map[int]string{100: "Pull-up", 101: "Incline Bench Press", 102: "Incline Dumbbell Press"} {
+		var gotID, count int
+		var isDefault bool
+		s.db.QueryRow("SELECT COUNT(*) FROM exercise_library WHERE name = ?", name).Scan(&count)
+		s.db.QueryRow("SELECT id, is_default FROM exercise_library WHERE name = ?", name).Scan(&gotID, &isDefault)
+		if count != 1 || gotID != id || !isDefault {
+			t.Errorf("expected %s to stay exercise %d and become default, got %d rows, id %d, default %v", name, id, count, gotID, isDefault)
+		}
+	}
+
+	muscles, err := s.GetExerciseMuscles()
+	if err != nil {
+		t.Fatalf("failed to get muscles: %v", err)
+	}
+	if pullUp := muscles["Pull-up"]; len(pullUp) != 1 || pullUp[0] != (MuscleTarget{Muscle: "back", Role: RolePrimary}) {
+		t.Errorf("expected user's Pull-up tags kept, got %+v", pullUp)
+	}
+	for _, name := range []string{"Incline Bench Press", "Incline Dumbbell Press"} {
+		if len(muscles[name]) != 3 {
+			t.Errorf("expected %s to get 3 default tags, got %+v", name, muscles[name])
+		}
+	}
+
+	stats, err := s.GetStatisticsResponse("Pull-up")
+	if err != nil || len(stats.Data) != 1 {
+		t.Errorf("expected Pull-up history to remain, got %+v (%v)", stats.Data, err)
 	}
 }

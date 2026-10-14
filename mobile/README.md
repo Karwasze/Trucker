@@ -13,6 +13,16 @@ Expo (React Native) app for the Trucker API. Targets iOS; Android should work to
 - **Progress** – estimated 1RM and volume per exercise.
 - **Settings** – switch between the development and production server, and
   remove custom exercises. Every tab shows a DEV or PROD badge next to its title.
+- **Rest timer** – ticking off a set starts it (or restarts it), counting up from
+  0:00 to the target. It shows at the top of every screen in a Dynamic Island
+  style: on a notched iPhone the notch grows to show the time, with the status
+  bar hidden meanwhile. Tap it to expand it, with buttons to restart or stop;
+  while idle, tap the notch to start it yourself. The target (3:00 by default)
+  and what happens at the end – the island bursting open with a check and
+  confetti, or a vibration – are set under
+  Settings. Vibration uses a scheduled notification, so it also goes off with
+  the phone locked. On iOS the running timer also shows on the Lock Screen as a
+  Live Activity; that needs a development build (`npx expo run:ios`), not Expo Go.
 
 ## Running on your iPhone
 

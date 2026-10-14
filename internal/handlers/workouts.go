@@ -20,6 +20,8 @@ func (h *Handlers) WorkoutsAPI(w http.ResponseWriter, r *http.Request) {
 		h.listWorkouts(w)
 	case "POST":
 		h.createWorkout(w, r)
+	case "PUT":
+		h.updateWorkout(w, r)
 	case "DELETE":
 		h.deleteWorkout(w, r)
 	default:
@@ -67,14 +69,7 @@ func (h *Handlers) createWorkout(w http.ResponseWriter, r *http.Request) {
 	workout := store.Workout{
 		Date:      input.Date,
 		PlanID:    input.PlanID,
-		Exercises: []store.Exercise{},
-	}
-
-	// Exercises without a name or without any sets are not worth storing.
-	for _, exercise := range input.Exercises {
-		if exercise.Name != "" && len(exercise.Sets) > 0 {
-			workout.Exercises = append(workout.Exercises, exercise)
-		}
+		Exercises: storableExercises(input.Exercises),
 	}
 
 	id, err := h.store.SaveWorkout(workout)
@@ -93,9 +88,9 @@ func (h *Handlers) createWorkout(w http.ResponseWriter, r *http.Request) {
 	// The workout is already saved, so a progression failure is logged
 	// rather than failing the request.
 	if workout.PlanID != nil {
-		progression, err := h.store.ApplyProgression(*workout.PlanID, workout.Date, workout.Exercises)
+		progression, err := h.store.EvaluateProgression(*workout.PlanID, workout)
 		if err != nil {
-			log.Printf("Error applying plan progression: %v", err)
+			log.Printf("Error evaluating plan progression: %v", err)
 		} else {
 			response.Progression = progression
 		}
@@ -103,6 +98,56 @@ func (h *Handlers) createWorkout(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(response)
+}
+
+// updateWorkout replaces a logged workout's date and exercises. The plan it
+// was logged against is kept. Plan targets are worked out from history, so
+// they follow the edit.
+func (h *Handlers) updateWorkout(w http.ResponseWriter, r *http.Request) {
+	var input store.Workout
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if input.ID <= 0 {
+		http.Error(w, "Workout ID required", http.StatusBadRequest)
+		return
+	}
+	if _, err := time.Parse("2006-01-02", input.Date); err != nil {
+		http.Error(w, "Date is required in YYYY-MM-DD format", http.StatusBadRequest)
+		return
+	}
+
+	workout := store.Workout{
+		ID:        input.ID,
+		Date:      input.Date,
+		Exercises: storableExercises(input.Exercises),
+	}
+
+	found, err := h.store.UpdateWorkout(workout)
+	if err != nil {
+		http.Error(w, "Failed to update workout", http.StatusInternalServerError)
+		log.Printf("Error updating workout: %v", err)
+		return
+	}
+	if !found {
+		http.Error(w, "Workout not found", http.StatusNotFound)
+		return
+	}
+
+	json.NewEncoder(w).Encode(workout)
+}
+
+// storableExercises drops exercises without a name or without any sets,
+// which are not worth storing.
+func storableExercises(exercises []store.Exercise) []store.Exercise {
+	kept := []store.Exercise{}
+	for _, exercise := range exercises {
+		if exercise.Name != "" && len(exercise.Sets) > 0 {
+			kept = append(kept, exercise)
+		}
+	}
+	return kept
 }
 
 func (h *Handlers) deleteWorkout(w http.ResponseWriter, r *http.Request) {
@@ -134,6 +179,8 @@ func (h *Handlers) deleteWorkout(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, `{"success": true}`)
 }
 
+// LatestExercise returns the sets of the most recent workout that logged an
+// exercise, and the target for doing it again on date (today by default).
 func (h *Handlers) LatestExercise(w http.ResponseWriter, r *http.Request) {
 	exerciseName := r.URL.Query().Get("name")
 	if exerciseName == "" {
@@ -141,24 +188,37 @@ func (h *Handlers) LatestExercise(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	date := time.Now().Format("2006-01-02")
+	if dateStr := r.URL.Query().Get("date"); dateStr != "" {
+		if _, err := time.Parse("2006-01-02", dateStr); err != nil {
+			http.Error(w, "Date must be in YYYY-MM-DD format", http.StatusBadRequest)
+			return
+		}
+		date = dateStr
+	}
+
 	sets, err := h.store.GetLatestExerciseSets(exerciseName)
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	if len(sets) == 0 {
-		fmt.Fprintf(w, `{"sets": []}`)
+	target, reason, err := h.store.FreeExerciseTarget(exerciseName, date)
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		log.Printf("Error working out exercise target: %v", err)
 		return
 	}
-
-	fmt.Fprintf(w, `{"sets": [`)
-	for i, set := range sets {
-		if i > 0 {
-			fmt.Fprintf(w, `,`)
-		}
-		fmt.Fprintf(w, `{"reps": %d, "weight": %.1f}`, set.Reps, set.Weight)
+	if sets == nil {
+		sets = []store.Set{}
 	}
-	fmt.Fprintf(w, `]}`)
+	if target == nil {
+		target = []store.Set{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(struct {
+		Sets   []store.Set `json:"sets"`
+		Target []store.Set `json:"target"`
+		Reason string      `json:"reason,omitempty"`
+	}{sets, target, reason})
 }

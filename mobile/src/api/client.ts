@@ -53,6 +53,9 @@ export function createApi(baseUrl: string) {
       })),
     createWorkout: (workout: NewWorkout) =>
       request<CreatedWorkout>('/api/workouts', { method: 'POST', body: JSON.stringify(workout) }),
+    /** Replaces a workout's date and exercises; its plan and progression are untouched. */
+    updateWorkout: ({ plan_id: _planId, ...workout }: Workout) =>
+      request<Workout>('/api/workouts', { method: 'PUT', body: JSON.stringify(workout) }),
     deleteWorkout: (id: number) =>
       request<{ success: boolean }>(`/api/workouts?id=${id}`, { method: 'DELETE' }),
 
@@ -110,6 +113,13 @@ export function createApi(baseUrl: string) {
 
     latestSets: async (name: string) =>
       (await request<{ sets: Set[] | null }>(`/api/latest-exercise?name=${q(name)}`)).sets ?? [],
+    /** The sets to do next for an exercise added outside a plan, progressed from history. */
+    exerciseTarget: async (name: string, date: string) => {
+      const res = await request<{ target: Set[] | null; reason?: string }>(
+        `/api/latest-exercise?name=${q(name)}&date=${q(date)}`
+      );
+      return { sets: res.target ?? [], reason: res.reason };
+    },
 
     statistics: async (exercise?: string) => {
       const res = await request<StatisticsResponse>(

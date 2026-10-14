@@ -13,8 +13,8 @@ func TestSeedDefaultExercises(t *testing.T) {
 
 	var count int
 	s.db.QueryRow("SELECT COUNT(*) FROM exercise_library WHERE is_default = 1").Scan(&count)
-	if count != 18 {
-		t.Errorf("expected 18 default exercises, got %d", count)
+	if count != 21 {
+		t.Errorf("expected 21 default exercises, got %d", count)
 	}
 
 	expected := []string{"Squat", "Bench Press", "Deadlift", "Overhead Press"}
@@ -38,8 +38,8 @@ func TestSeedDefaultExercises_Idempotent(t *testing.T) {
 
 	var count int
 	s.db.QueryRow("SELECT COUNT(*) FROM exercise_library").Scan(&count)
-	if count != 18 {
-		t.Errorf("expected 18 exercises after double seed, got %d", count)
+	if count != 21 {
+		t.Errorf("expected 21 exercises after double seed, got %d", count)
 	}
 }
 
@@ -53,8 +53,8 @@ func TestGetAllExercises(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(exercises) != 18 {
-		t.Errorf("expected 18 exercises, got %d", len(exercises))
+	if len(exercises) != 21 {
+		t.Errorf("expected 21 exercises, got %d", len(exercises))
 	}
 
 	for i := 1; i < len(exercises); i++ {

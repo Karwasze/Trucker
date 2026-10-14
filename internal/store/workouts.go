@@ -21,28 +21,85 @@ func (s *Store) SaveWorkout(workout Workout) (int, error) {
 		return 0, err
 	}
 
-	for _, exercise := range workout.Exercises {
-		exerciseResult, err := tx.Exec("INSERT INTO exercises (workout_id, name) VALUES (?, ?)", workoutID, exercise.Name)
-		if err != nil {
-			return 0, err
-		}
-
-		exerciseID, err := exerciseResult.LastInsertId()
-		if err != nil {
-			return 0, err
-		}
-
-		for _, set := range exercise.Sets {
-			if _, err := tx.Exec("INSERT INTO sets (exercise_id, reps, weight) VALUES (?, ?, ?)", exerciseID, set.Reps, set.Weight); err != nil {
-				return 0, err
-			}
-		}
+	if err := insertExercises(tx, workoutID, workout.Exercises); err != nil {
+		return 0, err
 	}
 
 	if err := tx.Commit(); err != nil {
 		return 0, err
 	}
 	return int(workoutID), nil
+}
+
+// UpdateWorkout replaces a workout's date, exercises and sets. The plan it
+// was logged against is kept. It returns false if no workout with the given
+// ID exists.
+func (s *Store) UpdateWorkout(workout Workout) (bool, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+
+	result, err := tx.Exec("UPDATE workouts SET date = ? WHERE id = ?", workout.Date, workout.ID)
+	if err != nil {
+		return false, err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	if rowsAffected == 0 {
+		return false, nil
+	}
+
+	if err := deleteExercises(tx, workout.ID); err != nil {
+		return false, err
+	}
+	if err := insertExercises(tx, int64(workout.ID), workout.Exercises); err != nil {
+		return false, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func insertExercises(tx *sql.Tx, workoutID int64, exercises []Exercise) error {
+	for _, exercise := range exercises {
+		exerciseResult, err := tx.Exec("INSERT INTO exercises (workout_id, name) VALUES (?, ?)", workoutID, exercise.Name)
+		if err != nil {
+			return err
+		}
+
+		exerciseID, err := exerciseResult.LastInsertId()
+		if err != nil {
+			return err
+		}
+
+		for _, set := range exercise.Sets {
+			if _, err := tx.Exec("INSERT INTO sets (exercise_id, reps, weight) VALUES (?, ?, ?)", exerciseID, set.Reps, set.Weight); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// deleteExercises removes a workout's exercises and their sets.
+func deleteExercises(tx *sql.Tx, workoutID int) error {
+	if _, err := tx.Exec(`
+		DELETE FROM sets
+		WHERE exercise_id IN (
+			SELECT id FROM exercises WHERE workout_id = ?
+		)
+	`, workoutID); err != nil {
+		return err
+	}
+
+	_, err := tx.Exec("DELETE FROM exercises WHERE workout_id = ?", workoutID)
+	return err
 }
 
 // GetWorkouts returns all workouts with their exercises and sets, newest
@@ -128,16 +185,7 @@ func (s *Store) DeleteWorkout(id int) (bool, error) {
 	}
 	defer tx.Rollback()
 
-	if _, err := tx.Exec(`
-		DELETE FROM sets
-		WHERE exercise_id IN (
-			SELECT id FROM exercises WHERE workout_id = ?
-		)
-	`, id); err != nil {
-		return false, err
-	}
-
-	if _, err := tx.Exec("DELETE FROM exercises WHERE workout_id = ?", id); err != nil {
+	if err := deleteExercises(tx, id); err != nil {
 		return false, err
 	}
 

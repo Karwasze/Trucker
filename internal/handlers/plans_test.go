@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -15,12 +16,11 @@ const samplePlanJSON = `{
 	"name": "5x5",
 	"days": [
 		{"weekday": "friday", "exercises": [
-			{"name": "Squat", "sets": [{"reps": 5, "weight": 120}], "weight_increment": 2.5}
+			{"name": "Squat", "sets": 1, "reps": 3}
 		]},
 		{"weekday": "Monday", "exercises": [
-			{"name": "Squat", "sets": [{"reps": 5, "weight": 100}, {"reps": 5, "weight": 100}],
-			 "weight_increment": 2.5, "deload_after": 3, "deload_percent": 10},
-			{"name": "Bench Press", "sets": [{"reps": 5, "weight": 80}], "reps_increment": 1}
+			{"name": "Squat", "sets": 2, "reps": 5},
+			{"name": "Bench Press", "sets": 1, "reps": 5}
 		]}
 	]
 }`
@@ -57,7 +57,7 @@ func TestPlansAPI_POST(t *testing.T) {
 	if len(plan.Days) != 2 || plan.Days[0].Weekday != "monday" || plan.Days[1].Weekday != "friday" {
 		t.Errorf("expected days normalised and ordered monday, friday; got %+v", plan.Days)
 	}
-	if squat := plan.Days[0].Exercises[0]; squat.WeightIncrement != 2.5 || squat.DeloadAfter != 3 || len(squat.Sets) != 2 {
+	if squat := plan.Days[0].Exercises[0]; squat != (store.PlanExercise{Name: "Squat", Sets: 2, Reps: 5}) {
 		t.Errorf("unexpected squat: %+v", squat)
 	}
 
@@ -75,15 +75,11 @@ func TestPlansAPI_POST_Validation(t *testing.T) {
 		{"missing name", `{"name": "  ", "days": []}`},
 		{"invalid weekday", `{"name": "P", "days": [{"weekday": "funday", "exercises": []}]}`},
 		{"duplicate weekday", `{"name": "P", "days": [{"weekday": "monday", "exercises": []}, {"weekday": "MONDAY", "exercises": []}]}`},
-		{"missing exercise name", `{"name": "P", "days": [{"weekday": "monday", "exercises": [{"name": "", "sets": [{"reps": 5, "weight": 50}]}]}]}`},
-		{"no sets", `{"name": "P", "days": [{"weekday": "monday", "exercises": [{"name": "Squat", "sets": []}]}]}`},
-		{"zero reps", `{"name": "P", "days": [{"weekday": "monday", "exercises": [{"name": "Squat", "sets": [{"reps": 0, "weight": 50}]}]}]}`},
-		{"negative weight", `{"name": "P", "days": [{"weekday": "monday", "exercises": [{"name": "Squat", "sets": [{"reps": 5, "weight": -1}]}]}]}`},
-		{"negative weight increment", `{"name": "P", "days": [{"weekday": "monday", "exercises": [{"name": "Squat", "sets": [{"reps": 5, "weight": 50}], "weight_increment": -2.5}]}]}`},
-		{"negative reps increment", `{"name": "P", "days": [{"weekday": "monday", "exercises": [{"name": "Squat", "sets": [{"reps": 5, "weight": 50}], "reps_increment": -1}]}]}`},
-		{"negative deload_after", `{"name": "P", "days": [{"weekday": "monday", "exercises": [{"name": "Squat", "sets": [{"reps": 5, "weight": 50}], "deload_after": -1}]}]}`},
-		{"deload without percent", `{"name": "P", "days": [{"weekday": "monday", "exercises": [{"name": "Squat", "sets": [{"reps": 5, "weight": 50}], "deload_after": 3}]}]}`},
-		{"deload percent over 100", `{"name": "P", "days": [{"weekday": "monday", "exercises": [{"name": "Squat", "sets": [{"reps": 5, "weight": 50}], "deload_after": 3, "deload_percent": 150}]}]}`},
+		{"missing exercise name", `{"name": "P", "days": [{"weekday": "monday", "exercises": [{"name": "", "sets": 3, "reps": 5}]}]}`},
+		{"no sets", `{"name": "P", "days": [{"weekday": "monday", "exercises": [{"name": "Squat", "sets": 0, "reps": 5}]}]}`},
+		{"zero reps", `{"name": "P", "days": [{"weekday": "monday", "exercises": [{"name": "Squat", "sets": 3, "reps": 0}]}]}`},
+		{"negative sets", `{"name": "P", "days": [{"weekday": "monday", "exercises": [{"name": "Squat", "sets": -1, "reps": 5}]}]}`},
+		{"sets as a list", `{"name": "P", "days": [{"weekday": "monday", "exercises": [{"name": "Squat", "sets": [{"reps": 5, "weight": 50}]}]}]}`},
 	}
 
 	for _, tt := range tests {
@@ -163,7 +159,7 @@ func TestPlansAPI_PUT(t *testing.T) {
 	created := createTestPlan(t, h)
 
 	body := fmt.Sprintf(`{"id": %d, "name": "Renamed", "days": [
-		{"weekday": "tuesday", "exercises": [{"name": "Overhead Press", "sets": [{"reps": 8, "weight": 40}]}]}
+		{"weekday": "tuesday", "exercises": [{"name": "Overhead Press", "sets": 3, "reps": 8}]}
 	]}`, created.ID)
 	w := plansRequest(t, h, "PUT", "/api/plans", body)
 	if w.Code != http.StatusOK {
@@ -240,14 +236,17 @@ func todayRequest(h *Handlers, method, target string) *httptest.ResponseRecorder
 }
 
 func TestPlanTodayAPI(t *testing.T) {
-	h, _ := newTestHandlers(t)
+	h, s := newTestHandlers(t)
 	created := createTestPlan(t, h)
+	seedWorkout(t, s, "2026-10-09", []store.Exercise{
+		{Name: "Squat", Sets: []store.Set{{Reps: 5, Weight: 100}, {Reps: 5, Weight: 100}}},
+	})
 
 	type todayResponse struct {
-		PlanID    int                  `json:"plan_id"`
-		Date      string               `json:"date"`
-		Weekday   string               `json:"weekday"`
-		Exercises []store.PlanExercise `json:"exercises"`
+		PlanID    int                    `json:"plan_id"`
+		Date      string                 `json:"date"`
+		Weekday   string                 `json:"weekday"`
+		Exercises []store.ExerciseTarget `json:"exercises"`
 	}
 
 	w := todayRequest(h, "GET", fmt.Sprintf("/api/plans/today?id=%d&date=2026-10-12", created.ID))
@@ -258,6 +257,14 @@ func TestPlanTodayAPI(t *testing.T) {
 	json.NewDecoder(w.Body).Decode(&monday)
 	if monday.PlanID != created.ID || monday.Date != "2026-10-12" || monday.Weekday != "monday" || len(monday.Exercises) != 2 {
 		t.Errorf("unexpected monday response: %+v", monday)
+	}
+	want := []store.ExerciseTarget{
+		{Name: "Squat", Sets: []store.Set{{Reps: 5, Weight: 102.5}, {Reps: 5, Weight: 102.5}},
+			Reason: "Weight up 2.5 kg: you completed 2 × 5 @ 100 kg last time."},
+		{Name: "Bench Press", Sets: []store.Set{{Reps: 5, Weight: 0}}, Reason: "No history yet: pick a starting weight."},
+	}
+	if !reflect.DeepEqual(monday.Exercises, want) {
+		t.Errorf("expected targets %+v, got %+v", want, monday.Exercises)
 	}
 
 	w = todayRequest(h, "GET", fmt.Sprintf("/api/plans/today?id=%d&date=2026-10-13", created.ID))

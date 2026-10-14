@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useState } from 'react';
 
-import type { CreatedWorkout, NewWorkout, PlanExercise, Set } from '@/api/types';
+import type { CreatedWorkout, Exercise, ExerciseTarget, NewWorkout, Set } from '@/api/types';
 
 const STORAGE_KEY = 'trucker.draft';
 
@@ -13,6 +13,8 @@ export type DraftExercise = {
   name: string;
   /** Human-readable plan target, e.g. "3 × 5 @ 100 kg". */
   target?: string;
+  /** Why the target is what it is, e.g. "Weight up 2.5 kg: ...". */
+  reason?: string;
   sets: DraftSet[];
 };
 
@@ -38,25 +40,48 @@ export const toDraftSets = (sets: Set[]): DraftSet[] =>
 export function describeSets(sets: Set[]) {
   if (sets.length === 0) return '';
   const same = sets.every((s) => s.reps === sets[0].reps && s.weight === sets[0].weight);
-  if (same) return `${sets.length} × ${sets[0].reps} @ ${sets[0].weight} kg`;
+  // A weight of 0 is a bodyweight exercise, or a target with no history yet.
+  if (same) return `${sets.length} × ${sets[0].reps}${sets[0].weight ? ` @ ${sets[0].weight} kg` : ''}`;
   return sets.map((s) => `${s.reps}@${s.weight}`).join(', ');
 }
 
-export function draftExercise(name: string, sets: Set[], target?: string): DraftExercise {
-  return { key: newKey(), name, target, sets: toDraftSets(sets) };
+export function draftExercise(
+  name: string,
+  sets: Set[],
+  target?: string,
+  reason?: string
+): DraftExercise {
+  return { key: newKey(), name, target, reason, sets: toDraftSets(sets) };
 }
 
-export const planFingerprint = (exercises: PlanExercise[]) =>
+export const planFingerprint = (exercises: ExerciseTarget[]) =>
   JSON.stringify(exercises.map((e) => [e.name, e.sets]));
 
-export function draftFromPlan(date: string, planId: number | null, exercises: PlanExercise[]): Draft {
+export function draftFromPlan(date: string, planId: number | null, exercises: ExerciseTarget[]): Draft {
   return {
     date,
     planId,
     basedOn: planId,
     source: planFingerprint(exercises),
-    exercises: exercises.map((e) => draftExercise(e.name, e.sets, describeSets(e.sets))),
+    exercises: exercises.map((e) => draftExercise(e.name, e.sets, describeSets(e.sets), e.reason)),
   };
+}
+
+/**
+ * Converts edited exercises back to the API shape, dropping sets without reps
+ * and exercises left without sets. With `doneOnly`, sets that weren't ticked
+ * off are dropped too.
+ */
+export function toExercises(exercises: DraftExercise[], doneOnly: boolean): Exercise[] {
+  return exercises
+    .map((e) => ({
+      name: e.name,
+      sets: e.sets
+        .filter((s) => !doneOnly || s.done)
+        .map((s) => ({ weight: parseFloat(s.weight) || 0, reps: parseInt(s.reps, 10) || 0 }))
+        .filter((s) => s.reps > 0),
+    }))
+    .filter((e) => e.sets.length > 0);
 }
 
 /** Completed sets only: a set that wasn't ticked off wasn't done. */
@@ -64,15 +89,7 @@ export function toWorkout(draft: Draft): NewWorkout {
   return {
     date: draft.date,
     ...(draft.planId !== null && { plan_id: draft.planId }),
-    exercises: draft.exercises
-      .map((e) => ({
-        name: e.name,
-        sets: e.sets
-          .filter((s) => s.done)
-          .map((s) => ({ weight: parseFloat(s.weight) || 0, reps: parseInt(s.reps, 10) || 0 }))
-          .filter((s) => s.reps > 0),
-      }))
-      .filter((e) => e.sets.length > 0),
+    exercises: toExercises(draft.exercises, true),
   };
 }
 
@@ -92,7 +109,7 @@ export function useDraft() {
       .catch(() => setDraftState(null));
   }, []);
 
-  const setDraft = useCallback((update: Draft | null | ((d: Draft) => Draft)) => {
+  const setDraft = useCallback((update: Draft | null | ((d: Draft) => Draft | null)) => {
     setDraftState((prev) => {
       const next = typeof update === 'function' ? (prev ? update(prev) : prev) : update;
       if (next) AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});

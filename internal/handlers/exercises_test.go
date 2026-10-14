@@ -25,7 +25,7 @@ func TestExercisesAPI_GET(t *testing.T) {
 
 	var exercises []store.ExerciseDB
 	json.NewDecoder(w.Body).Decode(&exercises)
-	if len(exercises) != 18 {
+	if len(exercises) != 21 {
 		t.Errorf("expected 18 exercises, got %d", len(exercises))
 	}
 }

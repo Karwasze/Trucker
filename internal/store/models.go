@@ -62,17 +62,21 @@ type PlanDay struct {
 	Exercises []PlanExercise `json:"exercises"`
 }
 
-// PlanExercise is one exercise in a plan day, with its target sets and the
-// rules used to progress or deload them. ConsecutiveMisses is maintained by
-// the server.
+// PlanExercise is one exercise in a plan day with its sets × reps scheme.
+// Weights are not planned: they are worked out from logged workouts.
 type PlanExercise struct {
-	Name              string  `json:"name"`
-	Sets              []Set   `json:"sets"`
-	WeightIncrement   float64 `json:"weight_increment"`
-	RepsIncrement     int     `json:"reps_increment"`
-	DeloadAfter       int     `json:"deload_after"`
-	DeloadPercent     float64 `json:"deload_percent"`
-	ConsecutiveMisses int     `json:"consecutive_misses"`
+	Name string `json:"name"`
+	Sets int    `json:"sets"`
+	Reps int    `json:"reps"`
+}
+
+// ExerciseTarget is what to lift for a plan exercise next: its sets × reps
+// scheme at weights worked out from the exercise's logged history, and the
+// reason for them, e.g. why the weight went up.
+type ExerciseTarget struct {
+	Name   string `json:"name"`
+	Sets   []Set  `json:"sets"`
+	Reason string `json:"reason,omitempty"`
 }
 
 // ProgressionResult reports how a logged workout affected one plan exercise.

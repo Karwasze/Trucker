@@ -10,6 +10,16 @@ import { useQuery } from '@/hooks/use-query';
 import { useTheme } from '@/hooks/use-theme';
 import { ExerciseMuscles } from '@/settings/exercise-muscles';
 import { ENVIRONMENT_NAMES, useSettings, type Environment } from '@/settings/settings-context';
+import { lockScreenSupported } from '@/timer/native';
+import { useTimer } from '@/timer/timer-context';
+import {
+  DURATION_STEP_SEC,
+  FINISH_BEHAVIOR_NAMES,
+  MAX_DURATION_SEC,
+  MIN_DURATION_SEC,
+  formatClock,
+  type FinishBehavior,
+} from '@/timer/timer-model';
 
 export default function SettingsScreen() {
   const { api, serverUrl, environment, selectEnvironment } = useSettings();
@@ -61,6 +71,9 @@ export default function SettingsScreen() {
       </View>
       {/* Keyed so the input and status start fresh for each server. */}
       <ServerCard key={environment} />
+
+      <SectionLabel>Rest timer</SectionLabel>
+      <TimerCard />
 
       <SectionLabel>Exercises</SectionLabel>
       {!exercises.data ? (
@@ -166,7 +179,71 @@ function ServerCard() {
   );
 }
 
+const FINISH_BEHAVIORS: FinishBehavior[] = ['animation', 'vibration'];
+
+/** Configures the floating rest timer's target and what happens when it's reached. */
+function TimerCard() {
+  const { settings, updateSettings } = useTimer();
+  const { durationSec, onFinish } = settings;
+  const step = (delta: number) => updateSettings({ durationSec: durationSec + delta });
+
+  return (
+    <Card>
+      <View style={styles.option}>
+        <ThemedText style={{ flex: 1 }}>Counts up to</ThemedText>
+        <Button
+          title="−"
+          variant="secondary"
+          compact
+          disabled={durationSec <= MIN_DURATION_SEC}
+          onPress={() => step(-DURATION_STEP_SEC)}
+          accessibilityLabel={`Shorten by ${DURATION_STEP_SEC} seconds`}
+        />
+        <ThemedText style={styles.duration}>{formatClock(durationSec * 1000)}</ThemedText>
+        <Button
+          title="+"
+          variant="secondary"
+          compact
+          disabled={durationSec >= MAX_DURATION_SEC}
+          onPress={() => step(DURATION_STEP_SEC)}
+          accessibilityLabel={`Lengthen by ${DURATION_STEP_SEC} seconds`}
+        />
+      </View>
+      <ThemedText type="small" themeColor="textSecondary">
+        When it finishes
+      </ThemedText>
+      <View style={styles.chips}>
+        {FINISH_BEHAVIORS.map((behavior) => (
+          <Chip
+            key={behavior}
+            label={FINISH_BEHAVIOR_NAMES[behavior]}
+            selected={behavior === onFinish}
+            inCard
+            onPress={() => updateSettings({ onFinish: behavior })}
+          />
+        ))}
+      </View>
+      <ThemedText type="small" themeColor="textSecondary">
+        Starts when you tick off a set; tap the top of the screen to start it yourself.{' '}
+        {onFinish === 'vibration'
+          ? 'Vibrates even with the phone locked, using a notification.'
+          : 'The island celebrates, or does once you next look at the app.'}{' '}
+        {lockScreenSupported
+          ? 'A running timer also shows on the Lock Screen.'
+          : 'The Lock Screen timer needs the installed app, not Expo Go.'}
+      </ThemedText>
+    </Card>
+  );
+}
+
 const styles = StyleSheet.create({
+  duration: {
+    minWidth: 56,
+    textAlign: 'center',
+    fontSize: 20,
+    fontWeight: 600,
+    fontVariant: ['tabular-nums'],
+  },
   input: {
     height: 44,
     borderRadius: 10,

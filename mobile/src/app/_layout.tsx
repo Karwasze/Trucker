@@ -6,6 +6,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import AppTabs from '@/components/app-tabs';
 import { SettingsProvider, useSettings } from '@/settings/settings-context';
+import { TimerProvider } from '@/timer/timer-context';
+import { TimerIsland } from '@/timer/timer-island';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -23,8 +25,11 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <SettingsProvider>
-          <HideSplashWhenReady />
-          <AppTabs />
+          <TimerProvider>
+            <HideSplashWhenReady />
+            <AppTabs />
+            <TimerIsland />
+          </TimerProvider>
         </SettingsProvider>
       </ThemeProvider>
     </GestureHandlerRootView>

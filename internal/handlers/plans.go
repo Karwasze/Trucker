@@ -117,7 +117,8 @@ func (h *Handlers) getPlan(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(plan)
 }
 
-// PlanTodayAPI returns what a plan schedules for a date (today by default).
+// PlanTodayAPI returns what a plan schedules for a date (today by default),
+// with target weights worked out from logged workouts.
 func (h *Handlers) PlanTodayAPI(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -150,17 +151,24 @@ func (h *Handlers) PlanTodayAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	targets, err := h.store.ExerciseTargets(day.Exercises, date.Format("2006-01-02"))
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		log.Printf("Error working out plan targets: %v", err)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(struct {
-		PlanID    int                  `json:"plan_id"`
-		Date      string               `json:"date"`
-		Weekday   string               `json:"weekday"`
-		Exercises []store.PlanExercise `json:"exercises"`
+		PlanID    int                    `json:"plan_id"`
+		Date      string                 `json:"date"`
+		Weekday   string                 `json:"weekday"`
+		Exercises []store.ExerciseTarget `json:"exercises"`
 	}{
 		PlanID:    id,
 		Date:      date.Format("2006-01-02"),
 		Weekday:   day.Weekday,
-		Exercises: day.Exercises,
+		Exercises: targets,
 	})
 }
 
@@ -217,25 +225,11 @@ func validatePlan(plan *store.TrainingPlan) error {
 			if ex.Name == "" {
 				return fmt.Errorf("Exercise name is required on %s", day.Weekday)
 			}
-			if len(ex.Sets) == 0 {
+			if ex.Sets <= 0 {
 				return fmt.Errorf("%s on %s needs at least one set", ex.Name, day.Weekday)
 			}
-			for _, set := range ex.Sets {
-				if set.Reps <= 0 {
-					return fmt.Errorf("%s on %s: reps must be greater than 0", ex.Name, day.Weekday)
-				}
-				if set.Weight < 0 {
-					return fmt.Errorf("%s on %s: weight cannot be negative", ex.Name, day.Weekday)
-				}
-			}
-			if ex.WeightIncrement < 0 || ex.RepsIncrement < 0 {
-				return fmt.Errorf("%s on %s: increments cannot be negative", ex.Name, day.Weekday)
-			}
-			if ex.DeloadAfter < 0 {
-				return fmt.Errorf("%s on %s: deload_after cannot be negative", ex.Name, day.Weekday)
-			}
-			if ex.DeloadAfter > 0 && (ex.DeloadPercent <= 0 || ex.DeloadPercent > 100) {
-				return fmt.Errorf("%s on %s: deload_percent must be between 0 and 100", ex.Name, day.Weekday)
+			if ex.Reps <= 0 {
+				return fmt.Errorf("%s on %s: reps must be greater than 0", ex.Name, day.Weekday)
 			}
 		}
 	}

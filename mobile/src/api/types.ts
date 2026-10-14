@@ -66,14 +66,19 @@ export type ExerciseDB = {
   muscles: MuscleTarget[];
 };
 
+/** A planned sets × reps scheme; weights are worked out from history. */
 export type PlanExercise = {
   name: string;
+  sets: number;
+  reps: number;
+};
+
+/** What to lift next for a plan exercise. */
+export type ExerciseTarget = {
+  name: string;
   sets: Set[];
-  weight_increment: number;
-  reps_increment: number;
-  deload_after: number;
-  deload_percent: number;
-  consecutive_misses: number;
+  /** Why the target is what it is, e.g. why the weight went up. */
+  reason?: string;
 };
 
 export type PlanDay = {
@@ -91,7 +96,7 @@ export type PlanToday = {
   plan_id: number;
   date: string;
   weekday: string;
-  exercises: PlanExercise[];
+  exercises: ExerciseTarget[];
 };
 
 export type StatisticsData = {

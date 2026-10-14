@@ -1,9 +1,9 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, StyleSheet, TextInput, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Button, Chip, Message, Screen, SectionLabel } from '@/components/ui';
+import { Button, Chip, HeaderButton, Message, Screen, SectionLabel } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import {
@@ -169,7 +169,14 @@ export default function PlanEditorScreen() {
               />
             ))}
           </View>
-          {edit.days.length === 0 && <Message>Pick the days you train.</Message>}
+          {edit.days.length === 0 ? (
+            <Message>Pick the days you train.</Message>
+          ) : (
+            <ThemedText type="small" themeColor="textSecondary">
+              Weights come from your last logged session: a step heavier when every set hits the
+              reps, one more rep when it doesn&apos;t, and 10% lighter after three misses in a row.
+            </ThemedText>
+          )}
 
           {edit.days.map((day) => (
             <View key={day.weekday} style={styles.day}>
@@ -210,25 +217,6 @@ export default function PlanEditorScreen() {
         onPick={(name) => pickerDay && addExercise(pickerDay, name)}
       />
     </Screen>
-  );
-}
-
-function HeaderButton({
-  title,
-  onPress,
-  disabled,
-  bold,
-}: {
-  title: string;
-  onPress: () => void;
-  disabled?: boolean;
-  bold?: boolean;
-}) {
-  const theme = useTheme();
-  return (
-    <Pressable onPress={onPress} hitSlop={10} disabled={disabled}>
-      <ThemedText style={{ color: theme.accent, fontWeight: bold ? 700 : 500 }}>{title}</ThemedText>
-    </Pressable>
   );
 }
 

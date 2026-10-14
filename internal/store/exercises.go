@@ -11,7 +11,8 @@ var defaultExerciseNames = []string{
 	"Front Squat", "Sumo Deadlift", "Lat Pulldown", "Bent Over Row",
 	"Leg Curl", "Leg Extension", "Leg Press", "Tricep Pushdown",
 	"Bicep Curl", "Calf Raise", "Lateral Raise", "Chest Fly",
-	"Skullcrushers", "Romanian Deadlift",
+	"Skullcrushers", "Romanian Deadlift", "Pull-up", "Incline Bench Press",
+	"Incline Dumbbell Press",
 }
 
 // SeedDefaultExercises ensures the built-in exercises exist in the exercise

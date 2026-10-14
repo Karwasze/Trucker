@@ -25,3 +25,6 @@ internal/store/migrations/0001_initial_schema.sql or earlier files, since they
 may already be applied to existing databases.
 
 Make sure changes can be applied to an existing database without a loss of data.
+
+# Fixing bugs
+Every time you break something, add a test to cover that scenario.

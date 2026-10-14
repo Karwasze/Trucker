@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -279,11 +280,12 @@ func TestLatestExerciseAPI_NoData(t *testing.T) {
 	}
 }
 
-func TestWorkoutsAPI_POST_WithPlanAppliesProgression(t *testing.T) {
+func TestWorkoutsAPI_POST_WithPlanReportsProgression(t *testing.T) {
 	h, s := newTestHandlers(t)
 	plan := createTestPlan(t, h)
+	before, _ := s.GetPlan(plan.ID)
 
-	// 2026-10-12 is a Monday: squat hits its targets, bench misses.
+	// 2026-10-12 is a Monday: squat hits its 2 × 5, bench misses its 1 × 5.
 	w := postWorkout(t, h, fmt.Sprintf(`{"date": "2026-10-12", "plan_id": %d, "exercises": [
 		{"name": "Squat", "sets": [{"reps": 5, "weight": 100}, {"reps": 5, "weight": 100}]},
 		{"name": "Bench Press", "sets": [{"reps": 4, "weight": 80}]}
@@ -311,13 +313,9 @@ func TestWorkoutsAPI_POST_WithPlanAppliesProgression(t *testing.T) {
 		t.Errorf("expected progression %+v, got %+v", want, resp.Progression)
 	}
 
-	updated, _ := s.GetPlan(plan.ID)
-	mon := updated.Days[0].Exercises
-	if mon[0].Sets[0].Weight != 102.5 || mon[0].Sets[1].Weight != 102.5 {
-		t.Errorf("expected squat targets raised to 102.5, got %+v", mon[0].Sets)
-	}
-	if mon[1].ConsecutiveMisses != 1 || mon[1].Sets[0].Reps != 5 {
-		t.Errorf("expected bench unchanged with 1 miss, got %+v", mon[1])
+	after, _ := s.GetPlan(plan.ID)
+	if fmt.Sprint(after) != fmt.Sprint(before) {
+		t.Errorf("expected the plan itself unchanged, got %+v", after)
 	}
 
 	workouts, _ := s.GetWorkouts()
@@ -350,5 +348,161 @@ func TestWorkoutsAPI_POST_WithoutPlanHasNoProgression(t *testing.T) {
 	body := w.Body.String()
 	if strings.Contains(body, "progression") || strings.Contains(body, "plan_id") {
 		t.Errorf("expected no plan fields in response, got %s", body)
+	}
+}
+
+func putWorkout(t *testing.T, h *Handlers, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest("PUT", "/api/workouts", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.WorkoutsAPI(w, req)
+	return w
+}
+
+func TestWorkoutsAPI_PUT(t *testing.T) {
+	h, s := newTestHandlers(t)
+	id := seedWorkout(t, s, "2026-03-15", []store.Exercise{
+		{Name: "Squat", Sets: []store.Set{{Weight: 100, Reps: 5}}},
+	})
+
+	w := putWorkout(t, h, fmt.Sprintf(`{
+		"id": %d,
+		"date": "2026-03-14",
+		"exercises": [
+			{"name": "Squat", "sets": [{"reps": 3, "weight": 110}]},
+			{"name": "Empty", "sets": []}
+		]
+	}`, id))
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var updated store.Workout
+	if err := json.NewDecoder(w.Body).Decode(&updated); err != nil {
+		t.Fatalf("invalid JSON response: %v", err)
+	}
+	if updated.ID != id || len(updated.Exercises) != 1 {
+		t.Errorf("unexpected response: %+v", updated)
+	}
+
+	workouts, _ := s.GetWorkouts()
+	if len(workouts) != 1 {
+		t.Fatalf("expected 1 workout, got %d", len(workouts))
+	}
+	got := workouts[0]
+	if got.Date != "2026-03-14" {
+		t.Errorf("expected date 2026-03-14, got %s", got.Date)
+	}
+	if len(got.Exercises) != 1 || got.Exercises[0].Sets[0].Weight != 110 || got.Exercises[0].Sets[0].Reps != 3 {
+		t.Errorf("unexpected exercises: %+v", got.Exercises)
+	}
+}
+
+func TestWorkoutsAPI_PUT_KeepsPlan(t *testing.T) {
+	h, s := newTestHandlers(t)
+	plan := createTestPlan(t, h)
+	planID := plan.ID
+	id, err := s.SaveWorkout(store.Workout{
+		Date:      "2026-10-12",
+		PlanID:    &planID,
+		Exercises: []store.Exercise{{Name: "Squat", Sets: []store.Set{{Weight: 100, Reps: 5}}}},
+	})
+	if err != nil {
+		t.Fatalf("failed to save workout: %v", err)
+	}
+
+	w := putWorkout(t, h, fmt.Sprintf(`{
+		"id": %d,
+		"date": "2026-10-12",
+		"exercises": [{"name": "Squat", "sets": [{"reps": 5, "weight": 105}]}]
+	}`, id))
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	workouts, _ := s.GetWorkouts()
+	if workouts[0].PlanID == nil || *workouts[0].PlanID != planID {
+		t.Errorf("expected plan_id %d to be kept, got %v", planID, workouts[0].PlanID)
+	}
+}
+
+func TestWorkoutsAPI_PUT_Invalid(t *testing.T) {
+	h, s := newTestHandlers(t)
+	id := seedWorkout(t, s, "2026-03-15", []store.Exercise{
+		{Name: "Squat", Sets: []store.Set{{Weight: 100, Reps: 5}}},
+	})
+
+	tests := []struct {
+		name string
+		body string
+		code int
+	}{
+		{"invalid JSON", `{bad`, http.StatusBadRequest},
+		{"missing id", `{"date": "2026-03-15", "exercises": []}`, http.StatusBadRequest},
+		{"bad date", fmt.Sprintf(`{"id": %d, "date": "15/03/2026"}`, id), http.StatusBadRequest},
+		{"unknown id", `{"id": 999, "date": "2026-03-15", "exercises": []}`, http.StatusNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if w := putWorkout(t, h, tt.body); w.Code != tt.code {
+				t.Errorf("expected %d, got %d: %s", tt.code, w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestLatestExercise_Target(t *testing.T) {
+	h, s := newTestHandlers(t)
+	seedWorkout(t, s, "2026-10-10", []store.Exercise{
+		{Name: "Bench Press", Sets: []store.Set{{Weight: 10, Reps: 10}, {Weight: 10, Reps: 10}, {Weight: 10, Reps: 10}, {Weight: 10, Reps: 10}}},
+	})
+
+	req := httptest.NewRequest("GET", "/api/latest-exercise?name=Bench+Press&date=2026-10-14", nil)
+	w := httptest.NewRecorder()
+	h.LatestExercise(w, req)
+
+	var result struct {
+		Sets   []store.Set `json:"sets"`
+		Target []store.Set `json:"target"`
+		Reason string      `json:"reason"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Sets) != 4 || result.Sets[0].Weight != 10 {
+		t.Errorf("expected the last 4 sets at 10 kg, got %v", result.Sets)
+	}
+	want := []store.Set{{Weight: 12.5, Reps: 10}, {Weight: 12.5, Reps: 10}, {Weight: 12.5, Reps: 10}, {Weight: 12.5, Reps: 10}}
+	if !reflect.DeepEqual(result.Target, want) {
+		t.Errorf("target = %v, want %v", result.Target, want)
+	}
+	if want := "Weight up 2.5 kg: you completed 4 × 10 @ 10 kg last time."; result.Reason != want {
+		t.Errorf("reason = %q, want %q", result.Reason, want)
+	}
+}
+
+func TestLatestExercise_NoHistory(t *testing.T) {
+	h, _ := newTestHandlers(t)
+
+	req := httptest.NewRequest("GET", "/api/latest-exercise?name=Bench+Press", nil)
+	w := httptest.NewRecorder()
+	h.LatestExercise(w, req)
+
+	if body := strings.TrimSpace(w.Body.String()); body != `{"sets":[],"target":[]}` {
+		t.Errorf("unexpected body %s", body)
+	}
+}
+
+func TestLatestExercise_BadDate(t *testing.T) {
+	h, _ := newTestHandlers(t)
+
+	req := httptest.NewRequest("GET", "/api/latest-exercise?name=Bench+Press&date=14-10-2026", nil)
+	w := httptest.NewRecorder()
+	h.LatestExercise(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
 	}
 }

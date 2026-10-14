@@ -166,6 +166,26 @@ export function Message({
   );
 }
 
+/** A text button for a native stack header, e.g. Save or Cancel. */
+export function HeaderButton({
+  title,
+  onPress,
+  disabled,
+  bold,
+}: {
+  title: string;
+  onPress: () => void;
+  disabled?: boolean;
+  bold?: boolean;
+}) {
+  const theme = useTheme();
+  return (
+    <Pressable onPress={onPress} hitSlop={10} disabled={disabled}>
+      <ThemedText style={{ color: theme.accent, fontWeight: bold ? 700 : 500 }}>{title}</ThemedText>
+    </Pressable>
+  );
+}
+
 export function SectionLabel({ children }: { children: ReactNode }) {
   return (
     <ThemedText type="smallBold" themeColor="textSecondary" style={styles.sectionLabel}>

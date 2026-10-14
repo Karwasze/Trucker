@@ -30,12 +30,12 @@ func samplePlan() TrainingPlan {
 		Name: "5x5",
 		Days: []PlanDay{
 			{Weekday: "friday", Exercises: []PlanExercise{
-				{Name: "Squat", Sets: []Set{{Reps: 5, Weight: 120}}, WeightIncrement: 2.5},
+				{Name: "Squat", Sets: 1, Reps: 3},
 			}},
 			{Weekday: "monday", Exercises: []PlanExercise{
-				{Name: "Squat", Sets: []Set{{Reps: 5, Weight: 100}, {Reps: 5, Weight: 100}}, WeightIncrement: 2.5},
-				{Name: "Bench Press", Sets: []Set{{Reps: 5, Weight: 80}}, RepsIncrement: 1, DeloadAfter: 1, DeloadPercent: 10},
-				{Name: "Deadlift", Sets: []Set{{Reps: 5, Weight: 140}}, WeightIncrement: 5},
+				{Name: "Squat", Sets: 2, Reps: 5},
+				{Name: "Bench Press", Sets: 3, Reps: 8},
+				{Name: "Deadlift", Sets: 1, Reps: 5},
 			}},
 		},
 	}
@@ -77,24 +77,8 @@ func TestCreateAndGetPlan(t *testing.T) {
 	if len(mon) != 3 || mon[0].Name != "Squat" || mon[1].Name != "Bench Press" || mon[2].Name != "Deadlift" {
 		t.Fatalf("expected monday exercises in submitted order, got %+v", mon)
 	}
-	if !reflect.DeepEqual(mon[0].Sets, []Set{{Reps: 5, Weight: 100}, {Reps: 5, Weight: 100}}) {
-		t.Errorf("unexpected squat sets: %+v", mon[0].Sets)
-	}
-	bench := mon[1]
-	if bench.RepsIncrement != 1 || bench.DeloadAfter != 1 || bench.DeloadPercent != 10 || bench.ConsecutiveMisses != 0 {
-		t.Errorf("unexpected bench progression settings: %+v", bench)
-	}
-}
-
-func TestCreatePlan_IgnoresClientMissCounter(t *testing.T) {
-	s := newTestStore(t)
-
-	plan := samplePlan()
-	plan.Days[0].Exercises[0].ConsecutiveMisses = 5
-	created := mustCreatePlan(t, s, plan)
-
-	if misses := created.Days[1].Exercises[0].ConsecutiveMisses; misses != 0 {
-		t.Errorf("expected consecutive_misses to start at 0, got %d", misses)
+	if mon[0] != (PlanExercise{Name: "Squat", Sets: 2, Reps: 5}) || mon[1] != (PlanExercise{Name: "Bench Press", Sets: 3, Reps: 8}) {
+		t.Errorf("unexpected set/rep schemes: %+v", mon)
 	}
 }
 
@@ -170,7 +154,7 @@ func TestUpdatePlan_ReplacesDays(t *testing.T) {
 		ID:   created.ID,
 		Name: "Renamed",
 		Days: []PlanDay{{Weekday: "tuesday", Exercises: []PlanExercise{
-			{Name: "Overhead Press", Sets: []Set{{Reps: 8, Weight: 40}}},
+			{Name: "Overhead Press", Sets: 4, Reps: 8},
 		}}},
 	})
 	if err != nil {
@@ -179,12 +163,14 @@ func TestUpdatePlan_ReplacesDays(t *testing.T) {
 	if updated.Name != "Renamed" || len(updated.Days) != 1 || updated.Days[0].Weekday != "tuesday" {
 		t.Errorf("unexpected updated plan: %+v", updated)
 	}
+	if ex := updated.Days[0].Exercises; len(ex) != 1 || ex[0] != (PlanExercise{Name: "Overhead Press", Sets: 4, Reps: 8}) {
+		t.Errorf("unexpected updated exercises: %+v", ex)
+	}
 
-	var exerciseCount, setCount int
+	var exerciseCount int
 	s.db.QueryRow("SELECT COUNT(*) FROM training_plan_exercises").Scan(&exerciseCount)
-	s.db.QueryRow("SELECT COUNT(*) FROM training_plan_sets").Scan(&setCount)
-	if exerciseCount != 1 || setCount != 1 {
-		t.Errorf("expected old rows replaced (1 exercise, 1 set), got %d exercises, %d sets", exerciseCount, setCount)
+	if exerciseCount != 1 {
+		t.Errorf("expected old rows replaced (1 exercise), got %d exercises", exerciseCount)
 	}
 }
 
@@ -210,7 +196,7 @@ func TestDeletePlan(t *testing.T) {
 	s := newTestStore(t)
 	created := mustCreatePlan(t, s, samplePlan())
 	kept := mustCreatePlan(t, s, TrainingPlan{Name: "Kept", Days: []PlanDay{{Weekday: "monday", Exercises: []PlanExercise{
-		{Name: "Squat", Sets: []Set{{Reps: 5, Weight: 60}}},
+		{Name: "Squat", Sets: 3, Reps: 5},
 	}}}})
 
 	planID := created.ID
@@ -234,11 +220,10 @@ func TestDeletePlan(t *testing.T) {
 		t.Errorf("expected other plan to survive: %v", err)
 	}
 
-	var exerciseCount, setCount int
+	var exerciseCount int
 	s.db.QueryRow("SELECT COUNT(*) FROM training_plan_exercises").Scan(&exerciseCount)
-	s.db.QueryRow("SELECT COUNT(*) FROM training_plan_sets").Scan(&setCount)
-	if exerciseCount != 1 || setCount != 1 {
-		t.Errorf("expected only the kept plan's rows to remain, got %d exercises, %d sets", exerciseCount, setCount)
+	if exerciseCount != 1 {
+		t.Errorf("expected only the kept plan's rows to remain, got %d exercises", exerciseCount)
 	}
 
 	workouts, _ := s.GetWorkouts()
@@ -290,17 +275,90 @@ func TestGetPlanDay(t *testing.T) {
 	}
 }
 
-func TestApplyProgression(t *testing.T) {
+func TestExerciseTargets(t *testing.T) {
+	s := newTestStore(t)
+
+	seedWorkout(t, s, "2026-10-05", []Exercise{
+		{Name: "Squat", Sets: []Set{{Reps: 5, Weight: 100}, {Reps: 5, Weight: 100}}},
+		{Name: "Bench Press", Sets: []Set{{Reps: 8, Weight: 60}, {Reps: 8, Weight: 60}, {Reps: 6, Weight: 60}}},
+	})
+	// Logged without a plan, and the same exercise twice in one workout:
+	// every session of the exercise counts, merged per workout.
+	seedWorkout(t, s, "2026-10-09", []Exercise{
+		{Name: "Squat", Sets: []Set{{Reps: 5, Weight: 105}}},
+		{Name: "Squat", Sets: []Set{{Reps: 5, Weight: 105}}},
+	})
+	// Logged after the date asked about, so it is ignored.
+	seedWorkout(t, s, "2026-10-20", []Exercise{
+		{Name: "Squat", Sets: []Set{{Reps: 5, Weight: 200}, {Reps: 5, Weight: 200}}},
+	})
+
+	targets, err := s.ExerciseTargets([]PlanExercise{
+		{Name: "Squat", Sets: 2, Reps: 5},
+		{Name: "Bench Press", Sets: 3, Reps: 8},
+		{Name: "Deadlift", Sets: 1, Reps: 5},
+	}, monday)
+	if err != nil {
+		t.Fatalf("failed to get targets: %v", err)
+	}
+
+	want := []ExerciseTarget{
+		{Name: "Squat", Sets: []Set{{Reps: 5, Weight: 110}, {Reps: 5, Weight: 110}},
+			Reason: "Weight up 5 kg: you completed 2 × 5 @ 105 kg last time."},
+		{Name: "Bench Press", Sets: []Set{{Reps: 8, Weight: 60}, {Reps: 8, Weight: 60}, {Reps: 7, Weight: 60}},
+			Reason: "You didn't finish 3 × 8 @ 60 kg last time: same weight, one more rep on short sets. 2 more misses deload."},
+		{Name: "Deadlift", Sets: []Set{{Reps: 5, Weight: 0}}, Reason: "No history yet: pick a starting weight."},
+	}
+	if !reflect.DeepEqual(targets, want) {
+		t.Errorf("expected targets %+v, got %+v", want, targets)
+	}
+}
+
+func TestExerciseTargets_FollowEditedHistory(t *testing.T) {
+	s := newTestStore(t)
+	scheme := []PlanExercise{{Name: "Squat", Sets: 1, Reps: 5}}
+	id := seedWorkout(t, s, "2026-10-05", []Exercise{{Name: "Squat", Sets: []Set{{Reps: 5, Weight: 100}}}})
+
+	if _, err := s.UpdateWorkout(Workout{ID: id, Date: "2026-10-05", Exercises: []Exercise{
+		{Name: "Squat", Sets: []Set{{Reps: 4, Weight: 100}}},
+	}}); err != nil {
+		t.Fatalf("failed to update workout: %v", err)
+	}
+
+	targets, err := s.ExerciseTargets(scheme, monday)
+	if err != nil {
+		t.Fatalf("failed to get targets: %v", err)
+	}
+	if got := targets[0].Sets; !reflect.DeepEqual(got, []Set{{Reps: 5, Weight: 100}}) {
+		t.Errorf("expected the edited miss to repeat 100 kg, got %+v", got)
+	}
+}
+
+func TestEvaluateProgression(t *testing.T) {
 	s := newTestStore(t)
 	created := mustCreatePlan(t, s, samplePlan())
+	planID := created.ID
 
-	results, err := s.ApplyProgression(created.ID, monday, []Exercise{
+	for _, date := range []string{"2026-09-28", "2026-10-05"} {
+		seedWorkout(t, s, date, []Exercise{{Name: "Bench Press", Sets: []Set{{Reps: 8, Weight: 60}, {Reps: 8, Weight: 60}, {Reps: 6, Weight: 60}}}})
+	}
+
+	workout := Workout{Date: monday, PlanID: &planID, Exercises: []Exercise{
 		{Name: "Squat", Sets: []Set{{Reps: 5, Weight: 100}, {Reps: 5, Weight: 100}}},
-		{Name: "Bench Press", Sets: []Set{{Reps: 3, Weight: 80}}},
+		{Name: "Bench Press", Sets: []Set{{Reps: 8, Weight: 60}, {Reps: 7, Weight: 60}, {Reps: 7, Weight: 60}}},
 		{Name: "Bicep Curl", Sets: []Set{{Reps: 10, Weight: 15}}},
-	})
+	}}
+	id, err := s.SaveWorkout(workout)
 	if err != nil {
-		t.Fatalf("failed to apply progression: %v", err)
+		t.Fatalf("failed to save workout: %v", err)
+	}
+	workout.ID = id
+	// A later workout on the same day must not affect this one's results.
+	seedWorkout(t, s, monday, []Exercise{{Name: "Squat", Sets: []Set{{Reps: 1, Weight: 100}}}})
+
+	results, err := s.EvaluateProgression(planID, workout)
+	if err != nil {
+		t.Fatalf("failed to evaluate progression: %v", err)
 	}
 
 	want := []ProgressionResult{
@@ -311,65 +369,24 @@ func TestApplyProgression(t *testing.T) {
 		t.Errorf("expected results %+v, got %+v", want, results)
 	}
 
-	plan, _ := s.GetPlan(created.ID)
-	mon := plan.Days[0].Exercises
-	if !reflect.DeepEqual(mon[0].Sets, []Set{{Reps: 5, Weight: 102.5}, {Reps: 5, Weight: 102.5}}) {
-		t.Errorf("expected squat to progress to 102.5, got %+v", mon[0].Sets)
-	}
-	if !reflect.DeepEqual(mon[1].Sets, []Set{{Reps: 5, Weight: 72}}) || mon[1].ConsecutiveMisses != 0 {
-		t.Errorf("expected bench deloaded to 72 with misses reset, got %+v", mon[1])
-	}
-	if !reflect.DeepEqual(mon[2].Sets, []Set{{Reps: 5, Weight: 140}}) || mon[2].ConsecutiveMisses != 0 {
-		t.Errorf("expected unlogged deadlift untouched, got %+v", mon[2])
-	}
-	fri := plan.Days[1].Exercises
-	if !reflect.DeepEqual(fri[0].Sets, []Set{{Reps: 5, Weight: 120}}) {
-		t.Errorf("expected friday squat untouched, got %+v", fri[0].Sets)
+	after, _ := s.GetPlan(planID)
+	if !reflect.DeepEqual(after, created) {
+		t.Errorf("expected evaluating not to change the plan, got %+v", after)
 	}
 }
 
-func TestApplyProgression_PersistsMissCounter(t *testing.T) {
+func TestEvaluateProgression_RestDay(t *testing.T) {
 	s := newTestStore(t)
 	created := mustCreatePlan(t, s, samplePlan())
 
-	results, err := s.ApplyProgression(created.ID, monday, []Exercise{
-		{Name: "Squat", Sets: []Set{{Reps: 5, Weight: 100}}},
-	})
-	if err != nil {
-		t.Fatalf("failed to apply progression: %v", err)
-	}
-	if len(results) != 1 || results[0].Result != ResultMissed {
-		t.Fatalf("expected a single miss, got %+v", results)
-	}
-
-	plan, _ := s.GetPlan(created.ID)
-	squat := plan.Days[0].Exercises[0]
-	if squat.ConsecutiveMisses != 1 {
-		t.Errorf("expected 1 consecutive miss, got %d", squat.ConsecutiveMisses)
-	}
-	if squat.Sets[0].Weight != 100 {
-		t.Errorf("expected targets unchanged on a miss, got %+v", squat.Sets)
-	}
-}
-
-func TestApplyProgression_RestDay(t *testing.T) {
-	s := newTestStore(t)
-	created := mustCreatePlan(t, s, samplePlan())
-	before, _ := s.GetPlan(created.ID)
-
-	results, err := s.ApplyProgression(created.ID, tuesday, []Exercise{
+	results, err := s.EvaluateProgression(created.ID, Workout{ID: 1, Date: tuesday, Exercises: []Exercise{
 		{Name: "Squat", Sets: []Set{{Reps: 5, Weight: 200}}},
-	})
+	}})
 	if err != nil {
-		t.Fatalf("failed to apply progression: %v", err)
+		t.Fatalf("failed to evaluate progression: %v", err)
 	}
 	if results == nil || len(results) != 0 {
 		t.Errorf("expected empty non-nil results on a rest day, got %+v", results)
-	}
-
-	after, _ := s.GetPlan(created.ID)
-	if !reflect.DeepEqual(before, after) {
-		t.Error("expected plan unchanged after rest-day workout")
 	}
 }
 
@@ -380,7 +397,7 @@ func TestUpdateExercise_PropagatesToPlans(t *testing.T) {
 		t.Fatalf("failed to create exercise: %v", err)
 	}
 	created := mustCreatePlan(t, s, TrainingPlan{Name: "Custom", Days: []PlanDay{{Weekday: "monday", Exercises: []PlanExercise{
-		{Name: "Custom Lift", Sets: []Set{{Reps: 5, Weight: 50}}},
+		{Name: "Custom Lift", Sets: 3, Reps: 5},
 	}}}})
 
 	if _, err := s.UpdateExercise(custom.ID, "Renamed Lift"); err != nil {

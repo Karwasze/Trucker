@@ -5,16 +5,27 @@ import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useTimer } from '@/timer/timer-context';
 import type { DraftExercise, DraftSet } from '@/workout/draft';
 
 type Props = {
   exercise: DraftExercise;
   onChange: (exercise: DraftExercise) => void;
   onRemove: () => void;
+  /** Off when editing a logged workout, where every set was done. */
+  trackDone?: boolean;
 };
 
-export function ExerciseCard({ exercise, onChange, onRemove }: Props) {
+export function ExerciseCard({ exercise, onChange, onRemove, trackDone = true }: Props) {
   const theme = useTheme();
+  const timer = useTimer();
+
+  // Ticking a set off starts the rest before the next one, restarting a running timer.
+  const toggleDone = (index: number) => {
+    const done = !exercise.sets[index].done;
+    updateSet(index, { done });
+    if (done) timer.start();
+  };
 
   const updateSet = (index: number, patch: Partial<DraftSet>) =>
     onChange({
@@ -54,10 +65,17 @@ export function ExerciseCard({ exercise, onChange, onRemove }: Props) {
                 Target {exercise.target}
               </ThemedText>
             )}
+            {exercise.reason && (
+              <ThemedText type="small" themeColor="textSecondary" style={{ fontStyle: 'italic' }}>
+                {exercise.reason}
+              </ThemedText>
+            )}
           </View>
-          <ThemedText type="small" themeColor="textSecondary">
-            {doneCount}/{exercise.sets.length}
-          </ThemedText>
+          {trackDone && (
+            <ThemedText type="small" themeColor="textSecondary">
+              {doneCount}/{exercise.sets.length}
+            </ThemedText>
+          )}
         </View>
 
         <View style={styles.headerRow}>
@@ -70,7 +88,7 @@ export function ExerciseCard({ exercise, onChange, onRemove }: Props) {
           <ThemedText type="small" themeColor="textSecondary" style={styles.inputCol}>
             Reps
           </ThemedText>
-          <View style={styles.doneCol} />
+          {trackDone && <View style={styles.doneCol} />}
         </View>
 
         {exercise.sets.map((set, i) => (
@@ -117,20 +135,22 @@ export function ExerciseCard({ exercise, onChange, onRemove }: Props) {
                   { color: theme.text, backgroundColor: theme.backgroundSelected },
                 ]}
               />
-              <Pressable
-                onPress={() => updateSet(i, { done: !set.done })}
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: set.done }}
-                accessibilityLabel={`Set ${i + 1} done`}
-                style={[
-                  styles.check,
-                  styles.doneCol,
-                  { backgroundColor: set.done ? theme.success : theme.backgroundSelected },
-                ]}>
-                <ThemedText style={{ color: set.done ? '#fff' : theme.textSecondary, fontWeight: 700 }}>
-                  ✓
-                </ThemedText>
-              </Pressable>
+              {trackDone && (
+                <Pressable
+                  onPress={() => toggleDone(i)}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: set.done }}
+                  accessibilityLabel={`Set ${i + 1} done`}
+                  style={[
+                    styles.check,
+                    styles.doneCol,
+                    { backgroundColor: set.done ? theme.success : theme.backgroundSelected },
+                  ]}>
+                  <ThemedText style={{ color: set.done ? '#fff' : theme.textSecondary, fontWeight: 700 }}>
+                    ✓
+                  </ThemedText>
+                </Pressable>
+              )}
             </View>
           </SwipeToDelete>
         ))}

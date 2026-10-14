@@ -5,142 +5,291 @@ import (
 	"testing"
 )
 
-func TestEvaluateExercise(t *testing.T) {
-	sets := func(pairs ...float64) []Set {
-		var out []Set
-		for i := 0; i < len(pairs); i += 2 {
-			out = append(out, Set{Reps: int(pairs[i]), Weight: pairs[i+1]})
-		}
-		return out
+// setList builds sets from reps, weight pairs.
+func setList(pairs ...float64) []Set {
+	var out []Set
+	for i := 0; i < len(pairs); i += 2 {
+		out = append(out, Set{Reps: int(pairs[i]), Weight: pairs[i+1]})
 	}
+	return out
+}
+
+func TestNextTarget(t *testing.T) {
+	scheme := PlanExercise{Name: "Squat", Sets: 3, Reps: 5}
 
 	tests := []struct {
-		name       string
-		target     PlanExercise
-		logged     []Set
-		wantSets   []Set
-		wantMisses int
-		wantResult string
+		name        string
+		sessions    [][]Set
+		wantSets    []Set
+		wantOutcome string
+		wantReason  string
 	}{
 		{
-			name:       "exact hit adds weight increment",
-			target:     PlanExercise{Sets: sets(5, 100, 5, 100), WeightIncrement: 2.5},
-			logged:     sets(5, 100, 5, 100),
-			wantSets:   sets(5, 102.5, 5, 102.5),
-			wantResult: ResultProgressed,
+			name:       "no history leaves the weight to the lifter",
+			wantSets:   setList(5, 0, 5, 0, 5, 0),
+			wantReason: "No history yet: pick a starting weight.",
 		},
 		{
-			name:       "exceeding targets and extra sets is a hit",
-			target:     PlanExercise{Sets: sets(5, 100), WeightIncrement: 2.5},
-			logged:     sets(6, 105, 5, 100),
-			wantSets:   sets(5, 102.5),
-			wantResult: ResultProgressed,
+			name:        "hitting every set adds the default step",
+			sessions:    [][]Set{setList(5, 100, 5, 100, 5, 100)},
+			wantSets:    setList(5, 102.5, 5, 102.5, 5, 102.5),
+			wantReason:  "Weight up 2.5 kg: you completed 3 × 5 @ 100 kg last time.",
+			wantOutcome: ResultProgressed,
 		},
 		{
-			name:       "reps increment only",
-			target:     PlanExercise{Sets: sets(8, 20, 8, 20), RepsIncrement: 1},
-			logged:     sets(8, 20, 8, 20),
-			wantSets:   sets(9, 20, 9, 20),
-			wantResult: ResultProgressed,
+			name: "step is the most common logged weight jump",
+			sessions: [][]Set{
+				setList(5, 100, 5, 100, 5, 100),
+				setList(5, 105, 5, 105, 5, 105),
+				setList(5, 110, 5, 110, 5, 110),
+				setList(5, 112.5, 5, 112.5, 5, 112.5),
+				setList(5, 117.5, 5, 117.5, 5, 117.5),
+			},
+			wantSets:    setList(5, 122.5, 5, 122.5, 5, 122.5),
+			wantReason:  "Weight up 5 kg: you completed 3 × 5 @ 117.5 kg last time.",
+			wantOutcome: ResultProgressed,
 		},
 		{
-			name:       "weight and reps increments together",
-			target:     PlanExercise{Sets: sets(5, 60), WeightIncrement: 1.25, RepsIncrement: 1},
-			logged:     sets(5, 60),
-			wantSets:   sets(6, 61.25),
-			wantResult: ResultProgressed,
+			name: "drops in weight don't count as a step",
+			sessions: [][]Set{
+				setList(5, 60, 5, 60, 5, 60),
+				setList(5, 61.25, 5, 61.25, 5, 61.25),
+				setList(5, 50, 5, 50, 5, 50),
+			},
+			wantSets:    setList(5, 51.25, 5, 51.25, 5, 51.25),
+			wantReason:  "Weight up 1.25 kg: you completed 3 × 5 @ 50 kg last time.",
+			wantOutcome: ResultProgressed,
 		},
 		{
-			name:       "hit resets miss counter",
-			target:     PlanExercise{Sets: sets(5, 100), WeightIncrement: 2.5, ConsecutiveMisses: 2},
-			logged:     sets(5, 100),
-			wantSets:   sets(5, 102.5),
-			wantResult: ResultProgressed,
+			name:        "extra reps, extra sets and lighter warm-ups still hit",
+			sessions:    [][]Set{setList(5, 60, 6, 100, 5, 100, 5, 100, 3, 100)},
+			wantSets:    setList(5, 102.5, 5, 102.5, 5, 102.5),
+			wantReason:  "Weight up 2.5 kg: you completed 3 × 5 @ 100 kg last time.",
+			wantOutcome: ResultProgressed,
 		},
 		{
-			name:       "fewer sets than target is a miss",
-			target:     PlanExercise{Sets: sets(5, 100, 5, 100), WeightIncrement: 2.5},
-			logged:     sets(5, 100),
-			wantSets:   sets(5, 100, 5, 100),
-			wantMisses: 1,
-			wantResult: ResultMissed,
+			name:        "a miss keeps the weight and adds a rep to short sets",
+			sessions:    [][]Set{setList(5, 100, 4, 100, 3, 100)},
+			wantSets:    setList(5, 100, 5, 100, 4, 100),
+			wantReason:  "You didn't finish 3 × 5 @ 100 kg last time: same weight, one more rep on short sets. 2 more misses deload.",
+			wantOutcome: ResultMissed,
 		},
 		{
-			name:       "one set short on reps is a miss",
-			target:     PlanExercise{Sets: sets(5, 100, 5, 100), WeightIncrement: 2.5},
-			logged:     sets(5, 100, 4, 100),
-			wantSets:   sets(5, 100, 5, 100),
-			wantMisses: 1,
-			wantResult: ResultMissed,
+			name:        "missing sets aim one rep above the last set done",
+			sessions:    [][]Set{setList(5, 100, 4, 100)},
+			wantSets:    setList(5, 100, 5, 100, 5, 100),
+			wantReason:  "You didn't finish 3 × 5 @ 100 kg last time: same weight, one more rep on short sets. 2 more misses deload.",
+			wantOutcome: ResultMissed,
 		},
 		{
-			name:       "lighter weight is a miss",
-			target:     PlanExercise{Sets: sets(5, 100), WeightIncrement: 2.5},
-			logged:     sets(5, 97.5),
-			wantSets:   sets(5, 100),
-			wantMisses: 1,
-			wantResult: ResultMissed,
+			name: "two misses in a row is not yet a deload",
+			sessions: [][]Set{
+				setList(5, 100, 5, 100, 4, 100),
+				setList(5, 100, 5, 100, 4, 100),
+			},
+			wantSets:    setList(5, 100, 5, 100, 5, 100),
+			wantReason:  "You didn't finish 3 × 5 @ 100 kg last time: same weight, one more rep on short sets. One more miss deloads.",
+			wantOutcome: ResultMissed,
 		},
 		{
-			name:       "miss counter accumulates below deload threshold",
-			target:     PlanExercise{Sets: sets(5, 100), DeloadAfter: 3, DeloadPercent: 10, ConsecutiveMisses: 1},
-			logged:     sets(3, 100),
-			wantSets:   sets(5, 100),
-			wantMisses: 2,
-			wantResult: ResultMissed,
+			name: "three misses in a row at the same weight deloads 10%",
+			sessions: [][]Set{
+				setList(5, 100, 5, 100, 4, 100),
+				setList(5, 100, 5, 100, 4, 100),
+				setList(5, 100, 4, 100, 4, 100),
+			},
+			wantSets:    setList(5, 90, 5, 90, 5, 90),
+			wantReason:  "Deloading: you missed 3 × 5 @ 100 kg 3 sessions in a row.",
+			wantOutcome: ResultDeloaded,
 		},
 		{
-			name:       "deload fires at threshold and resets counter",
-			target:     PlanExercise{Sets: sets(5, 100, 3, 110), DeloadAfter: 3, DeloadPercent: 10, ConsecutiveMisses: 2},
-			logged:     sets(3, 100),
-			wantSets:   sets(5, 90, 3, 99),
-			wantResult: ResultDeloaded,
+			name: "deloads round to the step",
+			sessions: [][]Set{
+				setList(5, 100, 5, 100, 5, 100),
+				setList(3, 102.5, 3, 102.5, 3, 102.5),
+				setList(3, 102.5, 3, 102.5, 3, 102.5),
+				setList(3, 102.5, 3, 102.5, 3, 102.5),
+			},
+			wantSets:    setList(5, 92.5, 5, 92.5, 5, 92.5),
+			wantReason:  "Deloading: you missed 3 × 5 @ 102.5 kg 3 sessions in a row.",
+			wantOutcome: ResultDeloaded,
 		},
 		{
-			name:       "deload rounds to one decimal",
-			target:     PlanExercise{Sets: sets(5, 52.5), DeloadAfter: 1, DeloadPercent: 15},
-			logged:     sets(4, 52.5),
-			wantSets:   sets(5, 44.6),
-			wantResult: ResultDeloaded,
+			name: "misses at a different weight don't add to the streak",
+			sessions: [][]Set{
+				setList(3, 100, 3, 100, 3, 100),
+				setList(3, 100, 3, 100, 3, 100),
+				setList(3, 102.5, 3, 102.5, 3, 102.5),
+			},
+			wantSets:    setList(4, 102.5, 4, 102.5, 4, 102.5),
+			wantReason:  "You didn't finish 3 × 5 @ 102.5 kg last time: same weight, one more rep on short sets. 2 more misses deload.",
+			wantOutcome: ResultMissed,
 		},
 		{
-			name:       "deload_after zero never deloads",
-			target:     PlanExercise{Sets: sets(5, 100), DeloadPercent: 10, ConsecutiveMisses: 10},
-			logged:     sets(1, 100),
-			wantSets:   sets(5, 100),
-			wantMisses: 11,
-			wantResult: ResultMissed,
+			name: "a hit breaks the miss streak",
+			sessions: [][]Set{
+				setList(3, 100, 3, 100, 3, 100),
+				setList(3, 100, 3, 100, 3, 100),
+				setList(5, 100, 5, 100, 5, 100),
+				setList(3, 102.5, 3, 102.5, 3, 102.5),
+			},
+			wantSets:    setList(4, 102.5, 4, 102.5, 4, 102.5),
+			wantReason:  "You didn't finish 3 × 5 @ 102.5 kg last time: same weight, one more rep on short sets. 2 more misses deload.",
+			wantOutcome: ResultMissed,
+		},
+		{
+			name: "a deload never rounds back up to the same weight",
+			sessions: [][]Set{
+				setList(3, 5, 3, 5, 3, 5),
+				setList(3, 5, 3, 5, 3, 5),
+				setList(3, 5, 3, 5, 3, 5),
+			},
+			wantSets:    setList(5, 2.5, 5, 2.5, 5, 2.5),
+			wantReason:  "Deloading: you missed 3 × 5 @ 5 kg 3 sessions in a row.",
+			wantOutcome: ResultDeloaded,
+		},
+		{
+			name:        "bodyweight hits add a rep to each set instead of weight",
+			sessions:    [][]Set{setList(5, 0, 5, 0, 5, 0)},
+			wantSets:    setList(6, 0, 6, 0, 6, 0),
+			wantReason:  "One more rep per set: you completed 3 × 5 last time.",
+			wantOutcome: ResultProgressed,
+		},
+		{
+			name:        "bodyweight reps build on the last session past the plan",
+			sessions:    [][]Set{setList(8, 0, 7, 0, 6, 0, 4, 0)},
+			wantSets:    setList(9, 0, 8, 0, 7, 0),
+			wantReason:  "One more rep per set: you completed 3 × 5 last time.",
+			wantOutcome: ResultProgressed,
+		},
+		{
+			name:        "a bodyweight miss adds a rep to short sets",
+			sessions:    [][]Set{setList(5, 0, 4, 0, 3, 0)},
+			wantSets:    setList(5, 0, 5, 0, 4, 0),
+			wantReason:  "You didn't finish 3 × 5 last time: one more rep on short sets.",
+			wantOutcome: ResultMissed,
+		},
+		{
+			name: "bodyweight misses never deload",
+			sessions: [][]Set{
+				setList(5, 0, 5, 0, 4, 0),
+				setList(5, 0, 5, 0, 4, 0),
+				setList(5, 0, 4, 0, 4, 0),
+			},
+			wantSets:    setList(5, 0, 5, 0, 5, 0),
+			wantReason:  "You didn't finish 3 × 5 last time: one more rep on short sets.",
+			wantOutcome: ResultMissed,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			original := append([]Set(nil), tt.target.Sets...)
-
-			got, result := evaluateExercise(tt.target, tt.logged)
-
-			if result != tt.wantResult {
-				t.Errorf("expected result %q, got %q", tt.wantResult, result)
+			gotSets, gotOutcome, gotReason := nextTarget(scheme, tt.sessions)
+			if !reflect.DeepEqual(gotSets, tt.wantSets) {
+				t.Errorf("expected sets %+v, got %+v", tt.wantSets, gotSets)
 			}
-			if !reflect.DeepEqual(got.Sets, tt.wantSets) {
-				t.Errorf("expected sets %+v, got %+v", tt.wantSets, got.Sets)
+			if gotOutcome != tt.wantOutcome {
+				t.Errorf("expected outcome %q, got %q", tt.wantOutcome, gotOutcome)
 			}
-			if got.ConsecutiveMisses != tt.wantMisses {
-				t.Errorf("expected %d consecutive misses, got %d", tt.wantMisses, got.ConsecutiveMisses)
-			}
-			if !reflect.DeepEqual(tt.target.Sets, original) {
-				t.Errorf("input targets were mutated: %+v", tt.target.Sets)
+			if gotReason != tt.wantReason {
+				t.Errorf("expected reason %q, got %q", tt.wantReason, gotReason)
 			}
 		})
 	}
 }
 
-func TestEvaluateExercise_RepeatedIncrementsDoNotDrift(t *testing.T) {
-	ex := PlanExercise{Sets: []Set{{Reps: 5, Weight: 20}}, WeightIncrement: 0.1}
-	for i := 0; i < 30; i++ {
-		ex, _ = evaluateExercise(ex, ex.Sets)
+func TestNextTarget_RepeatedStepsDoNotDrift(t *testing.T) {
+	scheme := PlanExercise{Name: "Curl", Sets: 1, Reps: 8}
+	sessions := [][]Set{setList(8, 10), setList(8, 10.1)}
+
+	for i := 0; i < 50; i++ {
+		target, _, _ := nextTarget(scheme, sessions)
+		sessions = append(sessions, target)
 	}
-	if ex.Sets[0].Weight != 23 {
-		t.Errorf("expected weight 23 after 30 increments of 0.1, got %v", ex.Sets[0].Weight)
+
+	last := sessions[len(sessions)-1][0].Weight
+	if last != 15.1 {
+		t.Errorf("expected 15.1 after 51 steps of 0.1, got %v", last)
+	}
+}
+
+func TestFreeExerciseTarget(t *testing.T) {
+	tests := []struct {
+		name     string
+		sessions [][]Set
+		want     []Set
+	}{
+		{
+			name: "no history has no target",
+		},
+		{
+			name:     "even sets add the default step",
+			sessions: [][]Set{setList(10, 10, 10, 10, 10, 10, 10, 10)},
+			want:     setList(10, 12.5, 10, 12.5, 10, 12.5, 10, 12.5),
+		},
+		{
+			name: "step is learned from history",
+			sessions: [][]Set{
+				setList(8, 20, 8, 20),
+				setList(8, 21, 8, 21),
+			},
+			want: setList(8, 22, 8, 22),
+		},
+		{
+			name:     "short sets add a rep at the same weight",
+			sessions: [][]Set{setList(10, 60, 10, 60, 8, 60, 7, 60)},
+			want:     setList(10, 60, 10, 60, 9, 60, 8, 60),
+		},
+		{
+			name:     "warm-up sets are dropped",
+			sessions: [][]Set{setList(10, 20, 5, 60, 5, 60, 5, 60)},
+			want:     setList(5, 62.5, 5, 62.5, 5, 62.5),
+		},
+		{
+			name:     "bodyweight sets add a rep to short sets",
+			sessions: [][]Set{setList(12, 0, 10, 0)},
+			want:     setList(12, 0, 11, 0),
+		},
+		{
+			name:     "even bodyweight sets add a rep to each",
+			sessions: [][]Set{setList(12, 0, 12, 0)},
+			want:     setList(13, 0, 13, 0),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, _ := freeExerciseTarget(tt.sessions)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("got %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFreeExerciseTarget_FromStore(t *testing.T) {
+	s := newTestStore(t)
+	seedWorkout(t, s, "2026-10-10", []Exercise{
+		{Name: "Bench Press", Sets: setList(10, 10, 10, 10, 10, 10, 10, 10)},
+	})
+
+	got, reason, err := s.FreeExerciseTarget("Bench Press", "2026-10-14")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := setList(10, 12.5, 10, 12.5, 10, 12.5, 10, 12.5); !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+	if want := "Weight up 2.5 kg: you completed 4 × 10 @ 10 kg last time."; reason != want {
+		t.Errorf("expected reason %q, got %q", want, reason)
+	}
+
+	// Workouts after the date don't count.
+	got, _, err = s.FreeExerciseTarget("Bench Press", "2026-10-09")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != nil {
+		t.Errorf("expected no target before any history, got %v", got)
 	}
 }

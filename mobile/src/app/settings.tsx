@@ -10,7 +10,6 @@ import { useQuery } from '@/hooks/use-query';
 import { useTheme } from '@/hooks/use-theme';
 import { ExerciseMuscles } from '@/settings/exercise-muscles';
 import { ENVIRONMENT_NAMES, useSettings, type Environment } from '@/settings/settings-context';
-import { lockScreenSupported } from '@/timer/native';
 import { useTimer } from '@/timer/timer-context';
 import {
   DURATION_STEP_SEC,
@@ -184,7 +183,7 @@ const FINISH_BEHAVIORS: FinishBehavior[] = ['animation', 'vibration'];
 /** Configures the floating rest timer's target and what happens when it's reached. */
 function TimerCard() {
   const { settings, updateSettings } = useTimer();
-  const { durationSec, onFinish } = settings;
+  const { durationSec, animation, vibration } = settings;
   const step = (delta: number) => updateSettings({ durationSec: durationSec + delta });
 
   return (
@@ -217,20 +216,16 @@ function TimerCard() {
           <Chip
             key={behavior}
             label={FINISH_BEHAVIOR_NAMES[behavior]}
-            selected={behavior === onFinish}
+            selected={settings[behavior]}
             inCard
-            onPress={() => updateSettings({ onFinish: behavior })}
+            onPress={() => updateSettings({ [behavior]: !settings[behavior] })}
           />
         ))}
       </View>
       <ThemedText type="small" themeColor="textSecondary">
         Starts when you tick off a set; tap the top of the screen to start it yourself.{' '}
-        {onFinish === 'vibration'
-          ? 'Vibrates even with the phone locked, using a notification.'
-          : 'The island celebrates, or does once you next look at the app.'}{' '}
-        {lockScreenSupported
-          ? 'A running timer also shows on the Lock Screen.'
-          : 'The Lock Screen timer needs the installed app, not Expo Go.'}
+        {animation && 'The island celebrates, or does once you next look at the app. '}
+        {vibration && 'Vibrates even with the phone locked, using a notification.'}
       </ThemedText>
     </Card>
   );

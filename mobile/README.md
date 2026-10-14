@@ -19,10 +19,8 @@ Expo (React Native) app for the Trucker API. Targets iOS; Android should work to
   bar hidden meanwhile. Tap it to expand it, with buttons to restart or stop;
   while idle, tap the notch to start it yourself. The target (3:00 by default)
   and what happens at the end – the island bursting open with a check and
-  confetti, or a vibration – are set under
-  Settings. Vibration uses a scheduled notification, so it also goes off with
-  the phone locked. On iOS the running timer also shows on the Lock Screen as a
-  Live Activity; that needs a development build (`npx expo run:ios`), not Expo Go.
+  confetti, a vibration, both or neither – are set under Settings. Vibration uses a scheduled notification, so it also goes off with
+  the phone locked.
 
 ## Running on your iPhone
 

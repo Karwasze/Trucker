@@ -1,11 +1,10 @@
-/** What happens when the timer reaches its target. */
+/** What can happen when the timer reaches its target; each is toggled on its own. */
 export type FinishBehavior = 'animation' | 'vibration';
 
 export type TimerSettings = {
   /** The target the timer counts up to, e.g. 180 for 3:00. */
   durationSec: number;
-  onFinish: FinishBehavior;
-};
+} & Record<FinishBehavior, boolean>;
 
 /** A timer that is counting; stored as wall-clock times so it survives restarts. */
 export type RunningTimer = {
@@ -13,7 +12,11 @@ export type RunningTimer = {
   durationMs: number;
 };
 
-export const DEFAULT_TIMER_SETTINGS: TimerSettings = { durationSec: 180, onFinish: 'animation' };
+export const DEFAULT_TIMER_SETTINGS: TimerSettings = {
+  durationSec: 180,
+  animation: true,
+  vibration: false,
+};
 
 export const MIN_DURATION_SEC = 15;
 export const MAX_DURATION_SEC = 30 * 60;
@@ -39,12 +42,20 @@ export function parseTimerSettings(raw: string | null): TimerSettings {
   if (!raw) return DEFAULT_TIMER_SETTINGS;
   try {
     const stored = JSON.parse(raw);
+    const flag = (behavior: FinishBehavior) =>
+      typeof stored[behavior] === 'boolean'
+        ? stored[behavior]
+        : // Older versions stored a single choice as onFinish.
+          stored.onFinish in FINISH_BEHAVIOR_NAMES
+          ? stored.onFinish === behavior
+          : DEFAULT_TIMER_SETTINGS[behavior];
     return {
       durationSec:
         typeof stored.durationSec === 'number'
           ? clampDuration(stored.durationSec)
           : DEFAULT_TIMER_SETTINGS.durationSec,
-      onFinish: stored.onFinish in FINISH_BEHAVIOR_NAMES ? stored.onFinish : DEFAULT_TIMER_SETTINGS.onFinish,
+      animation: flag('animation'),
+      vibration: flag('vibration'),
     };
   } catch {
     return DEFAULT_TIMER_SETTINGS;

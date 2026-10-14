@@ -12,9 +12,7 @@ import { AppState } from 'react-native';
 
 import {
   cancelFinishAlert,
-  endLiveActivities,
   scheduleFinishAlert,
-  startLiveActivity,
   vibrate,
 } from '@/timer/native';
 import {
@@ -67,21 +65,19 @@ export function TimerProvider({ children }: { children: ReactNode }) {
   const stop = useCallback(() => {
     setRunning(null);
     cancelFinishAlert();
-    endLiveActivities();
   }, [setRunning]);
 
   const start = useCallback(() => {
     const timer = { startedAt: Date.now(), durationMs: settings.durationSec * 1000 };
     setRunning(timer);
-    startLiveActivity(timer);
   }, [settings.durationSec, setRunning]);
 
   // The background alert follows the setting, even when it changes mid-timer.
   // Scheduling again replaces the previous alert.
   useEffect(() => {
-    if (running && settings.onFinish === 'vibration') scheduleFinishAlert(running);
+    if (running && settings.vibration) scheduleFinishAlert(running);
     else cancelFinishAlert();
-  }, [running, settings.onFinish]);
+  }, [running, settings.vibration]);
 
   // Fires the finish behavior once the target is reached. While the app is in
   // the background nothing runs, so this also catches up when it returns.
@@ -93,9 +89,9 @@ export function TimerProvider({ children }: { children: ReactNode }) {
       if (late < 0) return;
       stop();
       if (late > STALE_FINISH_MS) return;
-      if (settings.onFinish === 'animation') setCelebration((n) => n + 1);
+      if (settings.animation) setCelebration((n) => n + 1);
       // Within a second the phone was awake to vibrate; otherwise the scheduled alert already did.
-      else if (late < 1000) vibrate();
+      if (settings.vibration && late < 1000) vibrate();
     };
     // A little slack so the timeout can't fire a moment before the end and be missed.
     const timeout = setTimeout(finish, Math.max(0, endsAt(running) - Date.now()) + 50);
@@ -104,7 +100,7 @@ export function TimerProvider({ children }: { children: ReactNode }) {
       clearTimeout(timeout);
       subscription.remove();
     };
-  }, [running, stop, settings.onFinish]);
+  }, [running, stop, settings.animation, settings.vibration]);
 
   const value = useMemo<TimerContextValue>(
     () => ({

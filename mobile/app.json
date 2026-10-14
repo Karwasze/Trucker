@@ -35,8 +35,7 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
-      ],
-      "expo-widgets"
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

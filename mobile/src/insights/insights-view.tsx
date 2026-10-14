@@ -1,5 +1,6 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { localDate } from '@/api/client';
 import type { Adherence, Insights, LiftProgress, PlanStall, StrengthLevel, Tonnage } from '@/api/types';
@@ -7,8 +8,9 @@ import { LineChart } from '@/components/line-chart';
 import { ThemedText } from '@/components/themed-text';
 import { TIMESPANS, TimespanControl, timespanStart, type Timespan } from '@/components/timespan';
 import { Card, Message, Screen, SectionLabel } from '@/components/ui';
-import { Spacing } from '@/constants/theme';
+import { Spacing, type ThemeColor } from '@/constants/theme';
 import { useQuery } from '@/hooks/use-query';
+import { useTheme } from '@/hooks/use-theme';
 import { Tile, TileRow } from '@/progress/tile';
 import { SettingsButton } from '@/settings/settings-button';
 import { useSettings } from '@/settings/settings-context';
@@ -21,7 +23,7 @@ const plural = (n: number, word: string, words = `${word}s`) => `${n} ${n === 1 
 /** Missed days listed before collapsing the rest into a count. */
 const MISSED_SHOWN = 5;
 
-/** Training analysis, shown on the Insights tab. Charts per lift live on the Progress tab. */
+/** Training analysis, shown on the Insights tab. Charts per lift live on the Progress tab, a tap away. */
 export function InsightsView() {
   const { api, planId, serverUrl } = useSettings();
   const [timespan, setTimespan] = useState<Timespan>(TIMESPANS[0]);
@@ -82,15 +84,15 @@ function InsightsContent({ data, timespan, hasPlan }: { data: Insights; timespan
       )}
 
       <SectionLabel>Progression</SectionLabel>
-      <Card>
-        {data.progression.length === 0 ? (
+      {data.progression.length === 0 ? (
+        <Card>
           <ThemedText type="small" themeColor="textSecondary">
-            No weighted lifts in {span}.
+            No weighted {hasPlan ? 'plan ' : ''}lifts in {span}.
           </ThemedText>
-        ) : (
-          data.progression.map((p) => <ProgressRow key={p.exercise} progress={p} />)
-        )}
-      </Card>
+        </Card>
+      ) : (
+        data.progression.map((p) => <ProgressCard key={p.exercise} progress={p} timespan={timespan} />)
+      )}
 
       <SectionLabel>Tonnage</SectionLabel>
       {data.tonnage.total === 0 ? (
@@ -180,20 +182,67 @@ function StallRow({ stall: s }: { stall: PlanStall }) {
   );
 }
 
-function ProgressRow({ progress: p }: { progress: LiftProgress }) {
-  const rate = p.per_month === undefined ? null : `${p.per_month >= 0 ? '+' : ''}${formatNumber(p.per_month)} kg/mo`;
+function ProgressCard({ progress: p, timespan }: { progress: LiftProgress; timespan: Timespan }) {
+  const theme = useTheme();
+  const change = p.latest_1rm - p.first_1rm;
+  const single = p.sessions === 1;
+  const trend: ThemeColor = single || change === 0 ? 'textSecondary' : change > 0 ? 'success' : 'danger';
+  const arrow = change > 0 ? '▲' : change < 0 ? '▼' : '±';
+  const percent = Math.round((Math.abs(change) / p.first_1rm) * 1000) / 10;
+  const atRecord = p.latest_1rm >= p.record_1rm;
+  const share = Math.min(p.latest_1rm / p.record_1rm, 1);
+  const rate =
+    p.per_month === undefined ? '–' : `${p.per_month >= 0 ? '+' : '−'}${formatNumber(Math.abs(p.per_month))} kg`;
   return (
-    <View style={styles.item}>
-      <View style={styles.row}>
-        <ThemedText style={{ flex: 1 }}>{p.exercise}</ThemedText>
-        <ThemedText type="smallBold" style={styles.num}>
-          {rate ?? plural(p.sessions, 'session')}
-        </ThemedText>
-      </View>
-      <ThemedText type="small" themeColor="textSecondary">
-        {formatNumber(p.first_1rm)} → {formatNumber(p.latest_1rm)} kg est. 1RM
-        {p.best_1rm > p.latest_1rm ? ` (best ${formatNumber(p.best_1rm)})` : ''}
-        {p.prs > 0 ? ` · ${plural(p.prs, 'PR')}, last ${shortDate(p.last_pr!)}` : ' · no PRs'}
+    <Pressable
+      onPress={() => router.navigate({ pathname: '/stats', params: { exercise: p.exercise, span: timespan.key } })}
+      style={({ pressed }) => pressed && { opacity: 0.6 }}
+      accessibilityRole="button"
+      accessibilityHint={`Opens the ${p.exercise} chart`}>
+      <Card>
+        <View style={styles.row}>
+          <ThemedText type="smallBold" style={{ flex: 1 }}>
+            {p.exercise}
+          </ThemedText>
+          <ThemedText themeColor="textSecondary">›</ThemedText>
+        </View>
+        <View style={[styles.row, { alignItems: 'baseline' }]}>
+          <ThemedText style={styles.big}>{formatNumber(p.latest_1rm)} kg</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary" style={{ flex: 1 }}>
+            est. 1RM
+          </ThemedText>
+          <ThemedText type="smallBold" themeColor={trend} style={styles.num}>
+            {single ? '–' : `${arrow} ${formatNumber(Math.abs(change))} kg (${percent}%)`}
+          </ThemedText>
+        </View>
+        <View style={styles.row}>
+          <View style={[styles.bar, { backgroundColor: theme.backgroundSelected }]}>
+            <View
+              style={[styles.fill, { width: `${share * 100}%`, backgroundColor: atRecord ? theme.success : theme.accent }]}
+            />
+          </View>
+          <ThemedText type="small" themeColor={atRecord ? 'success' : 'textSecondary'} style={styles.num}>
+            {atRecord ? 'Record' : `${Math.round(share * 100)}% of record`}
+          </ThemedText>
+        </View>
+        <View style={styles.row}>
+          <Stat label={`Record · ${shortDate(p.record_date)}`} value={`${formatNumber(p.record_1rm)} kg`} />
+          <Stat label="Per month" value={rate} />
+          <Stat label="PRs" value={String(p.prs)} />
+        </View>
+      </Card>
+    </Pressable>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={{ flex: 1 }}>
+      <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+        {label}
+      </ThemedText>
+      <ThemedText type="smallBold" style={{ fontVariant: ['tabular-nums'] }}>
+        {value}
       </ThemedText>
     </View>
   );
@@ -262,5 +311,21 @@ const styles = StyleSheet.create({
   num: {
     fontVariant: ['tabular-nums'],
     textAlign: 'right',
+  },
+  bar: {
+    flex: 1,
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  fill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  big: {
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: 700,
+    fontVariant: ['tabular-nums'],
   },
 });

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { localDate } from '@/api/client';
@@ -21,6 +22,17 @@ export default function StatsScreen() {
   const [selected, setSelected] = useState<Series | null>(null);
   const [timespan, setTimespan] = useState<Timespan>(TIMESPANS[0]);
   const names = useQuery(`stats:${serverUrl}`, async () => (await api.statistics()).exercises);
+
+  // Opened on a lift from elsewhere, e.g. Insights. The params are cleared once
+  // applied, so opening the same lift again applies them again.
+  const params = useLocalSearchParams<{ exercise?: string; span?: string }>();
+  useEffect(() => {
+    if (!params.exercise) return;
+    setSelected({ kind: 'exercise', name: params.exercise });
+    const span = TIMESPANS.find((t) => t.key === params.span);
+    if (span) setTimespan(span);
+    router.setParams({ exercise: undefined, span: undefined });
+  }, [params.exercise, params.span]);
 
   const exercises = names.data ?? [];
   // Default to the first exercise; bodyweight is the fallback before anything is logged.

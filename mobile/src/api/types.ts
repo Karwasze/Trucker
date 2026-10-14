@@ -175,6 +175,9 @@ export type LiftProgress = {
   latest_1rm: number;
   /** kg of est. 1RM gained a month, first session to latest; unset over less than two weeks. */
   per_month?: number;
+  /** Best est. 1RM of all time, up to the end of the timespan. */
+  record_1rm: number;
+  record_date: string;
   prs: number;
   last_pr?: string;
 };

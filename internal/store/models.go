@@ -141,20 +141,23 @@ type PlanStall struct {
 
 // LiftProgress is how a weighted lift's best estimated 1RM per session
 // developed over the timespan. PRs counts sessions that beat every earlier
-// session of the lift (the lift's first session ever is not one). PerMonth
+// session of the lift, including the lift's first session ever. PerMonth
 // is the change from the first session to the latest, per month; it is
-// left out when those are less than two weeks apart.
+// left out when those are less than two weeks apart. Record1RM is the best
+// estimated 1RM of all time, up to the end of the timespan.
 type LiftProgress struct {
-	Exercise  string   `json:"exercise"`
-	Sessions  int      `json:"sessions"`
-	First1RM  float64  `json:"first_1rm"`
-	FirstDate string   `json:"first_date"`
-	Best1RM   float64  `json:"best_1rm"`
-	BestDate  string   `json:"best_date"`
-	Latest1RM float64  `json:"latest_1rm"`
-	PerMonth  *float64 `json:"per_month,omitempty"`
-	PRs       int      `json:"prs"`
-	LastPR    string   `json:"last_pr,omitempty"`
+	Exercise   string   `json:"exercise"`
+	Sessions   int      `json:"sessions"`
+	First1RM   float64  `json:"first_1rm"`
+	FirstDate  string   `json:"first_date"`
+	Best1RM    float64  `json:"best_1rm"`
+	BestDate   string   `json:"best_date"`
+	Latest1RM  float64  `json:"latest_1rm"`
+	PerMonth   *float64 `json:"per_month,omitempty"`
+	Record1RM  float64  `json:"record_1rm"`
+	RecordDate string   `json:"record_date"`
+	PRs        int      `json:"prs"`
+	LastPR     string   `json:"last_pr,omitempty"`
 }
 
 // Tonnage is the weight lifted (weight × reps) over the timespan, in total,

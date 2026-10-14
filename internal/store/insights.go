@@ -74,7 +74,8 @@ type exerciseHistory struct {
 // Adherence, deloads, progression, tonnage and strength levels cover the
 // timespan starting on from (YYYY-MM-DD, or "" for all time); muscle volume
 // always covers the last four weeks. Adherence and stalls are judged against
-// the plan planID, and left out for 0 or an unknown plan.
+// the plan planID, and left out for 0 or an unknown plan; with a plan,
+// progression only covers the plan's exercises.
 func (s *Store) GetInsights(today, from string, planID int) (Insights, error) {
 	now, err := time.Parse(dateLayout, today)
 	if err != nil {
@@ -126,6 +127,7 @@ func (s *Store) GetInsights(today, from string, planID int) (Insights, error) {
 				return Insights{}, err
 			}
 			insights.Stalls = planStalls(plan, all, from, today)
+			insights.Progression = planProgress(plan, insights.Progression)
 		}
 	}
 
@@ -424,14 +426,16 @@ func planStalls(plan TrainingPlan, sets []insightSet, from, today string) []Plan
 }
 
 // liftProgress follows the best estimated 1RM per session of every weighted
-// lift trained since from, using earlier history to tell PRs.
+// lift trained since from, using earlier history to tell PRs. Lifts are
+// sorted by their change from the first session to the latest, relative to
+// the first, most improved first.
 func liftProgress(sets []insightSet, from string) []LiftProgress {
 	byExercise := histories(sets)
 	progress := []LiftProgress{}
 	for _, name := range slices.Sorted(maps.Keys(byExercise)) {
 		h := byExercise[name]
 		var p *LiftProgress
-		var lastDate string
+		var lastDate, recordDate string
 		record := 0.0
 		for i, sets := range h.sessions {
 			best := best1RM(sets)
@@ -446,24 +450,42 @@ func liftProgress(sets []insightSet, from string) []LiftProgress {
 				if best > p.Best1RM {
 					p.Best1RM, p.BestDate = round(best, 1), date
 				}
-				if record > 0 && best > record {
+				if best > record {
 					p.PRs++
 					p.LastPR = date
 				}
 				p.Latest1RM, lastDate = round(best, 1), date
 			}
-			record = math.Max(record, best)
+			if best > record {
+				record, recordDate = best, h.dates[i]
+			}
 		}
 		if p == nil {
 			continue
 		}
+		p.Record1RM, p.RecordDate = round(record, 1), recordDate
 		if days, _ := daysOff(p.FirstDate, lastDate); days >= minRateDays {
 			rate := round((p.Latest1RM-p.First1RM)/float64(days)*daysPerMonth, 1)
 			p.PerMonth = &rate
 		}
 		progress = append(progress, *p)
 	}
+	change := func(p LiftProgress) float64 { return (p.Latest1RM - p.First1RM) / p.First1RM }
+	slices.SortStableFunc(progress, func(a, b LiftProgress) int {
+		return cmp.Compare(change(b), change(a))
+	})
 	return progress
+}
+
+// planProgress keeps the progress of the lifts the plan schedules.
+func planProgress(plan TrainingPlan, progress []LiftProgress) []LiftProgress {
+	inPlan := make(map[string]bool)
+	for _, day := range plan.Days {
+		for _, scheme := range day.Exercises {
+			inPlan[scheme.Name] = true
+		}
+	}
+	return slices.DeleteFunc(progress, func(p LiftProgress) bool { return !inPlan[p.Exercise] })
 }
 
 // tonnage sums weight × reps over sets, per week from the week of the first

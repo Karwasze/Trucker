@@ -415,9 +415,10 @@ func TestGetInsights_Progression(t *testing.T) {
 
 	progress := getInsightsFor(t, s, insightsToday, "2026-03-01", 0).Progression
 	if len(progress) != 2 {
-		t.Fatalf("expected Bench Press and Squat (no bodyweight lifts), got %+v", progress)
+		t.Fatalf("expected Squat and Bench Press (no bodyweight lifts), got %+v", progress)
 	}
-	bench, squat := progress[0], progress[1]
+	// Fastest-improving first: squat is up 20%, bench 6.25%.
+	squat, bench := progress[0], progress[1]
 	if squat.Exercise != "Squat" || squat.Sessions != 4 || squat.First1RM != 90 || squat.FirstDate != "2026-03-01" ||
 		squat.Best1RM != 110 || squat.BestDate != "2026-03-20" || squat.PRs != 2 || squat.LastPR != "2026-03-20" {
 		t.Errorf("unexpected squat progress %+v", squat)
@@ -426,16 +427,93 @@ func TestGetInsights_Progression(t *testing.T) {
 	if squat.Latest1RM != 108 || squat.PerMonth == nil || *squat.PerMonth != 18.3 {
 		t.Errorf("expected latest 108 and +18.3 kg a month, got %v and %v", squat.Latest1RM, squat.PerMonth)
 	}
-	// Bench Press: its first session ever is not a PR, and 5 days is too
+	// Bench Press: its first session ever sets a PR, and 5 days is too
 	// short for a monthly rate.
-	if bench.Exercise != "Bench Press" || bench.PRs != 1 || bench.LastPR != "2026-03-30" || bench.PerMonth != nil {
+	if bench.Exercise != "Bench Press" || bench.PRs != 2 || bench.LastPR != "2026-03-30" || bench.PerMonth != nil {
 		t.Errorf("unexpected bench progress %+v", bench)
 	}
 
-	// From the beginning, the first squat session counts.
-	squat = getInsights(t, s).Progression[1]
-	if squat.Sessions != 5 || squat.First1RM != 100 || squat.PRs != 2 {
+	// From the beginning, the first squat session counts, and is a PR.
+	squat = getInsights(t, s).Progression[0]
+	if squat.Sessions != 5 || squat.First1RM != 100 || squat.PRs != 3 {
 		t.Errorf("unexpected all-time squat progress %+v", squat)
+	}
+}
+
+func TestGetInsights_ProgressionLimitedToPlan(t *testing.T) {
+	s := newTestStore(t)
+	plan := mondayThursdayPlan(t, s)
+
+	seedWorkout(t, s, "2026-03-23", []Exercise{
+		{Name: "Squat", Sets: []Set{{Weight: 100, Reps: 1}}},
+		{Name: "Deadlift", Sets: []Set{{Weight: 140, Reps: 1}}},
+	})
+	seedWorkout(t, s, "2026-03-26", []Exercise{{Name: "Bench Press", Sets: []Set{{Weight: 80, Reps: 1}}}})
+
+	exercises := func(progress []LiftProgress) []string {
+		var names []string
+		for _, p := range progress {
+			names = append(names, p.Exercise)
+		}
+		return names
+	}
+
+	got := exercises(getInsightsFor(t, s, insightsToday, "", plan.ID).Progression)
+	if want := []string{"Bench Press", "Squat"}; !slices.Equal(got, want) {
+		t.Errorf("with a plan: expected %v, got %v", want, got)
+	}
+	// Without a plan, or with an unknown one, every lift is shown.
+	for _, planID := range []int{0, 99} {
+		got := exercises(getInsightsFor(t, s, insightsToday, "", planID).Progression)
+		if want := []string{"Bench Press", "Deadlift", "Squat"}; !slices.Equal(got, want) {
+			t.Errorf("plan %d: expected %v, got %v", planID, want, got)
+		}
+	}
+}
+
+func TestGetInsights_ProgressionSingleSession(t *testing.T) {
+	s := newTestStore(t)
+	seedWorkout(t, s, "2026-03-31", []Exercise{{Name: "Deadlift", Sets: []Set{{Weight: 140, Reps: 1}}}})
+
+	dl := getInsights(t, s).Progression[0]
+	if dl.Sessions != 1 || dl.Latest1RM != 140 || dl.Best1RM != 140 || dl.PRs != 1 || dl.LastPR != "2026-03-31" ||
+		dl.Record1RM != 140 || dl.RecordDate != "2026-03-31" {
+		t.Errorf("expected a single session to set a 140 kg PR, got %+v", dl)
+	}
+}
+
+func TestGetInsights_ProgressionRecordBeforeTimespan(t *testing.T) {
+	s := newTestStore(t)
+	seedWorkout(t, s, "2026-02-01", []Exercise{{Name: "Deadlift", Sets: []Set{{Weight: 160, Reps: 1}}}})
+	seedWorkout(t, s, "2026-03-05", []Exercise{{Name: "Deadlift", Sets: []Set{{Weight: 170, Reps: 1}}}})
+	seedWorkout(t, s, "2026-03-31", []Exercise{{Name: "Deadlift", Sets: []Set{{Weight: 140, Reps: 1}}}})
+
+	// The record is all-time, even when set before the timespan.
+	dl := getInsightsFor(t, s, insightsToday, "2026-03-20", 0).Progression[0]
+	if dl.Best1RM != 140 || dl.PRs != 0 || dl.Record1RM != 170 || dl.RecordDate != "2026-03-05" {
+		t.Errorf("expected best 140 and a 170 kg record from Mar 5, got %+v", dl)
+	}
+}
+
+func TestGetInsights_ProgressionSortedByChange(t *testing.T) {
+	s := newTestStore(t)
+
+	for name, weights := range map[string][2]float64{
+		"Deadlift":       {150, 140}, // -6.7%
+		"Squat":          {100, 105}, // +5%
+		"Overhead Press": {40, 44},   // +10%
+		"Bench Press":    {80, 84},   // +5%, ties with Squat
+	} {
+		seedWorkout(t, s, "2026-03-01", []Exercise{{Name: name, Sets: []Set{{Weight: weights[0], Reps: 1}}}})
+		seedWorkout(t, s, "2026-03-31", []Exercise{{Name: name, Sets: []Set{{Weight: weights[1], Reps: 1}}}})
+	}
+
+	var got []string
+	for _, p := range getInsights(t, s).Progression {
+		got = append(got, p.Exercise)
+	}
+	if want := []string{"Overhead Press", "Bench Press", "Squat", "Deadlift"}; !slices.Equal(got, want) {
+		t.Errorf("expected %v, got %v", want, got)
 	}
 }
 

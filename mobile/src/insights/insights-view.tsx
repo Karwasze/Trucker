@@ -113,7 +113,7 @@ function InsightsContent({ data, timespan, hasPlan }: { data: Insights; timespan
           </ThemedText>
         ) : data.strength.length === 0 ? (
           <ThemedText type="small" themeColor="textSecondary">
-            Log a squat, bench press, deadlift or overhead press to see your strength level.
+            Log a squat, bench press, deadlift, overhead press or Romanian deadlift to see your strength level.
           </ThemedText>
         ) : (
           data.strength.map((s) => <StrengthRow key={s.exercise} level={s} />)

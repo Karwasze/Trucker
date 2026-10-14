@@ -51,6 +51,7 @@ var strengthStandards = []struct {
 	{"Bench Press", []float64{0.5, 1.0, 1.25, 1.75, 2.0}},
 	{"Deadlift", []float64{1.0, 1.5, 2.0, 2.5, 3.0}},
 	{"Overhead Press", []float64{0.35, 0.55, 0.8, 1.05, 1.35}},
+	{"Romanian Deadlift", []float64{0.75, 1.0, 1.5, 2.0, 2.75}},
 }
 
 const dateLayout = "2006-01-02"

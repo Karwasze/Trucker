@@ -244,6 +244,28 @@ func TestGetInsights_StrengthBelowBeginnerAndElite(t *testing.T) {
 	}
 }
 
+func TestGetInsights_StrengthRomanianDeadlift(t *testing.T) {
+	s := newTestStore(t)
+
+	s.SaveBodyweight("2026-03-30", 80)
+	seedWorkout(t, s, "2026-03-20", []Exercise{
+		{Name: "Romanian Deadlift", Sets: []Set{{Weight: 100, Reps: 1}}}, // 1.25 BW
+	})
+
+	strength := getInsights(t, s).Strength
+	if len(strength) != 1 {
+		t.Fatalf("expected only a Romanian Deadlift entry, got %+v", strength)
+	}
+	rdl := strength[0]
+	if rdl.Exercise != "Romanian Deadlift" || rdl.Best1RM != 100 || rdl.Ratio != 1.25 {
+		t.Errorf("unexpected Romanian Deadlift entry %+v", rdl)
+	}
+	// Intermediate is 1.5 x 80 = 120 kg.
+	if rdl.Level != "novice" || rdl.NextLevel != "intermediate" || rdl.NextLevelKg != 20 {
+		t.Errorf("expected novice -> intermediate in 20 kg, got %+v", rdl)
+	}
+}
+
 func TestGetInsights_StrengthCoversTimespan(t *testing.T) {
 	s := newTestStore(t)
 

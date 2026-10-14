@@ -184,7 +184,109 @@ func TestNextTarget(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotSets, gotOutcome, gotReason := nextTarget(scheme, tt.sessions)
+			gotSets, gotOutcome, gotReason := nextTarget(scheme, tt.sessions, 0)
+			if !reflect.DeepEqual(gotSets, tt.wantSets) {
+				t.Errorf("expected sets %+v, got %+v", tt.wantSets, gotSets)
+			}
+			if gotOutcome != tt.wantOutcome {
+				t.Errorf("expected outcome %q, got %q", tt.wantOutcome, gotOutcome)
+			}
+			if gotReason != tt.wantReason {
+				t.Errorf("expected reason %q, got %q", tt.wantReason, gotReason)
+			}
+		})
+	}
+}
+
+func TestNextTarget_AfterBreak(t *testing.T) {
+	scheme := PlanExercise{Name: "Squat", Sets: 3, Reps: 5}
+
+	tests := []struct {
+		name        string
+		sessions    [][]Set
+		daysOff     int
+		wantSets    []Set
+		wantOutcome string
+		wantReason  string
+	}{
+		{
+			name:        "under two weeks off progresses as usual",
+			sessions:    [][]Set{setList(5, 100, 5, 100, 5, 100)},
+			daysOff:     13,
+			wantSets:    setList(5, 102.5, 5, 102.5, 5, 102.5),
+			wantReason:  "Weight up 2.5 kg: you completed 3 × 5 @ 100 kg last time.",
+			wantOutcome: ResultProgressed,
+		},
+		{
+			name:        "two weeks off drops the weight 10%",
+			sessions:    [][]Set{setList(5, 100, 5, 100, 5, 100)},
+			daysOff:     14,
+			wantSets:    setList(5, 90, 5, 90, 5, 90),
+			wantReason:  "Back after 2 weeks off: weight down 10% from 100 kg to ease back in.",
+			wantOutcome: ResultReturning,
+		},
+		{
+			name:        "four weeks off drops the weight 20%",
+			sessions:    [][]Set{setList(5, 100, 5, 100, 5, 100)},
+			daysOff:     30,
+			wantSets:    setList(5, 80, 5, 80, 5, 80),
+			wantReason:  "Back after 4 weeks off: weight down 20% from 100 kg to ease back in.",
+			wantOutcome: ResultReturning,
+		},
+		{
+			name:        "eight weeks off drops the weight 30%",
+			sessions:    [][]Set{setList(5, 100, 5, 100, 5, 100)},
+			daysOff:     60,
+			wantSets:    setList(5, 70, 5, 70, 5, 70),
+			wantReason:  "Back after 8 weeks off: weight down 30% from 100 kg to ease back in.",
+			wantOutcome: ResultReturning,
+		},
+		{
+			name: "the lighter weight rounds to the learned step",
+			sessions: [][]Set{
+				setList(5, 97.5, 5, 97.5, 5, 97.5),
+				setList(5, 102.5, 5, 102.5, 5, 102.5),
+			},
+			daysOff:     21,
+			wantSets:    setList(5, 90, 5, 90, 5, 90),
+			wantReason:  "Back after 3 weeks off: weight down 10% from 102.5 kg to ease back in.",
+			wantOutcome: ResultReturning,
+		},
+		{
+			name:        "a miss before the break restarts at the planned reps",
+			sessions:    [][]Set{setList(5, 100, 4, 100, 3, 100)},
+			daysOff:     14,
+			wantSets:    setList(5, 90, 5, 90, 5, 90),
+			wantReason:  "Back after 2 weeks off: weight down 10% from 100 kg to ease back in.",
+			wantOutcome: ResultReturning,
+		},
+		{
+			name:        "bodyweight exercises drop reps instead",
+			sessions:    [][]Set{setList(8, 0, 7, 0, 6, 0, 4, 0)},
+			daysOff:     14,
+			wantSets:    setList(7, 0, 6, 0, 5, 0),
+			wantReason:  "Back after 2 weeks off: 10% fewer reps to ease back in.",
+			wantOutcome: ResultReturning,
+		},
+		{
+			name:        "bodyweight reps never drop below one",
+			sessions:    [][]Set{setList(1, 0)},
+			daysOff:     60,
+			wantSets:    setList(1, 0, 1, 0, 1, 0),
+			wantReason:  "Back after 8 weeks off: 30% fewer reps to ease back in.",
+			wantOutcome: ResultReturning,
+		},
+		{
+			name:       "no history has nothing to ease back into",
+			daysOff:    60,
+			wantSets:   setList(5, 0, 5, 0, 5, 0),
+			wantReason: "No history yet: pick a starting weight.",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotSets, gotOutcome, gotReason := nextTarget(scheme, tt.sessions, tt.daysOff)
 			if !reflect.DeepEqual(gotSets, tt.wantSets) {
 				t.Errorf("expected sets %+v, got %+v", tt.wantSets, gotSets)
 			}
@@ -203,7 +305,7 @@ func TestNextTarget_RepeatedStepsDoNotDrift(t *testing.T) {
 	sessions := [][]Set{setList(8, 10), setList(8, 10.1)}
 
 	for i := 0; i < 50; i++ {
-		target, _, _ := nextTarget(scheme, sessions)
+		target, _, _ := nextTarget(scheme, sessions, 0)
 		sessions = append(sessions, target)
 	}
 
@@ -259,7 +361,7 @@ func TestFreeExerciseTarget(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, _ := freeExerciseTarget(tt.sessions)
+			got, _ := freeExerciseTarget(tt.sessions, 0)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("got %v, want %v", got, tt.want)
 			}
@@ -291,5 +393,23 @@ func TestFreeExerciseTarget_FromStore(t *testing.T) {
 	}
 	if got != nil {
 		t.Errorf("expected no target before any history, got %v", got)
+	}
+}
+
+func TestFreeExerciseTarget_AfterBreak(t *testing.T) {
+	s := newTestStore(t)
+	seedWorkout(t, s, "2026-09-01", []Exercise{
+		{Name: "Bench Press", Sets: setList(10, 60, 10, 60)},
+	})
+
+	got, reason, err := s.FreeExerciseTarget("Bench Press", "2026-10-14")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := setList(10, 47.5, 10, 47.5); !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+	if want := "Back after 6 weeks off: weight down 20% from 60 kg to ease back in."; reason != want {
+		t.Errorf("expected reason %q, got %q", want, reason)
 	}
 }

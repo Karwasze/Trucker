@@ -1,14 +1,15 @@
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
 
-import { localDate } from '@/api/client';
 import type { Exercise, ProgressionResult } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Message, Screen } from '@/components/ui';
+import { SettingsButton } from '@/settings/settings-button';
 import { Spacing } from '@/constants/theme';
 import { useQuery } from '@/hooks/use-query';
 import { useTheme } from '@/hooks/use-theme';
+import { useToday } from '@/hooks/use-today';
 import { useSettings } from '@/settings/settings-context';
 import {
   completedSetCount,
@@ -32,7 +33,7 @@ const formatDay = (date: string) =>
 
 export default function TodayScreen() {
   const { api, planId, serverUrl } = useSettings();
-  const today = localDate();
+  const { today, recheck: recheckToday } = useToday();
   const { draft, setDraft } = useDraft();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -91,6 +92,33 @@ export default function TodayScreen() {
     if (stale) setDraft(draftFromPlan(today, planId, planDay.data?.exercises ?? []));
   }, [draft, planReady, planId, today, planDay.data, setDraft]);
 
+  // Pull-to-refresh rebuilds a plan draft nothing has been ticked in from the
+  // refreshed targets, bringing back exercises removed from it.
+  const rebuildOnRefresh = useRef(false);
+  useEffect(() => {
+    if (!rebuildOnRefresh.current) return;
+    if (planDay.error) {
+      rebuildOnRefresh.current = false;
+      return;
+    }
+    if (!planReady) return;
+    rebuildOnRefresh.current = false;
+    setDraft((d) =>
+      !d.logged && d.source !== undefined && !hasProgress(d)
+        ? draftFromPlan(today, planId, planDay.data?.exercises ?? [])
+        : d
+    );
+  }, [planDay.data, planDay.error, planReady, planId, today, setDraft]);
+
+  const refresh = () => {
+    recheckToday();
+    plans.refresh();
+    if (planId !== null) {
+      rebuildOnRefresh.current = true;
+      planDay.refresh();
+    }
+  };
+
   const resetToPlan = () => setDraft(draftFromPlan(today, planId, planDay.data?.exercises ?? []));
 
   const confirmReset = () =>
@@ -142,7 +170,7 @@ export default function TodayScreen() {
 
   if (draft?.logged) {
     return (
-      <Screen title="Today" subtitle={subtitle}>
+      <Screen title="Today" subtitle={subtitle} action={<SettingsButton />}>
         <LoggedSummary
           progression={draft.logged.progression ?? []}
           exercises={draft.logged.exercises}
@@ -164,11 +192,9 @@ export default function TodayScreen() {
     <Screen
       title="Today"
       subtitle={subtitle}
+      action={<SettingsButton />}
       refreshing={planDay.refreshing}
-      onRefresh={() => {
-        plans.refresh();
-        planDay.refresh();
-      }}>
+      onRefresh={refresh}>
       {draft && draft.date !== today && (
         <Card>
           <ThemedText type="smallBold">Unfinished workout from {formatDay(draft.date)}</ThemedText>

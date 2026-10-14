@@ -19,6 +19,8 @@ import { useTheme } from '@/hooks/use-theme';
 type ScreenProps = {
   title?: string;
   subtitle?: string;
+  /** Shown at the trailing end of the title row. */
+  action?: ReactNode;
   children: ReactNode;
   refreshing?: boolean;
   onRefresh?: () => void;
@@ -27,7 +29,7 @@ type ScreenProps = {
 };
 
 /** Scrollable tab screen with a large title and safe-area padding. */
-export function Screen({ title, subtitle, children, refreshing, onRefresh, hasHeader }: ScreenProps) {
+export function Screen({ title, subtitle, action, children, refreshing, onRefresh, hasHeader }: ScreenProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -53,6 +55,7 @@ export function Screen({ title, subtitle, children, refreshing, onRefresh, hasHe
           <View style={styles.titleRow}>
             <ThemedText style={styles.title}>{title}</ThemedText>
             <EnvironmentBadge />
+            {action && <View style={styles.action}>{action}</View>}
           </View>
           {subtitle && <ThemedText themeColor="textSecondary">{subtitle}</ThemedText>}
         </View>
@@ -210,6 +213,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
+  },
+  action: {
+    marginLeft: 'auto',
   },
   title: {
     flexShrink: 1,

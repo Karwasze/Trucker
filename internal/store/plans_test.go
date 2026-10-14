@@ -375,6 +375,47 @@ func TestEvaluateProgression(t *testing.T) {
 	}
 }
 
+func TestExerciseTargets_AfterBreak(t *testing.T) {
+	s := newTestStore(t)
+	seedWorkout(t, s, "2026-09-14", []Exercise{{Name: "Squat", Sets: []Set{{Reps: 5, Weight: 100}}}})
+
+	targets, err := s.ExerciseTargets([]PlanExercise{{Name: "Squat", Sets: 1, Reps: 5}}, monday)
+	if err != nil {
+		t.Fatalf("failed to get targets: %v", err)
+	}
+	want := []ExerciseTarget{{Name: "Squat", Sets: []Set{{Reps: 5, Weight: 80}},
+		Reason: "Back after 4 weeks off: weight down 20% from 100 kg to ease back in."}}
+	if !reflect.DeepEqual(targets, want) {
+		t.Errorf("expected targets %+v, got %+v", want, targets)
+	}
+}
+
+// The break before a workout eases its next target, but doesn't change how
+// the workout itself is judged.
+func TestEvaluateProgression_AfterBreak(t *testing.T) {
+	s := newTestStore(t)
+	created := mustCreatePlan(t, s, samplePlan())
+	planID := created.ID
+	seedWorkout(t, s, "2026-08-03", []Exercise{{Name: "Squat", Sets: []Set{{Reps: 5, Weight: 100}, {Reps: 5, Weight: 100}}}})
+
+	workout := Workout{Date: monday, PlanID: &planID, Exercises: []Exercise{
+		{Name: "Squat", Sets: []Set{{Reps: 5, Weight: 70}, {Reps: 5, Weight: 70}}},
+	}}
+	id, err := s.SaveWorkout(workout)
+	if err != nil {
+		t.Fatalf("failed to save workout: %v", err)
+	}
+	workout.ID = id
+
+	results, err := s.EvaluateProgression(planID, workout)
+	if err != nil {
+		t.Fatalf("failed to evaluate progression: %v", err)
+	}
+	if want := []ProgressionResult{{Exercise: "Squat", Result: ResultProgressed}}; !reflect.DeepEqual(results, want) {
+		t.Errorf("expected results %+v, got %+v", want, results)
+	}
+}
+
 func TestEvaluateProgression_RestDay(t *testing.T) {
 	s := newTestStore(t)
 	created := mustCreatePlan(t, s, samplePlan())

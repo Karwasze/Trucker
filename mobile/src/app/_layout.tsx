@@ -1,10 +1,9 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-import AppTabs from '@/components/app-tabs';
 import { SettingsProvider, useSettings } from '@/settings/settings-context';
 import { TimerProvider } from '@/timer/timer-context';
 import { TimerIsland } from '@/timer/timer-island';
@@ -27,7 +26,10 @@ export default function RootLayout() {
         <SettingsProvider>
           <TimerProvider>
             <HideSplashWhenReady />
-            <AppTabs />
+            <Stack>
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="settings" options={{ title: 'Settings', headerBackButtonDisplayMode: 'minimal' }} />
+            </Stack>
             <TimerIsland />
           </TimerProvider>
         </SettingsProvider>

@@ -21,6 +21,8 @@ type Props = {
 const LABEL_WIDTH = 40;
 const PAD_TOP = 8;
 const PAD_BOTTOM = 8;
+/** Keeps points on the first and last day clear of the edges, wider than the highlight dot. */
+const PAD_X = 8;
 const DAY_MS = 86_400_000;
 
 const toTime = (date: string) => new Date(`${date}T12:00:00`).getTime();
@@ -53,9 +55,9 @@ export function LineChart({ points, from, to, unit, height = 180 }: Props) {
 
   const t0 = toTime(from);
   const t1 = Math.max(toTime(to), t0 + DAY_MS);
-  const plotWidth = Math.max(width - LABEL_WIDTH, 1);
+  const plotWidth = Math.max(width - LABEL_WIDTH - 2 * PAD_X, 1);
   const plotHeight = height - PAD_TOP - PAD_BOTTOM;
-  const x = (date: string) => LABEL_WIDTH + ((toTime(date) - t0) / (t1 - t0)) * plotWidth;
+  const x = (date: string) => LABEL_WIDTH + PAD_X + ((toTime(date) - t0) / (t1 - t0)) * plotWidth;
   const y = (value: number) => PAD_TOP + (1 - (value - yMin) / (yMax - yMin)) * plotHeight;
 
   const coords = points.map((p) => ({ x: x(p.date), y: y(p.value) }));

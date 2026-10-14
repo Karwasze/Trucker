@@ -8,6 +8,7 @@ import { Spacing } from '@/constants/theme';
 import { useQuery } from '@/hooks/use-query';
 import { useTheme } from '@/hooks/use-theme';
 import { scheduleOf } from '@/plans/edit-model';
+import { SettingsButton } from '@/settings/settings-button';
 import { useSettings } from '@/settings/settings-context';
 
 export default function PlansScreen() {
@@ -15,7 +16,7 @@ export default function PlansScreen() {
   const plans = useQuery(`plans:${serverUrl}`, api.listPlans);
 
   return (
-    <Screen title="Training plans" refreshing={plans.refreshing} onRefresh={plans.refresh}>
+    <Screen title="Training plans" action={<SettingsButton />} refreshing={plans.refreshing} onRefresh={plans.refresh}>
       {!plans.data ? (
         <Message loading={!plans.error} error={plans.error} />
       ) : (

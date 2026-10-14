@@ -12,6 +12,7 @@ const (
 	ResultProgressed = "progressed"
 	ResultMissed     = "missed"
 	ResultDeloaded   = "deloaded"
+	ResultReturning  = "returning"
 )
 
 const (
@@ -24,10 +25,22 @@ const (
 	deloadFraction    = 0.10
 )
 
+// layoffs are how much lighter to go after time away from an exercise,
+// longest break first. Shorter breaks progress as usual.
+var layoffs = []struct {
+	days     int
+	fraction float64
+}{
+	{56, 0.30},
+	{28, 0.20},
+	{14, 0.10},
+}
+
 // nextTarget works out the next target sets for a plan exercise from its
 // logged sessions (oldest first, one slice of sets per workout), along with
 // the outcome of the most recent session ("" when there is none) and a short
-// explanation of the target for the lifter.
+// explanation of the target for the lifter. daysOff is how long it has
+// been since the last session.
 //
 // The working weight of a session is its heaviest set, and the session hit
 // the scheme when at least scheme.Sets sets reached scheme.Reps at that
@@ -38,20 +51,41 @@ const (
 //   - missed deloadAfterMisses times in a row at the same weight: drop the
 //     weight by deloadFraction, at the planned reps
 //
+// After a break of two weeks or more (see layoffs), the target eases back
+// in instead: the last working weight drops by the layoff's fraction, at the
+// planned reps, whether or not the last session hit.
+//
 // Bodyweight sessions (a working weight of 0) have no weight to add or drop:
 // a hit adds a rep to each set of the last session instead (never below the
-// planned reps), and misses never deload.
+// planned reps), misses never deload, and breaks drop the reps of the last
+// session by the layoff's fraction.
 //
 // The weight step is the most common increase between consecutive sessions'
 // working weights, so it follows the plates the lifter actually adds.
 // Without history the weight is left at 0 for the lifter to fill in.
-func nextTarget(scheme PlanExercise, sessions [][]Set) ([]Set, string, string) {
+func nextTarget(scheme PlanExercise, sessions [][]Set, daysOff int) ([]Set, string, string) {
 	if len(sessions) == 0 {
 		return uniformSets(scheme, 0), "", "No history yet: pick a starting weight."
 	}
 
 	last := sessions[len(sessions)-1]
 	weight := workingWeight(last)
+	if fraction := layoffFraction(daysOff); fraction > 0 {
+		back := fmt.Sprintf("Back after %d weeks off: ", daysOff/7)
+		if weight == 0 {
+			working := workSets(last, weight)
+			target := make([]Set, scheme.Sets)
+			for i := range target {
+				previous := working[min(i, len(working)-1)]
+				target[i] = Set{Reps: max(int(math.Round(float64(previous.Reps)*(1-fraction))), 1)}
+			}
+			return target, ResultReturning,
+				back + fmt.Sprintf("%.0f%% fewer reps to ease back in.", fraction*100)
+		}
+		return uniformSets(scheme, reduceWeight(weight, fraction, weightStep(sessions))), ResultReturning,
+			back + fmt.Sprintf("weight down %.0f%% from %s to ease back in.", fraction*100, formatKg(weight))
+	}
+
 	planned := fmt.Sprintf("%d × %d", scheme.Sets, scheme.Reps)
 	if weight > 0 {
 		planned += " @ " + formatKg(weight)
@@ -80,12 +114,7 @@ func nextTarget(scheme PlanExercise, sessions [][]Set) ([]Set, string, string) {
 		misses++
 	}
 	if misses >= deloadAfterMisses && weight > 0 {
-		step := weightStep(sessions)
-		deloaded := roundWeight(math.Round(weight*(1-deloadFraction)/step) * step)
-		if deloaded >= weight {
-			deloaded = roundWeight(weight - step)
-		}
-		return uniformSets(scheme, math.Max(deloaded, 0)), ResultDeloaded,
+		return uniformSets(scheme, reduceWeight(weight, deloadFraction, weightStep(sessions))), ResultDeloaded,
 			fmt.Sprintf("Deloading: you missed %s %d sessions in a row.", planned, misses)
 	}
 
@@ -104,6 +133,44 @@ func nextTarget(scheme PlanExercise, sessions [][]Set) ([]Set, string, string) {
 		reason += fmt.Sprintf(" %d more misses deload.", left)
 	}
 	return target, ResultMissed, reason
+}
+
+// layoffFraction returns how much lighter to go after daysOff away from an
+// exercise, or 0 when the break is too short to matter.
+func layoffFraction(daysOff int) float64 {
+	for _, layoff := range layoffs {
+		if daysOff >= layoff.days {
+			return layoff.fraction
+		}
+	}
+	return 0
+}
+
+// reduceWeight drops weight by fraction, rounded to step but always at least
+// one step lighter, and never below 0.
+func reduceWeight(weight, fraction, step float64) float64 {
+	reduced := roundWeight(math.Round(weight*(1-fraction)/step) * step)
+	if reduced >= weight {
+		reduced = roundWeight(weight - step)
+	}
+	return math.Max(reduced, 0)
+}
+
+// daysOff returns the whole days from the last session, logged on lastDate,
+// to date (both YYYY-MM-DD), or 0 without a last session.
+func daysOff(lastDate, date string) (int, error) {
+	if lastDate == "" {
+		return 0, nil
+	}
+	start, err := time.Parse("2006-01-02", lastDate)
+	if err != nil {
+		return 0, err
+	}
+	end, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		return 0, err
+	}
+	return int(end.Sub(start).Hours() / 24), nil
 }
 
 // formatKg formats a weight without trailing zeros, e.g. "102.5 kg".
@@ -180,21 +247,26 @@ func roundWeight(weight float64) float64 {
 func (s *Store) ExerciseTargets(exercises []PlanExercise, date string) ([]ExerciseTarget, error) {
 	targets := []ExerciseTarget{}
 	for _, ex := range exercises {
-		sessions, err := s.exerciseSessions(ex.Name, date, 0)
+		sessions, lastDate, err := s.exerciseSessions(ex.Name, date, 0)
 		if err != nil {
 			return nil, err
 		}
-		sets, _, reason := nextTarget(ex, sessions)
+		off, err := daysOff(lastDate, date)
+		if err != nil {
+			return nil, err
+		}
+		sets, _, reason := nextTarget(ex, sessions, off)
 		targets = append(targets, ExerciseTarget{Name: ex.Name, Sets: sets, Reason: reason})
 	}
 	return targets, nil
 }
 
 // freeExerciseTarget works out the next target sets for an exercise logged
-// outside a plan and the reason for them, or nil without history. The scheme is taken from the most
+// outside a plan and the reason for them, or nil without history, daysOff
+// after the last session. The scheme is taken from the most
 // recent session: as many sets as were done at its working weight, at the
 // most reps any of them reached, progressed the same way as a plan exercise.
-func freeExerciseTarget(sessions [][]Set) ([]Set, string) {
+func freeExerciseTarget(sessions [][]Set, daysOff int) ([]Set, string) {
 	if len(sessions) == 0 {
 		return nil, ""
 	}
@@ -204,7 +276,7 @@ func freeExerciseTarget(sessions [][]Set) ([]Set, string) {
 	for _, set := range working {
 		scheme.Reps = max(scheme.Reps, set.Reps)
 	}
-	sets, _, reason := nextTarget(scheme, sessions)
+	sets, _, reason := nextTarget(scheme, sessions, daysOff)
 	return sets, reason
 }
 
@@ -212,11 +284,15 @@ func freeExerciseTarget(sessions [][]Set) ([]Set, string) {
 // a plan from its logged workouts on or before date, and the reason for
 // them, or nil without history.
 func (s *Store) FreeExerciseTarget(name, date string) ([]Set, string, error) {
-	sessions, err := s.exerciseSessions(name, date, 0)
+	sessions, lastDate, err := s.exerciseSessions(name, date, 0)
 	if err != nil {
 		return nil, "", err
 	}
-	sets, reason := freeExerciseTarget(sessions)
+	off, err := daysOff(lastDate, date)
+	if err != nil {
+		return nil, "", err
+	}
+	sets, reason := freeExerciseTarget(sessions, off)
 	return sets, reason, nil
 }
 
@@ -245,12 +321,13 @@ func (s *Store) EvaluateProgression(planID int, workout Workout) ([]ProgressionR
 			continue
 		}
 		// Only history up to this workout counts, so later workouts on the
-		// same date don't change its outcome.
-		sessions, err := s.exerciseSessions(ex.Name, workout.Date, workout.ID)
+		// same date don't change its outcome. The workout itself is the
+		// last session, so no break applies.
+		sessions, _, err := s.exerciseSessions(ex.Name, workout.Date, workout.ID)
 		if err != nil {
 			return nil, err
 		}
-		_, result, _ := nextTarget(ex, sessions)
+		_, result, _ := nextTarget(ex, sessions, 0)
 		results = append(results, ProgressionResult{Exercise: ex.Name, Result: result})
 	}
 	return results, nil
@@ -258,11 +335,12 @@ func (s *Store) EvaluateProgression(planID int, workout Workout) ([]ProgressionR
 
 // exerciseSessions returns the sets logged for an exercise in each workout
 // on or before date, oldest first, merging repeated entries of the exercise
-// within a workout. A non-zero lastWorkoutID also leaves out workouts on
+// within a workout, and the date of the last of them ("" when there are
+// none). A non-zero lastWorkoutID also leaves out workouts on
 // date that were logged after it.
-func (s *Store) exerciseSessions(name, date string, lastWorkoutID int) ([][]Set, error) {
+func (s *Store) exerciseSessions(name, date string, lastWorkoutID int) ([][]Set, string, error) {
 	rows, err := s.db.Query(`
-		SELECT w.id, s.reps, s.weight
+		SELECT w.id, w.date, s.reps, s.weight
 		FROM workouts w
 		JOIN exercises e ON e.workout_id = w.id
 		JOIN sets s ON s.exercise_id = e.id
@@ -270,17 +348,18 @@ func (s *Store) exerciseSessions(name, date string, lastWorkoutID int) ([][]Set,
 		ORDER BY w.date, w.id, e.id, s.id
 	`, name, date, date, lastWorkoutID, lastWorkoutID)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	defer rows.Close()
 
 	var sessions [][]Set
+	var lastDate string
 	lastID := -1
 	for rows.Next() {
 		var workoutID int
 		var set Set
-		if err := rows.Scan(&workoutID, &set.Reps, &set.Weight); err != nil {
-			return nil, err
+		if err := rows.Scan(&workoutID, &lastDate, &set.Reps, &set.Weight); err != nil {
+			return nil, "", err
 		}
 		if workoutID != lastID {
 			sessions = append(sessions, nil)
@@ -288,5 +367,5 @@ func (s *Store) exerciseSessions(name, date string, lastWorkoutID int) ([][]Set,
 		}
 		sessions[len(sessions)-1] = append(sessions[len(sessions)-1], set)
 	}
-	return sessions, rows.Err()
+	return sessions, lastDate, rows.Err()
 }

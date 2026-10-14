@@ -28,6 +28,10 @@ spec:
               value: {{ required "hostname is required" .Values.hostname | quote }}
             - name: EXPO_PUBLIC_API_URL
               value: {{ .Values.apiUrl | quote }}
+            {{- with .Values.appName }}
+            - name: APP_NAME
+              value: {{ . | quote }}
+            {{- end }}
             {{- with .Values.expoToken.secretName }}
             - name: EXPO_TOKEN
               valueFrom:

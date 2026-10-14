@@ -16,6 +16,10 @@ hostname: trucker-metro.tail135e5e.ts.net
 # API the app talks to in dev mode; Metro inlines it as EXPO_PUBLIC_API_URL.
 apiUrl: https://trucker.tail135e5e.ts.net
 
+# App name shown in Expo Go (overrides "name" in app.json via APP_NAME).
+# Empty: use the name from app.json.
+appName: Trucker Prod
+
 # Expo Go needs plain HTTP on the Metro port, so expose it as a Tailscale
 # LoadBalancer (a tailnet device named by tailscale.com/hostname) rather than
 # an HTTPS Ingress.

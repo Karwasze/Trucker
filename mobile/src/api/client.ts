@@ -85,15 +85,25 @@ export function createApi(baseUrl: string) {
     deleteBodyweight: (date: string) =>
       request<{ success: boolean }>(`/api/bodyweight?date=${q(date)}`, { method: 'DELETE' }),
 
-    insights: async (date: string) => {
-      const res = await request<Insights>(`/api/insights?date=${q(date)}`);
+    /** Analyses training up to date, over the timespan starting on from (null for all time). */
+    insights: async (date: string, from: string | null, planId: number | null) => {
+      let path = `/api/insights?date=${q(date)}`;
+      if (from) path += `&from=${q(from)}`;
+      if (planId !== null) path += `&plan_id=${planId}`;
+      const res = await request<Insights>(path);
       return {
         ...res,
         muscles: res.muscles ?? [],
+        stalls: res.stalls ?? [],
+        progression: res.progression ?? [],
+        tonnage: {
+          total: res.tonnage?.total ?? 0,
+          weekly: res.tonnage?.weekly ?? [],
+          by_exercise: res.tonnage?.by_exercise ?? [],
+        },
         strength: res.strength ?? [],
-        stalled: res.stalled ?? [],
         untagged: res.untagged ?? [],
-        recommendations: res.recommendations ?? [],
+        adherence: res.adherence && { ...res.adherence, missed: res.adherence.missed ?? [] },
       };
     },
 

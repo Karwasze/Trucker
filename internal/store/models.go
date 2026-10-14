@@ -85,17 +85,95 @@ type ProgressionResult struct {
 	Result   string `json:"result"`
 }
 
-// Insights summarises recent training: volume per muscle, strength relative
-// to bodyweight, stalled lifts and the resulting recommendations.
+// Insights summarises training over a timespan from From (empty for all
+// time) to Date: plan adherence and stalls, progression and tonnage per lift
+// and strength relative to bodyweight. Muscle volume always covers the last
+// four weeks.
 type Insights struct {
 	Date            string           `json:"date"`
+	From            string           `json:"from,omitempty"`
 	Bodyweight      *BodyweightTrend `json:"bodyweight"`
 	SessionsPerWeek float64          `json:"sessions_per_week"`
 	Muscles         []MuscleVolume   `json:"muscles"`
+	Adherence       *Adherence       `json:"adherence"`
+	Stalls          []PlanStall      `json:"stalls"`
+	Progression     []LiftProgress   `json:"progression"`
+	Tonnage         Tonnage          `json:"tonnage"`
 	Strength        []StrengthLevel  `json:"strength"`
-	Stalled         []StalledLift    `json:"stalled"`
 	Untagged        []string         `json:"untagged"`
-	Recommendations []Recommendation `json:"recommendations"`
+}
+
+// Adherence is how many of a plan's scheduled days had a workout, from Since
+// (the later of the timespan's start and the plan's first logged workout;
+// empty when nothing was logged from the plan yet). Any workout on a
+// scheduled day counts; workouts on other days are Extra. Today only counts
+// once something is logged. Missed lists the scheduled days without a
+// workout, newest first. Streak is the number of scheduled days in a row
+// completed up to now, regardless of the timespan.
+type Adherence struct {
+	Plan      string   `json:"plan"`
+	Since     string   `json:"since,omitempty"`
+	Scheduled int      `json:"scheduled"`
+	Completed int      `json:"completed"`
+	Extra     int      `json:"extra"`
+	Streak    int      `json:"streak"`
+	Missed    []string `json:"missed"`
+}
+
+// Statuses of a PlanStall.
+const (
+	StallMissing  = "missing"
+	StallDeloaded = "deloaded"
+)
+
+// PlanStall is a plan exercise that is StallMissing its scheme several
+// sessions in a row at Weight up to Date, or that StallDeloaded after Misses
+// misses at Weight on Date, within the timespan. DeloadNext is set when
+// the current misses are enough for the next session to deload.
+type PlanStall struct {
+	Exercise   string  `json:"exercise"`
+	Status     string  `json:"status"`
+	Weight     float64 `json:"weight"`
+	Misses     int     `json:"misses"`
+	Date       string  `json:"date"`
+	DeloadNext bool    `json:"deload_next,omitempty"`
+}
+
+// LiftProgress is how a weighted lift's best estimated 1RM per session
+// developed over the timespan. PRs counts sessions that beat every earlier
+// session of the lift (the lift's first session ever is not one). PerMonth
+// is the change from the first session to the latest, per month; it is
+// left out when those are less than two weeks apart.
+type LiftProgress struct {
+	Exercise  string   `json:"exercise"`
+	Sessions  int      `json:"sessions"`
+	First1RM  float64  `json:"first_1rm"`
+	FirstDate string   `json:"first_date"`
+	Best1RM   float64  `json:"best_1rm"`
+	BestDate  string   `json:"best_date"`
+	Latest1RM float64  `json:"latest_1rm"`
+	PerMonth  *float64 `json:"per_month,omitempty"`
+	PRs       int      `json:"prs"`
+	LastPR    string   `json:"last_pr,omitempty"`
+}
+
+// Tonnage is the weight lifted (weight × reps) over the timespan, in total,
+// per week (starting Monday, including empty weeks) and per exercise,
+// heaviest first.
+type Tonnage struct {
+	Total      float64           `json:"total"`
+	Weekly     []WeeklyTonnage   `json:"weekly"`
+	ByExercise []ExerciseTonnage `json:"by_exercise"`
+}
+
+type WeeklyTonnage struct {
+	Week    string  `json:"week"`
+	Tonnage float64 `json:"tonnage"`
+}
+
+type ExerciseTonnage struct {
+	Exercise string  `json:"exercise"`
+	Tonnage  float64 `json:"tonnage"`
 }
 
 // BodyweightTrend is the latest bodyweight and, when an earlier entry from
@@ -126,18 +204,4 @@ type StrengthLevel struct {
 	Level       string  `json:"level"`
 	NextLevel   string  `json:"next_level"`
 	NextLevelKg float64 `json:"next_level_kg"`
-}
-
-// StalledLift is an exercise whose best estimated 1RM over the last four
-// weeks did not beat the four weeks before.
-type StalledLift struct {
-	Exercise    string  `json:"exercise"`
-	Recent1RM   float64 `json:"recent_1rm"`
-	Previous1RM float64 `json:"previous_1rm"`
-}
-
-// Recommendation is one piece of advice. Kind is "warning", "info" or "good".
-type Recommendation struct {
-	Kind string `json:"kind"`
-	Text string `json:"text"`
 }

@@ -141,24 +141,61 @@ export type StrengthLevel = {
   next_level_kg: number;
 };
 
-export type StalledLift = {
-  exercise: string;
-  recent_1rm: number;
-  previous_1rm: number;
+/** Mirrors store.Adherence. Since is unset until something is logged from the plan. */
+export type Adherence = {
+  plan: string;
+  since?: string;
+  scheduled: number;
+  completed: number;
+  extra: number;
+  streak: number;
+  /** Newest first. */
+  missed: string[];
 };
 
-export type Recommendation = {
-  kind: 'warning' | 'info' | 'good';
-  text: string;
+/** A plan lift missing its scheme in a row now, or deloaded within the timespan. */
+export type PlanStall = {
+  exercise: string;
+  status: 'missing' | 'deloaded';
+  weight: number;
+  misses: number;
+  date: string;
+  deload_next?: boolean;
+};
+
+export type LiftProgress = {
+  exercise: string;
+  sessions: number;
+  first_1rm: number;
+  first_date: string;
+  best_1rm: number;
+  best_date: string;
+  latest_1rm: number;
+  /** kg of est. 1RM gained a month, first session to latest; unset over less than two weeks. */
+  per_month?: number;
+  prs: number;
+  last_pr?: string;
+};
+
+export type Tonnage = {
+  total: number;
+  /** One entry per week, keyed by its Monday. */
+  weekly: { week: string; tonnage: number }[];
+  /** Heaviest first. */
+  by_exercise: { exercise: string; tonnage: number }[];
 };
 
 export type Insights = {
   date: string;
+  from?: string;
   bodyweight: BodyweightTrend | null;
   sessions_per_week: number;
   muscles: MuscleVolume[];
+  /** Null without a plan. */
+  adherence: Adherence | null;
+  stalls: PlanStall[];
+  progression: LiftProgress[];
+  tonnage: Tonnage;
   strength: StrengthLevel[];
-  stalled: StalledLift[];
   untagged: string[];
-  recommendations: Recommendation[];
 };

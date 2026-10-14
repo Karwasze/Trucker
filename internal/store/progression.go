@@ -105,14 +105,7 @@ func nextTarget(scheme PlanExercise, sessions [][]Set, daysOff int) ([]Set, stri
 			fmt.Sprintf("Weight up %s: you completed %s last time.", formatKg(step), planned)
 	}
 
-	misses := 0
-	for i := len(sessions) - 1; i >= 0; i-- {
-		session := sessions[i]
-		if workingWeight(session) != weight || hitScheme(session, weight, scheme) {
-			break
-		}
-		misses++
-	}
+	misses := consecutiveMisses(scheme, sessions, weight)
 	if misses >= deloadAfterMisses && weight > 0 {
 		return uniformSets(scheme, reduceWeight(weight, deloadFraction, weightStep(sessions))), ResultDeloaded,
 			fmt.Sprintf("Deloading: you missed %s %d sessions in a row.", planned, misses)
@@ -133,6 +126,20 @@ func nextTarget(scheme PlanExercise, sessions [][]Set, daysOff int) ([]Set, stri
 		reason += fmt.Sprintf(" %d more misses deload.", left)
 	}
 	return target, ResultMissed, reason
+}
+
+// consecutiveMisses counts the most recent sessions that missed scheme in a
+// row at weight.
+func consecutiveMisses(scheme PlanExercise, sessions [][]Set, weight float64) int {
+	misses := 0
+	for i := len(sessions) - 1; i >= 0; i-- {
+		session := sessions[i]
+		if workingWeight(session) != weight || hitScheme(session, weight, scheme) {
+			break
+		}
+		misses++
+	}
+	return misses
 }
 
 // layoffFraction returns how much lighter to go after daysOff away from an

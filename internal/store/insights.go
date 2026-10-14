@@ -1,10 +1,13 @@
 package store
 
 import (
+	"cmp"
+	"database/sql"
+	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"slices"
-	"strings"
 	"time"
 )
 
@@ -26,13 +29,14 @@ const (
 
 const (
 	volumeWindowDays    = 28
-	stallWindowDays     = 56
-	stallMinSessions    = 4
-	strengthWindowDays  = 90
 	bodyweightTrendDays = 30
-	staleAfterDays      = 10
-	// Balance is only judged once the larger side gets this many sets a week.
-	balanceMinSets = 6
+	// A plan exercise counts as stalled after this many misses in a row at
+	// the same weight.
+	stallAfterMisses = 2
+	// Progression rates need sessions at least this many days apart, so a
+	// couple of close sessions don't extrapolate wildly.
+	minRateDays  = 14
+	daysPerMonth = 30.44
 )
 
 var strengthLevelNames = []string{"beginner", "novice", "intermediate", "advanced", "elite"}
@@ -49,32 +53,48 @@ var strengthStandards = []struct {
 	{"Overhead Press", []float64{0.35, 0.55, 0.8, 1.05, 1.35}},
 }
 
-var (
-	pushMuscles = []string{"chest", "shoulders", "triceps"}
-	pullMuscles = []string{"back", "biceps"}
-)
-
 const dateLayout = "2006-01-02"
 
-// insightSet is one logged set with its workout date.
+// insightSet is one logged set with its workout.
 type insightSet struct {
-	date     string
-	exercise string
-	weight   float64
-	reps     int
+	workoutID int
+	date      string
+	exercise  string
+	Set
+}
+
+// exerciseHistory is an exercise's logged sessions, one per workout, oldest
+// first.
+type exerciseHistory struct {
+	dates    []string
+	sessions [][]Set
 }
 
 // GetInsights analyses training up to and including today (YYYY-MM-DD).
-func (s *Store) GetInsights(today string) (Insights, error) {
+// Adherence, deloads, progression, tonnage and strength levels cover the
+// timespan starting on from (YYYY-MM-DD, or "" for all time); muscle volume
+// always covers the last four weeks. Adherence and stalls are judged against
+// the plan planID, and left out for 0 or an unknown plan.
+func (s *Store) GetInsights(today, from string, planID int) (Insights, error) {
 	now, err := time.Parse(dateLayout, today)
 	if err != nil {
 		return Insights{}, fmt.Errorf("invalid date %q: %w", today, err)
 	}
-	daysAgo := func(days int) string { return now.AddDate(0, 0, -days).Format(dateLayout) }
+	if from != "" {
+		if _, err := time.Parse(dateLayout, from); err != nil {
+			return Insights{}, fmt.Errorf("invalid date %q: %w", from, err)
+		}
+	}
 
-	sets, err := s.setsBetween(daysAgo(strengthWindowDays), today)
+	all, err := s.setsBetween("", today)
 	if err != nil {
 		return Insights{}, err
+	}
+	var window []insightSet
+	for _, set := range all {
+		if set.date >= from {
+			window = append(window, set)
+		}
 	}
 	tags, err := s.GetExerciseMuscles()
 	if err != nil {
@@ -86,19 +106,36 @@ func (s *Store) GetInsights(today string) (Insights, error) {
 	}
 
 	insights := Insights{
-		Date:       today,
-		Bodyweight: bodyweightTrend(bodyweight),
-		Stalled:    stalledLifts(sets, daysAgo(stallWindowDays), daysAgo(volumeWindowDays)),
-		Untagged:   []string{},
+		Date:        today,
+		From:        from,
+		Bodyweight:  bodyweightTrend(bodyweight),
+		Stalls:      []PlanStall{},
+		Progression: liftProgress(all, from),
+		Tonnage:     tonnage(window, now),
+		Untagged:    []string{},
 	}
 
-	volumeStart := daysAgo(volumeWindowDays)
+	if planID != 0 {
+		plan, err := getPlan(s.db, planID)
+		switch {
+		case errors.Is(err, ErrPlanNotFound):
+		case err != nil:
+			return Insights{}, err
+		default:
+			if insights.Adherence, err = s.adherence(plan, all, from, now); err != nil {
+				return Insights{}, err
+			}
+			insights.Stalls = planStalls(plan, all, from, today)
+		}
+	}
+
+	volumeStart := now.AddDate(0, 0, -volumeWindowDays).Format(dateLayout)
 	weeks := float64(volumeWindowDays) / 7
 	sessions := make(map[string]bool)
 	weighted := make(map[string]float64)
 	muscleDays := make(map[string]map[string]bool)
 	lastTrained := make(map[string]string)
-	for _, set := range sets {
+	for _, set := range all {
 		muscles, tagged := tags[set.exercise]
 		if !tagged && set.date > volumeStart && !slices.Contains(insights.Untagged, set.exercise) {
 			insights.Untagged = append(insights.Untagged, set.exercise)
@@ -139,26 +176,24 @@ func (s *Store) GetInsights(today string) (Insights, error) {
 	}
 
 	if insights.Bodyweight != nil {
-		insights.Strength = strengthLevels(sets, insights.Bodyweight.Weight)
+		insights.Strength = strengthLevels(window, insights.Bodyweight.Weight)
 	}
 	if insights.Strength == nil {
 		insights.Strength = []StrengthLevel{}
 	}
-
-	insights.Recommendations = recommend(insights, now, len(sessions) > 0)
 	return insights, nil
 }
 
 // setsBetween returns every set logged after start and up to end (both
-// YYYY-MM-DD), in date order.
+// YYYY-MM-DD), in the order they were logged.
 func (s *Store) setsBetween(start, end string) ([]insightSet, error) {
 	rows, err := s.db.Query(`
-		SELECT w.date, e.name, s.weight, s.reps
+		SELECT w.id, w.date, e.name, s.weight, s.reps
 		FROM sets s
 		JOIN exercises e ON s.exercise_id = e.id
 		JOIN workouts w ON e.workout_id = w.id
 		WHERE w.date > ? AND w.date <= ?
-		ORDER BY w.date, s.id
+		ORDER BY w.date, w.id, e.id, s.id
 	`, start, end)
 	if err != nil {
 		return nil, err
@@ -168,7 +203,7 @@ func (s *Store) setsBetween(start, end string) ([]insightSet, error) {
 	var sets []insightSet
 	for rows.Next() {
 		var set insightSet
-		if err := rows.Scan(&set.date, &set.exercise, &set.weight, &set.reps); err != nil {
+		if err := rows.Scan(&set.workoutID, &set.date, &set.exercise, &set.Weight, &set.Reps); err != nil {
 			return nil, err
 		}
 		sets = append(sets, set)
@@ -176,12 +211,42 @@ func (s *Store) setsBetween(start, end string) ([]insightSet, error) {
 	return sets, rows.Err()
 }
 
+// histories groups sets by exercise into sessions, merging repeated entries
+// of an exercise within a workout.
+func histories(sets []insightSet) map[string]*exerciseHistory {
+	byExercise := make(map[string]*exerciseHistory)
+	lastWorkout := make(map[string]int)
+	for _, set := range sets {
+		h := byExercise[set.exercise]
+		if h == nil {
+			h = &exerciseHistory{}
+			byExercise[set.exercise] = h
+		}
+		if len(h.sessions) == 0 || lastWorkout[set.exercise] != set.workoutID {
+			h.dates = append(h.dates, set.date)
+			h.sessions = append(h.sessions, nil)
+			lastWorkout[set.exercise] = set.workoutID
+		}
+		h.sessions[len(h.sessions)-1] = append(h.sessions[len(h.sessions)-1], set.Set)
+	}
+	return byExercise
+}
+
 // estimated1RM is calculate1RM limited to rep counts the formula handles.
-func estimated1RM(set insightSet) float64 {
-	if set.reps < 1 || set.reps > 36 {
+func estimated1RM(set Set) float64 {
+	if set.Reps < 1 || set.Reps > 36 {
 		return 0
 	}
-	return calculate1RM(set.weight, set.reps)
+	return calculate1RM(set.Weight, set.Reps)
+}
+
+// best1RM is the best estimated 1RM of a session's sets.
+func best1RM(sets []Set) float64 {
+	best := 0.0
+	for _, set := range sets {
+		best = math.Max(best, estimated1RM(set))
+	}
+	return best
 }
 
 func bodyweightTrend(entries []BodyweightEntry) *BodyweightTrend {
@@ -231,7 +296,7 @@ func strengthLevels(sets []insightSet, bodyweight float64) []StrengthLevel {
 		best := 0.0
 		for _, set := range sets {
 			if set.exercise == standard.exercise {
-				best = math.Max(best, estimated1RM(set))
+				best = math.Max(best, estimated1RM(set.Set))
 			}
 		}
 		if best == 0 {
@@ -253,157 +318,199 @@ func strengthLevels(sets []insightSet, bodyweight float64) []StrengthLevel {
 	return levels
 }
 
-// stalledLifts finds exercises trained at least stallMinSessions times after
-// start whose best estimated 1RM after split is no better than before it.
-func stalledLifts(sets []insightSet, start, split string) []StalledLift {
-	type history struct {
-		sessions         map[string]bool
-		previous, recent float64
+// adherence compares the days the plan schedules with the days anything was
+// logged, from the plan's first logged workout up to now.
+func (s *Store) adherence(plan TrainingPlan, sets []insightSet, from string, now time.Time) (*Adherence, error) {
+	today := now.Format(dateLayout)
+	a := &Adherence{Plan: plan.Name, Missed: []string{}}
+
+	var first sql.NullString
+	err := s.db.QueryRow("SELECT MIN(date) FROM workouts WHERE plan_id = ? AND date <= ?", plan.ID, today).Scan(&first)
+	if err != nil {
+		return nil, err
 	}
-	byExercise := make(map[string]*history)
-	var order []string
+	if !first.Valid {
+		return a, nil
+	}
+	start, err := time.Parse(dateLayout, first.String)
+	if err != nil {
+		return nil, err
+	}
+	a.Since = max(first.String, from)
+
+	scheduled := make(map[string]bool)
+	for _, day := range plan.Days {
+		scheduled[day.Weekday] = len(day.Exercises) > 0
+	}
+	trained := make(map[string]bool)
 	for _, set := range sets {
-		if set.date <= start {
+		trained[set.date] = true
+	}
+
+	// Newest first, so the streak ends at the first miss.
+	streaking := true
+	for d := now; !d.Before(start); d = d.AddDate(0, 0, -1) {
+		date := d.Format(dateLayout)
+		inSpan := date >= from
+		switch {
+		case !scheduled[weekdayNames[isoWeekday(d.Weekday())-1]]:
+			if trained[date] && inSpan {
+				a.Extra++
+			}
+		case trained[date]:
+			if inSpan {
+				a.Completed++
+			}
+			if streaking {
+				a.Streak++
+			}
+		case date == today:
+			// Today isn't over yet.
+		default:
+			if inSpan {
+				a.Missed = append(a.Missed, date)
+			}
+			streaking = false
+		}
+	}
+	a.Scheduled = a.Completed + len(a.Missed)
+	return a, nil
+}
+
+// planStalls replays the plan's progression over each of its exercises'
+// history to find exercises missing their scheme now and deloads within the
+// timespan starting on from. An exercise missing its scheme now is reported
+// as such, otherwise its latest deload in the timespan is. After a layoff the
+// plan eases back in instead of counting misses, so neither does this.
+func planStalls(plan TrainingPlan, sets []insightSet, from, today string) []PlanStall {
+	byExercise := histories(sets)
+	seen := make(map[string]bool)
+	stalls := []PlanStall{}
+	for _, day := range plan.Days {
+		for _, scheme := range day.Exercises {
+			h := byExercise[scheme.Name]
+			if seen[scheme.Name] || h == nil {
+				continue
+			}
+			seen[scheme.Name] = true
+
+			last := len(h.sessions) - 1
+			weight := workingWeight(h.sessions[last])
+			off, _ := daysOff(h.dates[last], today)
+			if misses := consecutiveMisses(scheme, h.sessions, weight); misses >= stallAfterMisses && layoffFraction(off) == 0 {
+				_, result, _ := nextTarget(scheme, h.sessions, 0)
+				stalls = append(stalls, PlanStall{
+					Exercise: scheme.Name, Status: StallMissing, Weight: weight, Misses: misses,
+					Date: h.dates[last], DeloadNext: result == ResultDeloaded,
+				})
+				continue
+			}
+
+			for i := last; i >= 0 && h.dates[i] >= from; i-- {
+				// Like EvaluateProgression, the outcome of a session follows
+				// from the history up to it.
+				if _, result, _ := nextTarget(scheme, h.sessions[:i+1], 0); result == ResultDeloaded {
+					weight := workingWeight(h.sessions[i])
+					stalls = append(stalls, PlanStall{
+						Exercise: scheme.Name, Status: StallDeloaded, Weight: weight,
+						Misses: consecutiveMisses(scheme, h.sessions[:i+1], weight), Date: h.dates[i],
+					})
+					break
+				}
+			}
+		}
+	}
+	return stalls
+}
+
+// liftProgress follows the best estimated 1RM per session of every weighted
+// lift trained since from, using earlier history to tell PRs.
+func liftProgress(sets []insightSet, from string) []LiftProgress {
+	byExercise := histories(sets)
+	progress := []LiftProgress{}
+	for _, name := range slices.Sorted(maps.Keys(byExercise)) {
+		h := byExercise[name]
+		var p *LiftProgress
+		var lastDate string
+		record := 0.0
+		for i, sets := range h.sessions {
+			best := best1RM(sets)
+			if best == 0 {
+				continue
+			}
+			if date := h.dates[i]; date >= from {
+				if p == nil {
+					p = &LiftProgress{Exercise: name, First1RM: round(best, 1), FirstDate: date}
+				}
+				p.Sessions++
+				if best > p.Best1RM {
+					p.Best1RM, p.BestDate = round(best, 1), date
+				}
+				if record > 0 && best > record {
+					p.PRs++
+					p.LastPR = date
+				}
+				p.Latest1RM, lastDate = round(best, 1), date
+			}
+			record = math.Max(record, best)
+		}
+		if p == nil {
 			continue
 		}
-		h := byExercise[set.exercise]
-		if h == nil {
-			h = &history{sessions: make(map[string]bool)}
-			byExercise[set.exercise] = h
-			order = append(order, set.exercise)
+		if days, _ := daysOff(p.FirstDate, lastDate); days >= minRateDays {
+			rate := round((p.Latest1RM-p.First1RM)/float64(days)*daysPerMonth, 1)
+			p.PerMonth = &rate
 		}
-		h.sessions[set.date] = true
-		if set.date > split {
-			h.recent = math.Max(h.recent, estimated1RM(set))
-		} else {
-			h.previous = math.Max(h.previous, estimated1RM(set))
-		}
+		progress = append(progress, *p)
 	}
-
-	stalled := []StalledLift{}
-	slices.Sort(order)
-	for _, name := range order {
-		h := byExercise[name]
-		if len(h.sessions) >= stallMinSessions && h.previous > 0 && h.recent > 0 && h.recent <= h.previous {
-			stalled = append(stalled, StalledLift{Exercise: name, Recent1RM: round(h.recent, 1), Previous1RM: round(h.previous, 1)})
-		}
-	}
-	return stalled
+	return progress
 }
 
-// recommend turns the analysis into advice, warnings first.
-func recommend(insights Insights, now time.Time, trainedRecently bool) []Recommendation {
-	var warnings, infos []Recommendation
-	warn := func(format string, args ...any) {
-		warnings = append(warnings, Recommendation{Kind: "warning", Text: fmt.Sprintf(format, args...)})
-	}
-	info := func(format string, args ...any) {
-		infos = append(infos, Recommendation{Kind: "info", Text: fmt.Sprintf(format, args...)})
+// tonnage sums weight × reps over sets, per week from the week of the first
+// set to the week of now.
+func tonnage(sets []insightSet, now time.Time) Tonnage {
+	t := Tonnage{Weekly: []WeeklyTonnage{}, ByExercise: []ExerciseTonnage{}}
+	if len(sets) == 0 {
+		return t
 	}
 
-	if !trainedRecently {
-		warn("No workouts in the last 4 weeks. Log a few sessions to get training advice.")
-	} else {
-		volume := make(map[string]float64)
-		var untrained []string
-		for _, m := range insights.Muscles {
-			volume[m.Muscle] = m.WeeklySets
-			switch m.Status {
-			case VolumeUntrained:
-				untrained = append(untrained, m.Muscle)
-			case VolumeLow:
-				warn("Train %s more: %s sets a week%s. Aim for %d–%d.",
-					m.Muscle, formatSets(m.WeeklySets), lastTrainedNote(m, now), VolumeLowBelow, VolumeHighAbove)
-			case VolumeHigh:
-				warn("%s volume is high: %s sets a week. Above %d is hard to recover from, so consider cutting back.",
-					capitalize(m.Muscle), formatSets(m.WeeklySets), VolumeHighAbove)
-			}
-			if m.Status != VolumeUntrained && m.Status != VolumeLow {
-				if days := daysSince(m.LastTrained, now); days > staleAfterDays {
-					warn("%s hasn't been trained in %d days.", capitalize(m.Muscle), days)
-				}
-				if m.DaysPerWeek < 1.5 {
-					info("%s is trained about once a week. Splitting its sets over 2 days usually grows it better.", capitalize(m.Muscle))
-				}
-			}
+	weekly := make(map[string]float64)
+	byExercise := make(map[string]float64)
+	for _, set := range sets {
+		kg := set.Weight * float64(set.Reps)
+		t.Total += kg
+		byExercise[set.exercise] += kg
+		date, err := time.Parse(dateLayout, set.date)
+		if err != nil {
+			continue
 		}
-
-		if len(untrained) > 0 {
-			warn("Not trained in the last 4 weeks: %s. Aim for %d–%d sets a week each.",
-				strings.Join(untrained, ", "), VolumeLowBelow, VolumeHighAbove)
-		}
-
-		push, pull := sum(volume, pushMuscles), sum(volume, pullMuscles)
-		switch {
-		case push >= balanceMinSets && push > 1.5*pull:
-			warn("You do more pushing (%s sets a week) than pulling (%s). Add rows or pulldowns to keep shoulders healthy.",
-				formatSets(push), formatSets(pull))
-		case pull >= balanceMinSets && pull > 1.5*push:
-			warn("You do more pulling (%s sets a week) than pushing (%s). Add presses to balance it.",
-				formatSets(pull), formatSets(push))
-		}
-		if quads, hams := volume["quads"], volume["hamstrings"]; quads >= balanceMinSets && quads > 2*hams {
-			warn("Quads get %s sets a week but hamstrings only %s. Add leg curls or Romanian deadlifts.",
-				formatSets(quads), formatSets(hams))
-		}
+		weekly[weekStart(date).Format(dateLayout)] += kg
 	}
+	t.Total = round(t.Total, 1)
 
-	for _, lift := range insights.Stalled {
-		warn("%s has stalled: best estimated 1RM %s kg over the last 4 weeks vs %s kg before. Try a deload or a different rep range.",
-			lift.Exercise, formatSets(lift.Recent1RM), formatSets(lift.Previous1RM))
-	}
-	if len(insights.Untagged) > 0 {
-		info("Tag muscles for %s in Settings so they count towards your volume.", strings.Join(insights.Untagged, ", "))
-	}
-	if insights.Bodyweight == nil {
-		info("Add your bodyweight to see strength levels.")
-	}
-
-	recommendations := append(warnings, infos...)
-	if len(warnings) == 0 {
-		recommendations = append([]Recommendation{{Kind: "good", Text: "Your training volume looks balanced. Keep it up."}}, recommendations...)
-	}
-	return recommendations
-}
-
-func lastTrainedNote(m MuscleVolume, now time.Time) string {
-	if days := daysSince(m.LastTrained, now); days > staleAfterDays {
-		return fmt.Sprintf(", last trained %d days ago", days)
-	}
-	return ""
-}
-
-// daysSince returns whole days from date (YYYY-MM-DD) to now, or 0 if date is
-// empty or invalid.
-func daysSince(date string, now time.Time) int {
-	t, err := time.Parse(dateLayout, date)
+	first, err := time.Parse(dateLayout, sets[0].date)
 	if err != nil {
-		return 0
+		first = now
 	}
-	return int(now.Sub(t).Hours() / 24)
+	for w := weekStart(first); !w.After(now); w = w.AddDate(0, 0, 7) {
+		week := w.Format(dateLayout)
+		t.Weekly = append(t.Weekly, WeeklyTonnage{Week: week, Tonnage: round(weekly[week], 1)})
+	}
+	for name, kg := range byExercise {
+		t.ByExercise = append(t.ByExercise, ExerciseTonnage{Exercise: name, Tonnage: round(kg, 1)})
+	}
+	slices.SortFunc(t.ByExercise, func(a, b ExerciseTonnage) int {
+		return cmp.Or(cmp.Compare(b.Tonnage, a.Tonnage), cmp.Compare(a.Exercise, b.Exercise))
+	})
+	return t
 }
 
-func sum(values map[string]float64, keys []string) float64 {
-	total := 0.0
-	for _, k := range keys {
-		total += values[k]
-	}
-	return total
+// weekStart returns the Monday of date's week.
+func weekStart(date time.Time) time.Time {
+	return date.AddDate(0, 0, 1-isoWeekday(date.Weekday()))
 }
 
 func round(v float64, decimals int) float64 {
 	p := math.Pow(10, float64(decimals))
 	return math.Round(v*p) / p
-}
-
-// formatSets prints a number without trailing zeros, e.g. 7.5 or 12.
-func formatSets(v float64) string {
-	return strings.TrimSuffix(fmt.Sprintf("%.1f", v), ".0")
-}
-
-func capitalize(s string) string {
-	if s == "" {
-		return s
-	}
-	return strings.ToUpper(s[:1]) + s[1:]
 }

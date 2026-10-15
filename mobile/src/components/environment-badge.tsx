@@ -6,7 +6,7 @@ import { ENVIRONMENT_NAMES, useSettings } from '@/settings/settings-context';
 
 /**
  * Shows which server the app talks to, so dev data isn't mistaken for real data.
- * Hidden when the deployment fixes the server, since there's nothing to tell apart.
+ * Hidden when the build fixes the server, since there's nothing to tell apart.
  */
 export function EnvironmentBadge() {
   const theme = useTheme();

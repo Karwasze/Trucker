@@ -12,10 +12,10 @@ const PROD_URL = 'https://trucker.tail135e5e.ts.net';
 export type Environment = 'dev' | 'prod';
 
 /**
- * Set on deployed bundles (the trucker-mobile chart): the app only talks to
- * this production server, and Settings can't switch or edit it.
+ * Release builds (e.g. `npm run ios:release`) only talk to the production
+ * server, and Settings can't switch or edit it.
  */
-export const FIXED_SERVER_URL = process.env.EXPO_PUBLIC_FIXED_API_URL || null;
+const SERVER_LOCKED = !__DEV__;
 
 export const ENVIRONMENT_NAMES: Record<Environment, string> = {
   dev: 'Development',
@@ -37,7 +37,7 @@ type SettingsContextValue = {
   loaded: boolean;
   environment: Environment;
   servers: Record<Environment, ServerSettings>;
-  /** Whether the server is fixed by the deployment (see FIXED_SERVER_URL). */
+  /** Whether the server is fixed by the build (see SERVER_LOCKED). */
   serverLocked: boolean;
   /** The active server's URL and plan. */
   serverUrl: string;
@@ -61,20 +61,18 @@ function defaultDevUrl() {
 }
 
 /**
- * Picks a starting production URL: the fixed server, or EXPO_PUBLIC_PROD_API_URL
- * if set; on the web,
+ * Picks a starting production URL: EXPO_PUBLIC_PROD_API_URL if set; on the web,
  * the page's own origin (nginx proxies /api/ to the server); otherwise PROD_URL.
  */
 function defaultProdUrl() {
-  if (FIXED_SERVER_URL) return FIXED_SERVER_URL;
   if (process.env.EXPO_PUBLIC_PROD_API_URL) return process.env.EXPO_PUBLIC_PROD_API_URL;
   if (Platform.OS === 'web' && typeof window !== 'undefined') return window.location.origin;
   return PROD_URL;
 }
 
 const defaults: Settings = {
-  // Release and deployed builds start on production; dev builds on the local API.
-  environment: __DEV__ && !FIXED_SERVER_URL ? 'dev' : 'prod',
+  // Release builds use production; dev builds start on the local API.
+  environment: SERVER_LOCKED ? 'prod' : 'dev',
   servers: {
     dev: { url: defaultDevUrl(), planId: null },
     prod: { url: defaultProdUrl(), planId: null },
@@ -82,14 +80,14 @@ const defaults: Settings = {
 };
 
 /**
- * Reads stored settings. With a fixed server, a plan picked while the same
- * URL was saved as the development server (as Expo Go bundles used to be)
- * carries over to production.
+ * Reads stored settings. In a release build, a plan picked while the
+ * production URL was saved as the development server carries over to
+ * production.
  */
 function parseStored(raw: string): Settings {
   const settings = parseStoredServers(raw);
   const { dev, prod } = settings.servers;
-  if (FIXED_SERVER_URL && prod.planId === null && dev.url === FIXED_SERVER_URL) {
+  if (SERVER_LOCKED && prod.planId === null && dev.url === defaults.servers.prod.url) {
     return { ...settings, servers: { ...settings.servers, prod: { ...prod, planId: dev.planId } } };
   }
   return settings;
@@ -145,10 +143,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       ...s,
       servers: { ...s.servers, [env]: { ...s.servers[env], ...patch } },
     });
-    // A fixed server overrides whatever was stored.
-    const environment = FIXED_SERVER_URL ? 'prod' : settings.environment;
-    const servers = FIXED_SERVER_URL
-      ? { ...settings.servers, prod: { ...settings.servers.prod, url: FIXED_SERVER_URL } }
+    // A locked build overrides whatever was stored.
+    const environment = SERVER_LOCKED ? 'prod' : settings.environment;
+    const servers = SERVER_LOCKED
+      ? { ...settings.servers, prod: { ...settings.servers.prod, url: defaults.servers.prod.url } }
       : settings.servers;
     const active = servers[environment];
 
@@ -156,17 +154,17 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       loaded,
       environment,
       servers,
-      serverLocked: !!FIXED_SERVER_URL,
+      serverLocked: SERVER_LOCKED,
       serverUrl: active.url,
       planId: active.planId,
       api: createApi(active.url),
       update: (patch) => save((s) => patchServer(s, environment, patch)),
       selectEnvironment: (env) => {
-        if (!FIXED_SERVER_URL) save((s) => ({ ...s, environment: env }));
+        if (!SERVER_LOCKED) save((s) => ({ ...s, environment: env }));
       },
       // A different server has different plans, so its selection no longer applies.
       setServerUrl: (env, url) => {
-        if (FIXED_SERVER_URL) return;
+        if (SERVER_LOCKED) return;
         save((s) => (s.servers[env].url === url ? s : patchServer(s, env, { url, planId: null })));
       },
     };

@@ -13,6 +13,7 @@ import { AppState } from 'react-native';
 import {
   cancelFinishAlert,
   scheduleFinishAlert,
+  syncLiveActivity,
   vibrate,
 } from '@/timer/native';
 import {
@@ -46,6 +47,7 @@ export function TimerProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<TimerSettings>(DEFAULT_TIMER_SETTINGS);
   const [running, setRunningState] = useState<RunningTimer | null>(null);
   const [celebration, setCelebration] = useState(0);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     AsyncStorage.multiGet([SETTINGS_KEY, RUNNING_KEY])
@@ -53,7 +55,8 @@ export function TimerProvider({ children }: { children: ReactNode }) {
         setSettings(parseTimerSettings(rawSettings));
         if (rawRunning) setRunningState(JSON.parse(rawRunning) as RunningTimer);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoaded(true));
   }, []);
 
   const setRunning = useCallback((next: RunningTimer | null) => {
@@ -78,6 +81,11 @@ export function TimerProvider({ children }: { children: ReactNode }) {
     if (running && settings.vibration) scheduleFinishAlert(running);
     else cancelFinishAlert();
   }, [running, settings.vibration]);
+
+  // Waits for the stored timer, so a relaunch keeps the activity it left running.
+  useEffect(() => {
+    if (loaded) syncLiveActivity(running);
+  }, [loaded, running]);
 
   // Fires the finish behavior once the target is reached. While the app is in
   // the background nothing runs, so this also catches up when it returns.

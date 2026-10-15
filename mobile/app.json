@@ -9,7 +9,9 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon",
-      "bundleIdentifier": "com.karolkedzierski.trucker",
+      "bundleIdentifier": "com.karwasze.trucker",
+      "buildNumber": "1",
+      "appleTeamId": "F29PEPYEQE",
       "supportsTablet": false
     },
     "android": {
@@ -28,6 +30,7 @@
     },
     "plugins": [
       "expo-router",
+      "expo-widgets",
       [
         "expo-splash-screen",
         {

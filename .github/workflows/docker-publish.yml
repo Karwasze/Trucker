@@ -20,9 +20,6 @@ jobs:
           - name: api
             context: .
             image: ${{ github.repository }}
-          - name: mobile
-            context: ./mobile
-            image: ${{ github.repository }}-mobile
 
     steps:
       - name: Checkout repository
@@ -80,7 +77,7 @@ jobs:
       - name: Bump chart versions and image tags
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          for chart in charts/trucker charts/trucker-mobile; do
+          for chart in charts/trucker; do
             sed -i -E "s/^version:.*/version: ${VERSION}/" "${chart}/Chart.yaml"
             sed -i -E "s/^appVersion:.*/appVersion: \"${VERSION}\"/" "${chart}/Chart.yaml"
             sed -i -E "s/^(  tag:).*/\1 ${VERSION}/" "${chart}/values.yaml"

@@ -1,9 +1,0 @@
-# Overrides for running trucker-mobile on microk8s (vs minikube).
-# Apply with:  helm ... -f values-microk8s.yaml
-#
-# Metro is reached through the Tailscale operator, which
-# works the same on both.
-
-# Register with Expo so the server is listed in Expo Go (see values.yaml).
-expoToken:
-  secretName: trucker-mobile-expo

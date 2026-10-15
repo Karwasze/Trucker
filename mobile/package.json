@@ -3,6 +3,7 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
+    "@expo/ui": "~57.0.25",
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~57.0.27",
     "expo-constants": "~57.0.21",
@@ -18,6 +19,7 @@
     "expo-symbols": "~57.0.3",
     "expo-system-ui": "~57.0.4",
     "expo-web-browser": "~57.0.3",
+    "expo-widgets": "~57.0.26",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
@@ -38,6 +40,9 @@
   "scripts": {
     "start": "expo start --port 8082",
     "ios": "expo start --ios --port 8082",
+    "prebuild:ios": "expo prebuild -p ios --clean",
+    "ios:release": "expo run:ios --device --configuration Release",
+    "deploy:ios": "scripts/deploy-ios.sh",
     "android": "expo start --android --port 8082",
     "web": "expo start --web --port 8082",
     "lint": "expo lint",

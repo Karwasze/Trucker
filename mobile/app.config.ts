@@ -1,9 +1,20 @@
 import { ConfigContext, ExpoConfig } from 'expo/config';
+import { withEntitlementsPlist } from 'expo/config-plugins';
 
-// Static config lives in app.json; this only lets a deployment rename the app
-// (e.g. "Trucker Prod" in Expo Go) via APP_NAME.
-export default ({ config }: ConfigContext): ExpoConfig => ({
-  ...config,
-  name: process.env.APP_NAME || config.name || 'Trucker',
-  slug: config.slug ?? 'trucker',
-});
+// Static config lives in app.json.
+export default ({ config }: ConfigContext): ExpoConfig =>
+  withoutPushEntitlement({
+    ...config,
+    name: config.name ?? 'Trucker',
+    slug: config.slug ?? 'trucker',
+  });
+
+// expo-notifications adds the Push Notifications entitlement, which personal
+// (free) Apple teams cannot sign. The app only schedules local notifications,
+// which work without it.
+function withoutPushEntitlement(config: ExpoConfig): ExpoConfig {
+  return withEntitlementsPlist(config, (cfg) => {
+    delete cfg.modResults['aps-environment'];
+    return cfg;
+  });
+}

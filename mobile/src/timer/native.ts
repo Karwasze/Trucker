@@ -14,6 +14,19 @@ const notifications: NotificationsModule | null = (() => {
   }
 })();
 
+type RestActivityModule = typeof import('@/timer/rest-activity');
+
+// Needs the native widget extension, which Expo Go and the web don't have.
+const restActivity: RestActivityModule['default'] | null = (() => {
+  if (Platform.OS !== 'ios') return null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return (require('@/timer/rest-activity') as RestActivityModule).default;
+  } catch {
+    return null;
+  }
+})();
+
 const NOTIFICATION_ID = 'rest-timer';
 
 /**
@@ -40,6 +53,30 @@ export async function scheduleFinishAlert(timer: RunningTimer) {
 
 export function cancelFinishAlert() {
   notifications?.cancelScheduledNotificationAsync(NOTIFICATION_ID).catch(() => {});
+}
+
+/**
+ * Shows the timer as a Live Activity on the lock screen and in the Dynamic
+ * Island, or removes it when there is no timer. Reuses an activity left over
+ * from a previous launch instead of stacking another one.
+ */
+export function syncLiveActivity(timer: RunningTimer | null) {
+  if (!restActivity) return;
+  try {
+    const [current, ...extra] = restActivity.getInstances();
+    for (const activity of extra) activity.end('immediate').catch(() => {});
+    if (!timer || endsAt(timer) <= Date.now()) {
+      current?.end('immediate').catch(() => {});
+      return;
+    }
+    const props = { startedAt: timer.startedAt, endsAt: endsAt(timer) };
+    // Past the stale date the activity shows as finished, without the app running.
+    const staleDate = new Date(props.endsAt);
+    if (current) current.update(props, staleDate).catch(() => {});
+    else restActivity.start(props, undefined, staleDate);
+  } catch {
+    // Live Activities turned off for the app, or unsupported (iOS < 16.2).
+  }
 }
 
 /** Three firm buzzes; iOS ignores durations and uses the pauses between them. */

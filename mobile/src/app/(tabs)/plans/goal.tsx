@@ -137,7 +137,8 @@ export default function GoalEditorScreen() {
         onPress: async () => {
           try {
             await api.deleteGoal(Number(id));
-            router.back();
+            // Skip the deleted goal's calendar, which sits under this screen.
+            router.dismissTo('/plans');
           } catch (e) {
             Alert.alert("Couldn't delete goal", (e as Error).message);
           }

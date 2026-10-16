@@ -39,7 +39,8 @@ const (
 	// Every recoveryEvery-th week is a recovery week at recoveryVolume.
 	recoveryEvery  = 4
 	recoveryVolume = 0.7
-	// floorFraction of the peak weekly volume is the least a plan starts at.
+	// floorFraction of the peak weekly volume is the least a plan starts at,
+	// unless it has time to grow to the peak from lower (see generatePlan).
 	floorFraction = 0.5
 	// otherSession is how long each session but the long one is, relative
 	// to the long one.
@@ -60,7 +61,11 @@ func peakLong(activity string, race float64) float64 {
 		}
 		return math.Min(math.Max(race*factor, 8000), 32000)
 	case ActivityCycling:
-		return math.Min(math.Max(race*1.3, 30000), 180000)
+		factor := 1.3
+		if race > 45000 {
+			factor = 1.0
+		}
+		return math.Min(math.Max(race*factor, 30000), 180000)
 	default:
 		return math.Min(math.Max(race*1.2, 1000), 5000)
 	}
@@ -187,8 +192,9 @@ func taperWeeks(g Goal, f Fitness) int {
 // including race day, with warnings about the goal.
 //
 // The weekly volume of each discipline starts at the larger of the current
-// weekly volume and floorFraction of the peak (or at PrevLevel when
-// continuing a plan), and grows each week up to the peak: the volume whose
+// weekly volume and a floor (or at PrevLevel when continuing a plan): the
+// smaller of floorFraction of the peak and the volume that grows into the
+// peak at weeklyGrowth, and grows each week up to the peak: the volume whose
 // long session is peakLong. The growth is spread to reach the peak as the
 // peak phase starts, but is never more than weeklyGrowth. A week's volume is one long
 // session and otherSession of it for each other session of a full week;
@@ -225,9 +231,10 @@ func generatePlan(in generatorInput) ([]PlannedSession, []string) {
 	peak := make(map[string]float64)
 	level := make(map[string]float64)
 	growth := make(map[string]float64)
+	floorShare := math.Min(floorFraction, math.Pow(weeklyGrowth, -float64(steps)))
 	for _, activity := range legs {
 		peak[activity] = peakLong(activity, g.leg(activity)) / longShare(full[activity])
-		floor := peak[activity] * floorFraction
+		floor := peak[activity] * floorShare
 		prev, continuing := in.PrevLevel[activity]
 		continuing = continuing && prev > 0
 		if !continuing {

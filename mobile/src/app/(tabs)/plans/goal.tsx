@@ -221,7 +221,7 @@ export default function GoalEditorScreen() {
           style={inputStyle}
         />
         <View style={styles.chips}>
-          {[8, 12, 16, 20].map((weeks) => (
+          {[8, 12, 16, 20, 24, 28].map((weeks) => (
             <Chip
               key={weeks}
               label={`${weeks} weeks`}

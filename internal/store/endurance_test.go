@@ -336,6 +336,33 @@ func TestGeneratePlan_LongPlanRampsUpToPeakPhase(t *testing.T) {
 	}
 }
 
+func TestGeneratePlan_HalfTriathlonRidesFromLowStart(t *testing.T) {
+	g := Goal{
+		Name: "Half triathlon", StartDate: "2026-10-19", RaceDate: "2027-04-04", // 24 weeks
+		SwimM: fp(1900), BikeM: fp(90000), RunM: fp(21097),
+		Weekdays: []string{"tuesday", "thursday", "saturday", "sunday"}, LongDay: "sunday",
+	}
+	sessions := generate(t, generatorInput{Goal: g, From: day(g.StartDate)})
+
+	firstLong, longest := 0.0, 0.0
+	for _, s := range sessions {
+		if s.Activity != ActivityCycling || s.Kind != KindLong {
+			continue
+		}
+		if firstLong == 0 {
+			firstLong = *s.TargetDistanceM
+		}
+		longest = max(longest, *s.TargetDistanceM)
+	}
+	// Without history, a long plan has time to start well below the peak.
+	if firstLong > 40000 {
+		t.Errorf("expected the first long ride at 40 km or less, got %v", firstLong)
+	}
+	if longest < 85000 || longest > 100000 {
+		t.Errorf("expected the long ride to peak around the 90 km race leg, got %v", longest)
+	}
+}
+
 func TestGeneratePlan_EaseQuality(t *testing.T) {
 	g := tenK()
 	// Week 6 (Nov 23) is in build, with a tempo run.

@@ -294,6 +294,48 @@ func TestGeneratePlan_ContinuesFromPreviousLevel(t *testing.T) {
 	}
 }
 
+func TestGeneratePlan_LongPlanRampsUpToPeakPhase(t *testing.T) {
+	g := tenK()
+	g.RaceDate = "2027-05-16" // 30 weeks
+	sessions := generate(t, generatorInput{Goal: g, From: day(g.StartDate)})
+
+	weeks, volume := weeklyVolume(sessions, ActivityRunning)
+	phase := make(map[string]string)
+	for _, s := range sessions {
+		phase[mondayOf(day(s.Date)).Format(dateLayout)] = s.Phase
+	}
+	peak := 0.0
+	for _, v := range volume {
+		peak = max(peak, v)
+	}
+	// Each non-recovery week of base and build grows on the last one, and
+	// the peak volume isn't reached before the peak phase.
+	prev := 0.0
+	for i, w := range weeks {
+		if phase[w] != PhaseBase && phase[w] != PhaseBuild {
+			continue
+		}
+		if (i+1)%4 == 0 {
+			continue
+		}
+		if volume[w] < prev {
+			t.Errorf("week %s drops from %v to %v", w, prev, volume[w])
+		}
+		prev = volume[w]
+		if volume[w] >= peak {
+			t.Errorf("week %s (%s) already at the peak volume %v", w, phase[w], peak)
+		}
+	}
+	if first, last := volume[weeks[0]], prev; last < first*1.6 {
+		t.Errorf("expected base and build to ramp up well, got %v to %v", first, last)
+	}
+	for i, w := range weeks {
+		if phase[w] == PhasePeak && (i+1)%4 != 0 && !near(volume[w], peak, 1500) {
+			t.Errorf("expected peak week %s near the peak volume %v, got %v", w, peak, volume[w])
+		}
+	}
+}
+
 func TestGeneratePlan_EaseQuality(t *testing.T) {
 	g := tenK()
 	// Week 6 (Nov 23) is in build, with a tempo run.

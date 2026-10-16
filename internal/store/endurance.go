@@ -188,8 +188,9 @@ func taperWeeks(g Goal, f Fitness) int {
 //
 // The weekly volume of each discipline starts at the larger of the current
 // weekly volume and floorFraction of the peak (or at PrevLevel when
-// continuing a plan), and grows by weeklyGrowth each week up to the peak:
-// the volume whose long session is peakLong. A week's volume is one long
+// continuing a plan), and grows each week up to the peak: the volume whose
+// long session is peakLong. The growth is spread to reach the peak as the
+// peak phase starts, but is never more than weeklyGrowth. A week's volume is one long
 // session and otherSession of it for each other session of a full week;
 // a week with fewer training days drops easy sessions. Recovery weeks drop to
 // recoveryVolume without moving the level on; the taper drops to 60% then
@@ -220,20 +221,29 @@ func generatePlan(in generatorInput) ([]PlannedSession, []string) {
 
 	// Volume is sized for a full week of sessions.
 	full := sessionCounts(legs, len(g.Weekdays))
+	steps := growthSteps(weeks, from, in.PrevLevel != nil && !in.Hold)
 	peak := make(map[string]float64)
 	level := make(map[string]float64)
+	growth := make(map[string]float64)
 	for _, activity := range legs {
 		peak[activity] = peakLong(activity, g.leg(activity)) / longShare(full[activity])
 		floor := peak[activity] * floorFraction
-		if prev, ok := in.PrevLevel[activity]; ok && prev > 0 {
-			grown := prev
-			if !in.Hold {
-				grown *= weeklyGrowth
-			}
-			level[activity] = math.Min(math.Max(grown, floor), peak[activity])
-		} else {
-			level[activity] = math.Min(math.Max(in.Fitness.Weekly[activity], floor), peak[activity])
+		prev, continuing := in.PrevLevel[activity]
+		continuing = continuing && prev > 0
+		if !continuing {
+			prev = in.Fitness.Weekly[activity]
 		}
+		prev = math.Min(math.Max(prev, floor), peak[activity])
+		// Long plans spread the growth to reach the peak as the peak
+		// phase starts, rather than plateauing for months.
+		growth[activity] = weeklyGrowth
+		if steps > 0 {
+			growth[activity] = math.Min(math.Pow(peak[activity]/prev, 1/float64(steps)), weeklyGrowth)
+		}
+		if continuing && !in.Hold {
+			prev *= growth[activity]
+		}
+		level[activity] = math.Min(math.Max(prev, floor), peak[activity])
 	}
 
 	var sessions []PlannedSession
@@ -245,7 +255,7 @@ func generatePlan(in generatorInput) ([]PlannedSession, []string) {
 		// The level grows after every full training week.
 		if !first && !weeks[i-1].recovery && isTraining(weeks[i-1].phase) && isTraining(week.phase) {
 			for _, activity := range legs {
-				level[activity] = math.Min(level[activity]*weeklyGrowth, peak[activity])
+				level[activity] = math.Min(level[activity]*growth[activity], peak[activity])
 			}
 		}
 		var days []time.Time
@@ -264,6 +274,32 @@ func generatePlan(in generatorInput) ([]PlannedSession, []string) {
 		first = false
 	}
 	return sessions, warnings
+}
+
+// growthSteps counts the times the level grows from the week of from up to
+// the first peak week (or the last training week without one), counting
+// growth into the week of from when continuing a plan.
+func growthSteps(weeks []planWeek, from time.Time, continuing bool) int {
+	first := weekIndex(weeks, from)
+	target := -1
+	for i, w := range weeks {
+		if isTraining(w.phase) {
+			target = i
+		}
+		if w.phase == PhasePeak {
+			break
+		}
+	}
+	steps := 0
+	if continuing && first < len(weeks) && isTraining(weeks[first].phase) {
+		steps++
+	}
+	for i := first + 1; i <= target; i++ {
+		if !weeks[i-1].recovery && isTraining(weeks[i-1].phase) && isTraining(weeks[i].phase) {
+			steps++
+		}
+	}
+	return steps
 }
 
 func isTraining(phase string) bool {

@@ -297,7 +297,7 @@ func TestExerciseTargets(t *testing.T) {
 		{Name: "Squat", Sets: 2, Reps: 5},
 		{Name: "Bench Press", Sets: 3, Reps: 8},
 		{Name: "Deadlift", Sets: 1, Reps: 5},
-	}, monday)
+	}, nil, monday)
 	if err != nil {
 		t.Fatalf("failed to get targets: %v", err)
 	}
@@ -314,6 +314,90 @@ func TestExerciseTargets(t *testing.T) {
 	}
 }
 
+// A lift trained in different schemes on different days progresses each
+// scheme from its own sessions: a heavy Monday doesn't count as a missed
+// light Friday, or the other way around.
+func TestExerciseTargets_SchemePerDay(t *testing.T) {
+	s := newTestStore(t)
+	schemes := []PlanExercise{{Name: "Squat", Sets: 5, Reps: 3}, {Name: "Squat", Sets: 4, Reps: 6}}
+
+	seedWorkout(t, s, "2026-09-28", []Exercise{{Name: "Squat", Sets: setList(3, 95, 3, 95, 3, 95, 3, 95, 3, 95)}})
+	seedWorkout(t, s, "2026-10-02", []Exercise{{Name: "Squat", Sets: setList(6, 80, 6, 80, 6, 80, 6, 80)}})
+	seedWorkout(t, s, "2026-10-05", []Exercise{{Name: "Squat", Sets: setList(3, 100, 3, 100, 3, 100, 3, 100, 3, 100)}})
+	seedWorkout(t, s, "2026-10-09", []Exercise{{Name: "Squat", Sets: setList(6, 82.5, 6, 82.5, 6, 82.5, 6, 82.5)}})
+
+	targets, err := s.ExerciseTargets(schemes[:1], schemes, monday)
+	if err != nil {
+		t.Fatalf("failed to get targets: %v", err)
+	}
+	want := []ExerciseTarget{{Name: "Squat", Sets: setList(3, 105, 3, 105, 3, 105, 3, 105, 3, 105),
+		Reason: "Weight up 5 kg: you completed 5 × 3 @ 100 kg last time."}}
+	if !reflect.DeepEqual(targets, want) {
+		t.Errorf("monday: expected targets %+v, got %+v", want, targets)
+	}
+
+	seedWorkout(t, s, monday, []Exercise{{Name: "Squat", Sets: setList(3, 105, 3, 105, 3, 105, 3, 105, 3, 105)}})
+	targets, err = s.ExerciseTargets(schemes[1:], schemes, friday)
+	if err != nil {
+		t.Fatalf("failed to get targets: %v", err)
+	}
+	want = []ExerciseTarget{{Name: "Squat", Sets: setList(6, 85, 6, 85, 6, 85, 6, 85),
+		Reason: "Weight up 2.5 kg: you completed 4 × 6 @ 82.5 kg last time."}}
+	if !reflect.DeepEqual(targets, want) {
+		t.Errorf("friday: expected targets %+v, got %+v", want, targets)
+	}
+}
+
+// A scheme without sessions of its own starts fresh, even when the lift has
+// history in another scheme.
+func TestExerciseTargets_NewScheme(t *testing.T) {
+	s := newTestStore(t)
+	schemes := []PlanExercise{{Name: "Squat", Sets: 5, Reps: 3}, {Name: "Squat", Sets: 4, Reps: 6}}
+	seedWorkout(t, s, monday, []Exercise{{Name: "Squat", Sets: setList(3, 100, 3, 100, 3, 100, 3, 100, 3, 100)}})
+
+	targets, err := s.ExerciseTargets(schemes[1:], schemes, friday)
+	if err != nil {
+		t.Fatalf("failed to get targets: %v", err)
+	}
+	want := []ExerciseTarget{{Name: "Squat", Sets: setList(6, 0, 6, 0, 6, 0, 6, 0),
+		Reason: "No 4 × 6 history yet: pick a starting weight."}}
+	if !reflect.DeepEqual(targets, want) {
+		t.Errorf("expected targets %+v, got %+v", want, targets)
+	}
+}
+
+// Misses on one day's scheme add up even with another scheme's sessions in
+// between, so they still deload.
+func TestEvaluateProgression_SchemePerDay(t *testing.T) {
+	s := newTestStore(t)
+	created := mustCreatePlan(t, s, TrainingPlan{Name: "Heavy/light", Days: []PlanDay{
+		{Weekday: "monday", Exercises: []PlanExercise{{Name: "Squat", Sets: 5, Reps: 3}}},
+		{Weekday: "friday", Exercises: []PlanExercise{{Name: "Squat", Sets: 4, Reps: 6}}},
+	}})
+	planID := created.ID
+
+	missed := setList(6, 80, 6, 80, 5, 80, 4, 80)
+	seedWorkout(t, s, "2026-10-02", []Exercise{{Name: "Squat", Sets: missed}})
+	seedWorkout(t, s, "2026-10-05", []Exercise{{Name: "Squat", Sets: setList(3, 100, 3, 100, 3, 100, 3, 100, 3, 100)}})
+	seedWorkout(t, s, "2026-10-09", []Exercise{{Name: "Squat", Sets: missed}})
+	seedWorkout(t, s, monday, []Exercise{{Name: "Squat", Sets: setList(3, 102.5, 3, 102.5, 3, 102.5, 3, 102.5, 3, 102.5)}})
+
+	workout := Workout{Date: friday, PlanID: &planID, Exercises: []Exercise{{Name: "Squat", Sets: missed}}}
+	id, err := s.SaveWorkout(workout)
+	if err != nil {
+		t.Fatalf("failed to save workout: %v", err)
+	}
+	workout.ID = id
+
+	results, err := s.EvaluateProgression(planID, workout)
+	if err != nil {
+		t.Fatalf("failed to evaluate progression: %v", err)
+	}
+	if want := []ProgressionResult{{Exercise: "Squat", Result: ResultDeloaded}}; !reflect.DeepEqual(results, want) {
+		t.Errorf("expected results %+v, got %+v", want, results)
+	}
+}
+
 func TestExerciseTargets_FollowEditedHistory(t *testing.T) {
 	s := newTestStore(t)
 	scheme := []PlanExercise{{Name: "Squat", Sets: 1, Reps: 5}}
@@ -325,7 +409,7 @@ func TestExerciseTargets_FollowEditedHistory(t *testing.T) {
 		t.Fatalf("failed to update workout: %v", err)
 	}
 
-	targets, err := s.ExerciseTargets(scheme, monday)
+	targets, err := s.ExerciseTargets(scheme, nil, monday)
 	if err != nil {
 		t.Fatalf("failed to get targets: %v", err)
 	}
@@ -379,7 +463,7 @@ func TestExerciseTargets_AfterBreak(t *testing.T) {
 	s := newTestStore(t)
 	seedWorkout(t, s, "2026-09-14", []Exercise{{Name: "Squat", Sets: []Set{{Reps: 5, Weight: 100}}}})
 
-	targets, err := s.ExerciseTargets([]PlanExercise{{Name: "Squat", Sets: 1, Reps: 5}}, monday)
+	targets, err := s.ExerciseTargets([]PlanExercise{{Name: "Squat", Sets: 1, Reps: 5}}, nil, monday)
 	if err != nil {
 		t.Fatalf("failed to get targets: %v", err)
 	}

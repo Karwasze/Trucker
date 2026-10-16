@@ -28,10 +28,11 @@ const restActivity: RestActivityModule['default'] | null = (() => {
 })();
 
 const NOTIFICATION_ID = 'rest-timer';
+const CHANNEL_ID = 'rest-timer';
 
 /**
  * Schedules a vibrating alert for when the timer ends, so it still goes off
- * with the phone locked. In the foreground the app vibrates itself and the
+ * with the phone locked; it buzzes once, like vibrate(). In the foreground the app vibrates itself and the
  * alert stays hidden, since no notification handler is set.
  */
 export async function scheduleFinishAlert(timer: RunningTimer) {
@@ -39,20 +40,40 @@ export async function scheduleFinishAlert(timer: RunningTimer) {
   try {
     const { granted } = await notifications.requestPermissionsAsync();
     if (!granted) return;
+    if (Platform.OS === 'android') {
+      await notifications.setNotificationChannelAsync(CHANNEL_ID, {
+        name: 'Rest timer',
+        importance: notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 400],
+        enableVibrate: true,
+      });
+    }
+    // Measured after the awaits, so the permission prompt doesn't push the alert late.
+    const delayMs = endsAt(timer) - Date.now();
+    if (delayMs <= 0) return;
     await notifications.scheduleNotificationAsync({
       identifier: NOTIFICATION_ID,
       content: {
+        // iOS drops a notification without text, buzz included.
         title: 'Rest over',
         body: `${formatClock(timer.durationMs)} is up. Time for the next set.`,
         sound: 'default',
+        // Breaks through a Focus, if the app has the Time Sensitive entitlement.
+        interruptionLevel: 'timeSensitive',
       },
-      trigger: { type: notifications.SchedulableTriggerInputTypes.DATE, date: endsAt(timer) },
+      trigger: {
+        type: notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: delayMs / 1000,
+        channelId: CHANNEL_ID,
+      },
     });
   } catch {}
 }
 
+/** Cancels the pending alert and clears any that already went off. */
 export function cancelFinishAlert() {
   notifications?.cancelScheduledNotificationAsync(NOTIFICATION_ID).catch(() => {});
+  notifications?.dismissNotificationAsync(NOTIFICATION_ID).catch(() => {});
 }
 
 /**
@@ -79,7 +100,7 @@ export function syncLiveActivity(timer: RunningTimer | null) {
   }
 }
 
-/** Three firm buzzes; iOS ignores durations and uses the pauses between them. */
+/** One firm buzz, matching the locked-phone alert. */
 export function vibrate() {
-  Vibration.vibrate(Platform.OS === 'android' ? [0, 400, 200, 400, 200, 400] : [0, 500, 500]);
+  Vibration.vibrate(400);
 }

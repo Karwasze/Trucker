@@ -213,14 +213,29 @@ func (s *Store) GetPlanDay(id int, date time.Time) (PlanDay, error) {
 	if err != nil {
 		return PlanDay{}, err
 	}
+	return plan.Day(date), nil
+}
 
+// Day returns what the plan schedules on the weekday of date. On a rest day
+// the returned day has no exercises.
+func (p TrainingPlan) Day(date time.Time) PlanDay {
 	weekday := weekdayNames[isoWeekday(date.Weekday())-1]
-	for _, day := range plan.Days {
+	for _, day := range p.Days {
 		if day.Weekday == weekday {
-			return day, nil
+			return day
 		}
 	}
-	return PlanDay{Weekday: weekday, Exercises: []PlanExercise{}}, nil
+	return PlanDay{Weekday: weekday, Exercises: []PlanExercise{}}
+}
+
+// Exercises returns the exercises of every day of the plan, with their
+// schemes.
+func (p TrainingPlan) Exercises() []PlanExercise {
+	var exercises []PlanExercise
+	for _, day := range p.Days {
+		exercises = append(exercises, day.Exercises...)
+	}
+	return exercises
 }
 
 func getPlan(q querier, id int) (TrainingPlan, error) {

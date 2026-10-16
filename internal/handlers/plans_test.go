@@ -276,6 +276,33 @@ func TestPlanTodayAPI(t *testing.T) {
 	}
 }
 
+// The plan trains Squat as 2 × 5 on Monday and 1 × 3 on Friday: Monday's
+// target follows the last Monday, not the heavy single on Friday in between.
+func TestPlanTodayAPI_SchemePerDay(t *testing.T) {
+	h, s := newTestHandlers(t)
+	created := createTestPlan(t, h)
+	seedWorkout(t, s, "2026-10-12", []store.Exercise{
+		{Name: "Squat", Sets: []store.Set{{Reps: 5, Weight: 100}, {Reps: 5, Weight: 100}}},
+	})
+	seedWorkout(t, s, "2026-10-16", []store.Exercise{
+		{Name: "Squat", Sets: []store.Set{{Reps: 3, Weight: 120}}},
+	})
+
+	w := todayRequest(h, "GET", fmt.Sprintf("/api/plans/today?id=%d&date=2026-10-19", created.ID))
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var monday struct {
+		Exercises []store.ExerciseTarget `json:"exercises"`
+	}
+	json.NewDecoder(w.Body).Decode(&monday)
+	want := store.ExerciseTarget{Name: "Squat", Sets: []store.Set{{Reps: 5, Weight: 102.5}, {Reps: 5, Weight: 102.5}},
+		Reason: "Weight up 2.5 kg: you completed 2 × 5 @ 100 kg last time."}
+	if len(monday.Exercises) == 0 || !reflect.DeepEqual(monday.Exercises[0], want) {
+		t.Errorf("expected squat target %+v, got %+v", want, monday.Exercises)
+	}
+}
+
 // After the plan's workout for the day is logged, the day returns it, so
 // the app doesn't offer the same workout again (e.g. after losing its draft).
 func TestPlanTodayAPI_LoggedWorkout(t *testing.T) {

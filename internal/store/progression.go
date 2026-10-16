@@ -256,13 +256,68 @@ func roundWeight(weight float64) float64 {
 	return math.Round(weight*100) / 100
 }
 
+// sessionsInScheme keeps the sessions that were done in scheme, out of the
+// schemes a plan trains the exercise in (other exercises in schemes are
+// ignored), so a lift trained heavy one day and light another progresses
+// each day from its own sessions. With a single scheme for the exercise,
+// every session is kept.
+//
+// Nothing records which scheme a session was aimed at, so each session goes
+// to the scheme closest to its shape: the most reps of any set at its
+// working weight closest to the scheme's reps, then its number of sets at
+// that weight closest to the scheme's sets, preferring more sets on a tie
+// since a miss leaves sets out rather than adding them.
+func sessionsInScheme(sessions [][]Set, scheme PlanExercise, schemes []PlanExercise) [][]Set {
+	candidates := []PlanExercise{scheme}
+	for _, other := range schemes {
+		if other.Name == scheme.Name && (other.Sets != scheme.Sets || other.Reps != scheme.Reps) {
+			candidates = append(candidates, other)
+		}
+	}
+	if len(candidates) == 1 {
+		return sessions
+	}
+
+	var kept [][]Set
+	for _, session := range sessions {
+		working := workSets(session, workingWeight(session))
+		reps := 0
+		for _, set := range working {
+			reps = max(reps, set.Reps)
+		}
+		closest := candidates[0]
+		for _, candidate := range candidates[1:] {
+			repsOff, closestRepsOff := absInt(candidate.Reps-reps), absInt(closest.Reps-reps)
+			setsOff, closestSetsOff := absInt(candidate.Sets-len(working)), absInt(closest.Sets-len(working))
+			if repsOff < closestRepsOff || (repsOff == closestRepsOff &&
+				(setsOff < closestSetsOff || (setsOff == closestSetsOff && candidate.Sets > closest.Sets))) {
+				closest = candidate
+			}
+		}
+		if closest.Sets == scheme.Sets && closest.Reps == scheme.Reps {
+			kept = append(kept, session)
+		}
+	}
+	return kept
+}
+
+func absInt(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
+}
+
 // ExerciseTargets works out the target sets for each plan exercise from the
 // exercise's logged workouts on or before date, whether or not they were
-// logged against a plan.
-func (s *Store) ExerciseTargets(exercises []PlanExercise, date string) ([]ExerciseTarget, error) {
+// logged against a plan. schemes are all the exercises of the plan, so an
+// exercise the plan trains in more than one scheme progresses each scheme
+// from its own sessions (see sessionsInScheme); breaks still count from the
+// last session in any scheme.
+func (s *Store) ExerciseTargets(exercises, schemes []PlanExercise, date string) ([]ExerciseTarget, error) {
 	targets := []ExerciseTarget{}
 	for _, ex := range exercises {
-		sessions, lastDate, err := s.exerciseSessions(ex.Name, date, 0)
+		all, lastDate, err := s.exerciseSessions(ex.Name, date, 0)
 		if err != nil {
 			return nil, err
 		}
@@ -270,7 +325,11 @@ func (s *Store) ExerciseTargets(exercises []PlanExercise, date string) ([]Exerci
 		if err != nil {
 			return nil, err
 		}
+		sessions := sessionsInScheme(all, ex, schemes)
 		sets, _, reason := nextTarget(ex, sessions, off)
+		if len(sessions) == 0 && len(all) > 0 {
+			reason = fmt.Sprintf("No %d × %d history yet: pick a starting weight.", ex.Sets, ex.Reps)
+		}
 		targets = append(targets, ExerciseTarget{Name: ex.Name, Sets: sets, Reason: reason})
 	}
 	return targets, nil
@@ -320,10 +379,11 @@ func (s *Store) EvaluateProgression(planID int, workout Workout) ([]ProgressionR
 	if err != nil {
 		return nil, err
 	}
-	day, err := s.GetPlanDay(planID, date)
+	plan, err := s.GetPlan(planID)
 	if err != nil {
 		return nil, err
 	}
+	day := plan.Day(date)
 
 	logged := make(map[string]bool)
 	for _, ex := range workout.Exercises {
@@ -337,10 +397,15 @@ func (s *Store) EvaluateProgression(planID int, workout Workout) ([]ProgressionR
 		}
 		// Only history up to this workout counts, so later workouts on the
 		// same date don't change its outcome. The workout itself is the
-		// last session, so no break applies.
+		// last session, so no break applies. It is judged against the day's
+		// scheme whatever its shape, and earlier sessions only when they
+		// were done in that scheme.
 		sessions, _, err := s.exerciseSessions(ex.Name, workout.Date, workout.ID)
 		if err != nil {
 			return nil, err
+		}
+		if n := len(sessions); n > 0 {
+			sessions = append(sessionsInScheme(sessions[:n-1], ex, plan.Exercises()), sessions[n-1])
 		}
 		_, result, _ := nextTarget(ex, sessions, 0)
 		results = append(results, ProgressionResult{Exercise: ex.Name, Result: result})

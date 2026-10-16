@@ -141,18 +141,19 @@ func (h *Handlers) PlanTodayAPI(w http.ResponseWriter, r *http.Request) {
 		date = parsed
 	}
 
-	day, err := h.store.GetPlanDay(id, date)
+	plan, err := h.store.GetPlan(id)
 	if errors.Is(err, store.ErrPlanNotFound) {
 		http.Error(w, "Plan not found", http.StatusNotFound)
 		return
 	}
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
-		log.Printf("Error loading plan day: %v", err)
+		log.Printf("Error loading plan: %v", err)
 		return
 	}
+	day := plan.Day(date)
 
-	targets, err := h.store.ExerciseTargets(day.Exercises, date.Format("2006-01-02"))
+	targets, err := h.store.ExerciseTargets(day.Exercises, plan.Exercises(), date.Format("2006-01-02"))
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		log.Printf("Error working out plan targets: %v", err)

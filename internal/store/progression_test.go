@@ -436,3 +436,42 @@ func TestFreeExerciseTarget_AfterBreak(t *testing.T) {
 		t.Errorf("expected reason %q, got %q", want, reason)
 	}
 }
+
+func TestSessionsInScheme(t *testing.T) {
+	heavy := PlanExercise{Name: "Squat", Sets: 5, Reps: 3}
+	light := PlanExercise{Name: "Squat", Sets: 4, Reps: 6}
+	schemes := []PlanExercise{heavy, light, {Name: "Bench Press", Sets: 3, Reps: 8}}
+
+	sessions := [][]Set{
+		setList(3, 100, 3, 100, 3, 100, 3, 100, 3, 100),
+		setList(6, 80, 6, 80, 6, 80, 6, 80),
+		// Misses still belong to the scheme they were aimed at.
+		setList(3, 102.5, 3, 102.5, 3, 102.5, 2, 102.5, 2, 102.5),
+		setList(6, 82.5, 6, 82.5, 5, 82.5, 4, 82.5),
+		// Warm-ups don't count towards the shape of a session.
+		setList(10, 40, 6, 82.5, 6, 82.5, 6, 82.5, 6, 82.5),
+	}
+
+	if got, want := sessionsInScheme(sessions, heavy, schemes), [][]Set{sessions[0], sessions[2]}; !reflect.DeepEqual(got, want) {
+		t.Errorf("heavy: got %v, want %v", got, want)
+	}
+	if got, want := sessionsInScheme(sessions, light, schemes), [][]Set{sessions[1], sessions[3], sessions[4]}; !reflect.DeepEqual(got, want) {
+		t.Errorf("light: got %v, want %v", got, want)
+	}
+
+	// With a single scheme for the exercise, every session counts.
+	if got := sessionsInScheme(sessions, heavy, []PlanExercise{heavy}); !reflect.DeepEqual(got, sessions) {
+		t.Errorf("single scheme: got %v, want all sessions", got)
+	}
+	if got := sessionsInScheme(sessions, heavy, nil); !reflect.DeepEqual(got, sessions) {
+		t.Errorf("no schemes: got %v, want all sessions", got)
+	}
+
+	// Schemes with the same reps are told apart by their number of sets.
+	triple := PlanExercise{Name: "Squat", Sets: 3, Reps: 5}
+	five := PlanExercise{Name: "Squat", Sets: 5, Reps: 5}
+	fives := [][]Set{setList(5, 100, 5, 100, 5, 100), setList(5, 90, 5, 90, 5, 90, 5, 90, 5, 90)}
+	if got, want := sessionsInScheme(fives, triple, []PlanExercise{triple, five}), fives[:1]; !reflect.DeepEqual(got, want) {
+		t.Errorf("3 × 5: got %v, want %v", got, want)
+	}
+}

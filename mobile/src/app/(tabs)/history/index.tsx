@@ -2,70 +2,112 @@ import { Link } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 
-import type { Workout } from '@/api/types';
+import type { CardioWorkout, Workout } from '@/api/types';
 import { SwipeToDelete, type SwipeRow } from '@/components/swipe-to-delete';
 import { ThemedText } from '@/components/themed-text';
 import { Card, Message, Screen } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
+import { CardioSummary } from '@/health/cardio-summary';
+import { useHealthImports, useHealthState } from '@/health/health-state';
+import { HealthImportBanner } from '@/health/import-banner';
 import { useQuery } from '@/hooks/use-query';
 import { SettingsButton } from '@/settings/settings-button';
 import { useSettings } from '@/settings/settings-context';
-import { confirmDeleteWorkout } from '@/workout/confirm-delete';
+import { confirmDeleteCardio, confirmDeleteWorkout } from '@/workout/confirm-delete';
 import { describeSets } from '@/workout/draft';
 import { formatDate, formatKg, volumeOf } from '@/workout/format';
+
+type Entry = { kind: 'strength'; workout: Workout } | { kind: 'cardio'; workout: CardioWorkout };
+
+/**
+ * Lifting and cardio workouts, newest day first. Within a day, cardio comes
+ * latest start first, then lifting workouts, which have no time.
+ */
+function timeline(workouts: Workout[], cardio: CardioWorkout[]): Entry[] {
+  const entries: Entry[] = [
+    ...cardio.map((workout) => ({ kind: 'cardio' as const, workout })),
+    ...workouts.map((workout) => ({ kind: 'strength' as const, workout })),
+  ];
+  // Both lists come newest first, which a stable sort by date keeps.
+  return entries.sort((a, b) => b.workout.date.localeCompare(a.workout.date));
+}
 
 export default function HistoryScreen() {
   const { api, serverUrl } = useSettings();
   const workouts = useQuery(`workouts:${serverUrl}`, api.listWorkouts);
+  const cardio = useQuery(`cardio:${serverUrl}`, () => api.listCardio());
   const plans = useQuery(`plans:${serverUrl}`, api.listPlans);
+  const imports = useHealthImports();
+  const { dismiss } = useHealthState();
   const planName = (id?: number) => plans.data?.find((p) => p.id === id)?.name;
-  const [deletingId, setDeletingId] = useState<number | null>(null);
+  // Keyed by kind too, since lifting and cardio IDs overlap.
+  const [deleting, setDeleting] = useState<string | null>(null);
 
-  const deleteWorkout = async (id: number, row?: SwipeRow) => {
-    setDeletingId(id);
+  const deleteEntry = async (entry: Entry, row?: SwipeRow) => {
+    const key = `${entry.kind}:${entry.workout.id}`;
+    setDeleting(key);
     try {
-      await api.deleteWorkout(id);
-      workouts.refresh();
+      if (entry.kind === 'strength') {
+        await api.deleteWorkout(entry.workout.id);
+        workouts.refresh();
+      } else {
+        await api.deleteCardio(entry.workout.id);
+        // Deleted on purpose, so don't offer it for import again.
+        if (entry.workout.source_uuid) await dismiss([entry.workout.source_uuid]);
+        cardio.refresh();
+      }
     } catch (e) {
       Alert.alert("Couldn't delete workout", (e as Error).message);
       row?.close();
     } finally {
-      setDeletingId(null);
+      setDeleting(null);
     }
   };
 
   // A full swipe is deliberate enough to skip the confirmation.
-  const onDelete = (id: number, row?: SwipeRow, fullSwipe = false) =>
+  const onDelete = (entry: Entry, row?: SwipeRow, fullSwipe = false) =>
     fullSwipe
-      ? deleteWorkout(id, row)
-      : confirmDeleteWorkout(
-          () => deleteWorkout(id, row),
+      ? deleteEntry(entry, row)
+      : (entry.kind === 'strength' ? confirmDeleteWorkout : confirmDeleteCardio)(
+          () => deleteEntry(entry, row),
           () => row?.close()
         );
+
+  const loaded = workouts.data && cardio.data;
+  const entries = loaded ? timeline(workouts.data!, cardio.data!) : [];
 
   return (
     <Screen
       title="History"
       action={<SettingsButton />}
-      refreshing={workouts.refreshing}
+      refreshing={workouts.refreshing || cardio.refreshing}
       onRefresh={() => {
         workouts.refresh();
+        cardio.refresh();
         plans.refresh();
+        imports.refresh();
       }}>
-      {!workouts.data ? (
-        <Message loading={!workouts.error} error={workouts.error} />
-      ) : workouts.data.length === 0 ? (
+      <HealthImportBanner count={imports.candidates.length} />
+      {!loaded ? (
+        <Message loading={!workouts.error && !cardio.error} error={workouts.error ?? cardio.error} />
+      ) : entries.length === 0 ? (
         <Message>No workouts yet. Log one from the Today tab.</Message>
       ) : (
-        workouts.data.map((w) => (
-          <WorkoutRow
-            key={w.id}
-            workout={w}
-            planName={planName(w.plan_id)}
-            deleting={deletingId === w.id}
-            onDelete={(row, fullSwipe) => onDelete(w.id, row, fullSwipe)}
-          />
-        ))
+        entries.map((entry) => {
+          const key = `${entry.kind}:${entry.workout.id}`;
+          const onEntryDelete = (row?: SwipeRow, fullSwipe?: boolean) => onDelete(entry, row, fullSwipe);
+          return entry.kind === 'strength' ? (
+            <WorkoutRow
+              key={key}
+              workout={entry.workout}
+              planName={planName(entry.workout.plan_id)}
+              deleting={deleting === key}
+              onDelete={onEntryDelete}
+            />
+          ) : (
+            <CardioRow key={key} workout={entry.workout} deleting={deleting === key} onDelete={onEntryDelete} />
+          );
+        })
       )}
     </Screen>
   );
@@ -115,6 +157,35 @@ function WorkoutRow({
                 </ThemedText>
               </View>
             ))}
+          </Card>
+        </Pressable>
+      </Link>
+    </SwipeToDelete>
+  );
+}
+
+/** A cardio history card, swiped like WorkoutRow. */
+function CardioRow({
+  workout: w,
+  deleting,
+  onDelete,
+}: {
+  workout: CardioWorkout;
+  deleting: boolean;
+  onDelete: (row?: SwipeRow, fullSwipe?: boolean) => void;
+}) {
+  return (
+    <SwipeToDelete
+      onDelete={onDelete}
+      loading={deleting}
+      accessibilityLabel={`Delete workout from ${formatDate(w.date)}`}>
+      <Link href={{ pathname: '/history/cardio/[id]', params: { id: w.id } }} asChild>
+        <Pressable
+          onLongPress={() => onDelete()}
+          disabled={deleting}
+          style={({ pressed }) => [pressed && { opacity: 0.6 }, deleting && { opacity: 0.4 }]}>
+          <Card>
+            <CardioSummary workout={w} />
           </Card>
         </Pressable>
       </Link>

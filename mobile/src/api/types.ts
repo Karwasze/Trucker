@@ -203,4 +203,124 @@ export type Insights = {
   tonnage: Tonnage;
   strength: StrengthLevel[];
   untagged: string[];
+  /** Cardio per activity over the timespan; cardio days count as sessions. */
+  cardio: CardioSummary[];
+  /** This week of the active goal; null without one. */
+  goal: GoalSummary | null;
 };
+
+export type GoalSummary = {
+  goal: Goal;
+  weeks_to_race: number;
+  phase: GoalPhase;
+  met: number;
+  partial: number;
+  missed: number;
+  pending: number;
+  planned_m: Partial<Record<CardioActivity, number>>;
+  done_m: Partial<Record<CardioActivity, number>>;
+  /** Threshold speed (m/s) the targets come from. */
+  threshold: Partial<Record<CardioActivity, number>>;
+};
+
+export type CardioSummary = {
+  activity: CardioActivity;
+  sessions: number;
+  distance_m: number;
+  duration_seconds: number;
+  weekly_distance_m: number;
+};
+
+export type CardioActivity = 'running' | 'cycling' | 'swimming' | 'walking' | 'hiking';
+
+/** Where a workout stood `t` seconds in: `d` metres so far, and the heart rate. */
+export type CardioSample = { t: number; d: number; hr?: number };
+
+/** A lap or segment marked during a workout. */
+export type CardioLap = { t: number; duration: number; d: number };
+
+/** An endurance workout imported from Apple Health. */
+export type CardioWorkout = {
+  id: number;
+  /** Local date of the start, YYYY-MM-DD. */
+  date: string;
+  /** RFC3339 start. */
+  started_at: string;
+  activity: CardioActivity;
+  duration_seconds: number;
+  distance_m?: number;
+  energy_kcal?: number;
+  avg_heart_rate?: number;
+  max_heart_rate?: number;
+  swim_strokes?: number;
+  lap_length_m?: number;
+  /** Only loaded for a single workout, not in lists. */
+  samples?: CardioSample[];
+  laps?: CardioLap[];
+  source?: string;
+  /** The Apple Health workout it was imported from. */
+  source_uuid?: string;
+  /** When importing: the planned session it fills. */
+  planned_session_id?: number;
+};
+
+export type NewCardioWorkout = Omit<CardioWorkout, 'id'>;
+
+/** An endurance race to train for; distances in metres. */
+export type Goal = {
+  id: number;
+  name: string;
+  race_date: string;
+  start_date: string;
+  swim_m?: number;
+  bike_m?: number;
+  run_m?: number;
+  weekdays: Weekday[];
+  long_day: Weekday;
+  active: boolean;
+};
+
+export type NewGoal = Omit<Goal, 'id' | 'start_date' | 'active'> & { id?: number };
+
+export type Weekday = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+
+export type GoalPhase = 'base' | 'build' | 'peak' | 'taper' | 'race';
+
+export type SessionKind = 'easy' | 'long' | 'tempo' | 'intervals' | 'recovery' | 'technique' | 'brick' | 'race';
+
+export type VerdictStatus = 'met' | 'partial' | 'missed' | 'pending';
+
+export type Verdict = {
+  status: VerdictStatus;
+  checks: { name: string; actual: string; target: string; ok: boolean }[];
+};
+
+/** A session of a goal's plan; speeds are m/s. */
+export type PlannedSession = {
+  id: number;
+  goal_id: number;
+  date: string;
+  activity: CardioActivity;
+  kind: SessionKind;
+  phase: GoalPhase;
+  target_distance_m?: number;
+  target_duration_s?: number;
+  intensity: string;
+  description: string;
+  speed_min?: number;
+  speed_max?: number;
+  hr_min?: number;
+  hr_max?: number;
+  reps?: number;
+  rep_distance_m?: number;
+  rep_duration_s?: number;
+  recovery_s?: number;
+  cardio_workout_id?: number;
+  /** The workout that filled it, without samples. */
+  workout?: CardioWorkout;
+  verdict?: Verdict;
+};
+
+export type GoalToday = { goal: Goal | null; sessions: PlannedSession[] };
+
+export type SavedGoal = { goal: Goal; warnings: string[] };

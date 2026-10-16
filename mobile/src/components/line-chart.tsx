@@ -15,6 +15,8 @@ type Props = {
   from: string;
   to: string;
   unit: string;
+  /** Formats a value for the readout; "12.3 unit" by default. */
+  formatValue?: (value: number) => string;
   height?: number;
 };
 
@@ -39,7 +41,14 @@ function niceStep(span: number, count: number) {
  * Line chart of values over time. Touch and drag across it to read
  * individual points.
  */
-export function LineChart({ points, from, to, unit, height = 180 }: Props) {
+export function LineChart({
+  points,
+  from,
+  to,
+  unit,
+  formatValue = (v) => `${v.toFixed(1)} ${unit}`,
+  height = 180,
+}: Props) {
   const theme = useTheme();
   const [width, setWidth] = useState(0);
   const [active, setActive] = useState<number | null>(null);
@@ -79,7 +88,7 @@ export function LineChart({ points, from, to, unit, height = 180 }: Props) {
     <View>
       <View style={styles.readout}>
         <ThemedText style={styles.value}>
-          {shown.value.toFixed(1)} {unit}
+          {formatValue(shown.value)}
         </ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
           {active === null ? 'Latest · ' : ''}
@@ -98,7 +107,7 @@ export function LineChart({ points, from, to, unit, height = 180 }: Props) {
         onResponderRelease={() => setActive(null)}
         onResponderTerminate={() => setActive(null)}
         accessible
-        accessibilityLabel={`${unit} chart, ${points.length} sessions, latest ${points.at(-1)!.value.toFixed(1)} ${unit}`}>
+        accessibilityLabel={`${unit} chart, ${points.length} sessions, latest ${formatValue(points.at(-1)!.value)}`}>
         {width > 0 && (
           <Svg width={width} height={height}>
             {ticks.map((t) => (

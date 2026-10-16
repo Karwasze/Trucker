@@ -29,6 +29,10 @@ export default function RootLayout() {
             <Stack>
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
               <Stack.Screen name="settings" options={{ title: 'Settings', headerBackButtonDisplayMode: 'minimal' }} />
+              <Stack.Screen
+                name="health-import"
+                options={{ title: 'Import from Apple Health', presentation: 'modal' }}
+              />
             </Stack>
             <TimerIsland />
           </TimerProvider>

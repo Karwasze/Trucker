@@ -13,3 +13,16 @@ export function confirmDeleteWorkout(onConfirm: () => void, onCancel?: () => voi
     { cancelable: true, onDismiss: onCancel }
   );
 }
+
+/** Asks before deleting an imported cardio workout; `onConfirm` runs only on Delete. */
+export function confirmDeleteCardio(onConfirm: () => void, onCancel?: () => void) {
+  Alert.alert(
+    'Delete workout?',
+    "It stays in Apple Health but won't be offered for import again.",
+    [
+      { text: 'Cancel', style: 'cancel', onPress: onCancel },
+      { text: 'Delete', style: 'destructive', onPress: onConfirm },
+    ],
+    { cancelable: true, onDismiss: onCancel }
+  );
+}

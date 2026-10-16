@@ -7,6 +7,9 @@ import { ThemedText } from "@/components/themed-text";
 import { Button, Card, Message, Screen } from "@/components/ui";
 import { SettingsButton } from "@/settings/settings-button";
 import { Spacing } from "@/constants/theme";
+import { EnduranceToday } from "@/goals/endurance-today";
+import { useHealthImports } from "@/health/health-state";
+import { HealthImportBanner } from "@/health/import-banner";
 import { useQuery } from "@/hooks/use-query";
 import { useTheme } from "@/hooks/use-theme";
 import { useToday } from "@/hooks/use-today";
@@ -132,9 +135,13 @@ export default function TodayScreen() {
     );
   }, [planDay.data, planDay.error, planReady, planId, today, setDraft]);
 
+  const imports = useHealthImports();
+  const waitingToday = imports.candidates.some((w) => w.date === today);
+
   const refresh = () => {
     recheckToday();
     plans.refresh();
+    imports.refresh();
     if (planId !== null) {
       rebuildOnRefresh.current = true;
       planDay.refresh();
@@ -232,10 +239,12 @@ export default function TodayScreen() {
   if (draft?.logged) {
     return (
       <Screen title="Today" subtitle={subtitle} action={<SettingsButton />}>
+        <HealthImportBanner count={imports.candidates.length} />
         <LoggedSummary
           progression={draft.logged.progression ?? []}
           exercises={draft.logged.exercises}
         />
+        <EnduranceToday date={today} waiting={waitingToday} />
         <Button
           title="Start another workout"
           variant="secondary"
@@ -265,6 +274,7 @@ export default function TodayScreen() {
       refreshing={planDay.refreshing}
       onRefresh={refresh}
     >
+      <HealthImportBanner count={imports.candidates.length} />
       {draft && draft.date !== today && (
         <Card>
           <ThemedText type="smallBold">
@@ -302,8 +312,7 @@ export default function TodayScreen() {
           )}
           {isRestDay && draft?.exercises.length === 0 && (
             <Message>
-              Rest day 😴{"\n"}Nothing scheduled — add exercises if you train
-              anyway.
+              No lifting today 😴{"\n"}Add exercises if you train anyway.
             </Message>
           )}
 
@@ -338,6 +347,8 @@ export default function TodayScreen() {
             variant="secondary"
             onPress={() => setPickerOpen(true)}
           />
+
+          <EnduranceToday date={today} waiting={waitingToday} />
 
           {draft && draft.exercises.length > 0 && (
             <View style={styles.footer}>

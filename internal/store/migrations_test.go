@@ -15,7 +15,7 @@ func TestMigrate_CreatesSchema(t *testing.T) {
 	tables := []string{
 		"workouts", "exercise_library", "exercises", "sets", "schema_migrations",
 		"training_plans", "training_plan_exercises", "training_plan_sets",
-		"bodyweight", "exercise_muscles",
+		"bodyweight", "exercise_muscles", "cardio_workouts", "goals", "planned_sessions",
 	}
 	for _, table := range tables {
 		var name string
@@ -46,8 +46,8 @@ func TestMigrate_IsIdempotent(t *testing.T) {
 	if err := s.db.QueryRow("SELECT COUNT(*) FROM schema_migrations").Scan(&count); err != nil {
 		t.Fatalf("failed to count schema_migrations: %v", err)
 	}
-	if count != 7 {
-		t.Errorf("expected 7 applied migrations, got %d", count)
+	if count != 9 {
+		t.Errorf("expected 9 applied migrations, got %d", count)
 	}
 }
 
@@ -383,5 +383,59 @@ func TestMigrate_UpgradeFromV6AddsPressAndPullUpDefaults(t *testing.T) {
 	stats, err := s.GetStatisticsResponse("Pull-up")
 	if err != nil || len(stats.Data) != 1 {
 		t.Errorf("expected Pull-up history to remain, got %+v (%v)", stats.Data, err)
+	}
+}
+
+func TestMigrate_UpgradeFromV7AddsCardioKeepingWorkouts(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "v7.db")
+
+	db, err := sql.Open("sqlite3", path)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	stmts := []string{"CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)"}
+	for i := 1; i <= 7; i++ {
+		matches, err := fs.Glob(migrationsFS, fmt.Sprintf("migrations/%04d_*.sql", i))
+		if err != nil || len(matches) != 1 {
+			t.Fatalf("failed to find migration %d: %v", i, err)
+		}
+		contents, err := migrationsFS.ReadFile(matches[0])
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", matches[0], err)
+		}
+		stmts = append(stmts, string(contents),
+			fmt.Sprintf("INSERT INTO schema_migrations (version, applied_at) VALUES (%d, '2026-01-01T00:00:00Z')", i))
+	}
+	stmts = append(stmts,
+		"INSERT INTO workouts (id, date) VALUES (1, '2026-10-01')",
+		"INSERT INTO exercises (id, workout_id, name) VALUES (1, 1, 'Squat')",
+		"INSERT INTO sets (exercise_id, reps, weight) VALUES (1, 5, 100)",
+		"INSERT INTO bodyweight (date, weight) VALUES ('2026-10-01', 80)",
+	)
+	for _, stmt := range stmts {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatalf("failed to build v7 database: %v", err)
+		}
+	}
+	db.Close()
+
+	s, err := Open(path)
+	if err != nil {
+		t.Fatalf("failed to open and migrate v7 database: %v", err)
+	}
+	defer s.Close()
+
+	workouts, err := s.GetWorkouts()
+	if err != nil || len(workouts) != 1 || len(workouts[0].Exercises) != 1 {
+		t.Errorf("expected the logged workout kept, got %+v (%v)", workouts, err)
+	}
+	bodyweight, err := s.ListBodyweight()
+	if err != nil || len(bodyweight) != 1 {
+		t.Errorf("expected bodyweight kept, got %+v (%v)", bodyweight, err)
+	}
+	if _, err := s.SaveCardioWorkouts([]CardioWorkout{{
+		Date: "2026-10-02", StartedAt: "2026-10-02T07:00:00Z", Activity: ActivityRunning, DurationSeconds: 1800,
+	}}); err != nil {
+		t.Errorf("expected cardio workouts to be storable, got %v", err)
 	}
 }

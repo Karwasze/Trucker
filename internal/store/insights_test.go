@@ -589,3 +589,112 @@ func TestGetInsights_TonnageEmpty(t *testing.T) {
 		t.Errorf("expected empty tonnage, got %+v", tonnage)
 	}
 }
+
+func seedCardio(t *testing.T, s *Store, workouts ...CardioWorkout) {
+	t.Helper()
+	if _, err := s.SaveCardioWorkouts(workouts); err != nil {
+		t.Fatalf("failed to seed cardio: %v", err)
+	}
+}
+
+func cardio(activity, date string, metres, seconds float64) CardioWorkout {
+	return CardioWorkout{
+		Date: date, StartedAt: date + "T07:00:00Z", Activity: activity,
+		DurationSeconds: seconds, DistanceM: &metres,
+	}
+}
+
+func TestGetInsights_CardioCountsAsSessions(t *testing.T) {
+	s := newTestStore(t)
+	seedWorkout(t, s, "2026-03-23", []Exercise{{Name: "Squat", Sets: sets(3, 100, 5)}})
+	// A run on a lifting day doesn't add a session; a ride on its own does.
+	seedCardio(t, s,
+		cardio(ActivityRunning, "2026-03-23", 5000, 1500),
+		cardio(ActivityCycling, "2026-03-25", 30000, 3600),
+	)
+
+	insights := getInsights(t, s)
+	if insights.SessionsPerWeek != 0.5 {
+		t.Errorf("expected 0.5 sessions/week from 2 days in 4 weeks, got %v", insights.SessionsPerWeek)
+	}
+}
+
+func TestGetInsights_CardioCountsForAdherence(t *testing.T) {
+	s := newTestStore(t)
+	plan := mondayThursdayPlan(t, s)
+	seedPlanWorkout(t, s, plan.ID, "2026-03-23", []Exercise{{Name: "Squat", Sets: sets(3, 100, 5)}})
+	// A swim on Thursday completes it; a run on Saturday is extra.
+	seedCardio(t, s,
+		cardio(ActivitySwimming, "2026-03-26", 1500, 2400),
+		cardio(ActivityRunning, "2026-03-28", 5000, 1500),
+	)
+
+	a := getInsightsFor(t, s, "2026-03-29", "", plan.ID).Adherence
+	if a.Scheduled != 2 || a.Completed != 2 || a.Extra != 1 || a.Streak != 2 {
+		t.Errorf("expected 2 of 2, 1 extra and a streak of 2, got %+v", a)
+	}
+}
+
+func TestGetInsights_CardioSummaries(t *testing.T) {
+	s := newTestStore(t)
+	seedCardio(t, s,
+		// Before the timespan.
+		cardio(ActivityRunning, "2026-03-01", 20000, 7200),
+		cardio(ActivityRunning, "2026-03-17", 5000, 1500),
+		cardio(ActivityCycling, "2026-03-20", 40000, 4800),
+		cardio(ActivityRunning, "2026-03-30", 10000, 3000),
+	)
+
+	// Mar 17 to Mar 30 is two weeks.
+	got := getInsightsFor(t, s, "2026-03-30", "2026-03-17", 0).Cardio
+	want := []CardioSummary{
+		{Activity: ActivityRunning, Sessions: 2, DistanceM: 15000, DurationSeconds: 4500, WeeklyDistanceM: 7500},
+		{Activity: ActivityCycling, Sessions: 1, DistanceM: 40000, DurationSeconds: 4800, WeeklyDistanceM: 20000},
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %+v, want %+v", got, want)
+	}
+
+	// All time starts at the first cardio workout: Mar 1 to Mar 30 is 30
+	// days.
+	got = getInsightsFor(t, s, "2026-03-30", "", 0).Cardio
+	if len(got) != 2 || got[0].Sessions != 3 || got[0].WeeklyDistanceM != 8167 {
+		t.Errorf("unexpected all-time summaries %+v", got)
+	}
+
+	if empty := getInsightsFor(t, newTestStore(t), "2026-03-30", "", 0).Cardio; empty == nil || len(empty) != 0 {
+		t.Errorf("expected empty, non-nil summaries, got %#v", empty)
+	}
+}
+
+func TestGetInsights_GoalSummary(t *testing.T) {
+	s := newTestStore(t)
+	if got := getInsightsFor(t, s, "2026-10-21", "", 0).Goal; got != nil {
+		t.Errorf("expected no goal summary without a goal, got %+v", got)
+	}
+
+	g := mustCreateGoal(t, s, newGoal(), "2026-10-19")
+	monday, err := s.GoalSessions(g.ID, "2026-10-19", "2026-10-19", "2026-10-21")
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := cardioRun("a", "2026-10-19", deref(monday[0].TargetDistanceM)/1000)
+	run.PlannedSessionID = &monday[0].ID
+	seedCardio(t, s, run)
+
+	// Wednesday: Monday met, Wednesday to come, Friday and Sunday ahead.
+	got := getInsightsFor(t, s, "2026-10-21", "", 0).Goal
+	if got == nil || got.Goal.ID != g.ID || got.Phase != PhaseBase || got.WeeksToRace != 11 {
+		t.Fatalf("unexpected summary %+v", got)
+	}
+	if got.Met != 1 || got.Pending != 3 || got.Missed != 0 {
+		t.Errorf("expected 1 met and 3 to come, got %+v", got)
+	}
+	if got.DoneM[ActivityRunning] != deref(monday[0].TargetDistanceM) || got.PlannedM[ActivityRunning] <= got.DoneM[ActivityRunning] {
+		t.Errorf("unexpected distances %+v / %+v", got.DoneM, got.PlannedM)
+	}
+
+	if after := getInsightsFor(t, s, "2027-01-11", "", 0).Goal; after != nil {
+		t.Errorf("expected no summary after the race, got %+v", after)
+	}
+}

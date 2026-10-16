@@ -32,6 +32,14 @@
       "expo-router",
       "expo-widgets",
       [
+        "@kingstinct/react-native-healthkit",
+        {
+          "NSHealthShareUsageDescription": "Trucker imports your runs, rides and swims from Apple Health to fill in your training plan.",
+          "NSHealthUpdateUsageDescription": false,
+          "background": false
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "backgroundColor": "#208AEF",

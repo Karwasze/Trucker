@@ -8,6 +8,7 @@ import { Button, Card, Chip, Message, Screen, SectionLabel } from '@/components/
 import { Spacing } from '@/constants/theme';
 import { useQuery } from '@/hooks/use-query';
 import { useTheme } from '@/hooks/use-theme';
+import { HealthCard } from '@/health/health-card';
 import { ExerciseMuscles } from '@/settings/exercise-muscles';
 import { ENVIRONMENT_NAMES, useSettings, type Environment } from '@/settings/settings-context';
 import { useTimer } from '@/timer/timer-context';
@@ -75,6 +76,9 @@ export default function SettingsScreen() {
 
       <SectionLabel>Rest timer</SectionLabel>
       <TimerCard />
+
+      <SectionLabel>Apple Health</SectionLabel>
+      <HealthCard />
 
       <SectionLabel>Exercises</SectionLabel>
       {!exercises.data ? (

@@ -106,6 +106,10 @@ func (s *Store) GetInsights(today, from string, planID int) (Insights, error) {
 	if err != nil {
 		return Insights{}, err
 	}
+	cardio, err := s.cardioBetween("", today)
+	if err != nil {
+		return Insights{}, err
+	}
 
 	insights := Insights{
 		Date:        today,
@@ -115,6 +119,7 @@ func (s *Store) GetInsights(today, from string, planID int) (Insights, error) {
 		Progression: liftProgress(all, from),
 		Tonnage:     tonnage(window, now),
 		Untagged:    []string{},
+		Cardio:      cardioSummaries(cardio, from, now),
 	}
 
 	if planID != 0 {
@@ -124,7 +129,7 @@ func (s *Store) GetInsights(today, from string, planID int) (Insights, error) {
 		case err != nil:
 			return Insights{}, err
 		default:
-			if insights.Adherence, err = s.adherence(plan, all, from, now); err != nil {
+			if insights.Adherence, err = s.adherence(plan, all, cardio, from, now); err != nil {
 				return Insights{}, err
 			}
 			insights.Stalls = planStalls(plan, all, from, today)
@@ -165,6 +170,11 @@ func (s *Store) GetInsights(today, from string, planID int) (Insights, error) {
 		}
 	}
 	slices.Sort(insights.Untagged)
+	for _, w := range cardio {
+		if w.Date > volumeStart {
+			sessions[w.Date] = true
+		}
+	}
 
 	insights.SessionsPerWeek = round(float64(len(sessions))/weeks, 1)
 	for _, muscle := range Muscles {
@@ -184,7 +194,59 @@ func (s *Store) GetInsights(today, from string, planID int) (Insights, error) {
 	if insights.Strength == nil {
 		insights.Strength = []StrengthLevel{}
 	}
+	if insights.Goal, err = s.goalSummary(cardio, now); err != nil {
+		return Insights{}, err
+	}
 	return insights, nil
+}
+
+// goalSummary sums up the active goal's week as of now, or nil without an
+// active goal or once its race is over.
+func (s *Store) goalSummary(cardio []CardioWorkout, now time.Time) (*GoalSummary, error) {
+	goal, err := s.ActiveGoal()
+	if err != nil || goal == nil {
+		return nil, err
+	}
+	today := now.Format(dateLayout)
+	if goal.RaceDate < today {
+		return nil, nil
+	}
+	fitness := estimateFitness(cardio, now)
+	start, _ := time.Parse(dateLayout, goal.StartDate)
+	race, _ := time.Parse(dateLayout, goal.RaceDate)
+	weeks := planWeeks(start, race, taperWeeks(*goal, fitness))
+	i := min(weekIndex(weeks, now), len(weeks)-1)
+
+	summary := &GoalSummary{
+		Goal:        *goal,
+		WeeksToRace: len(weeks) - 1 - i,
+		Phase:       weeks[i].phase,
+		PlannedM:    map[string]float64{},
+		DoneM:       map[string]float64{},
+		Threshold:   fitness.Threshold,
+	}
+	monday := mondayOf(now)
+	sessions, err := s.GoalSessions(goal.ID, monday.Format(dateLayout), monday.AddDate(0, 0, 6).Format(dateLayout), today)
+	if err != nil {
+		return nil, err
+	}
+	for _, session := range sessions {
+		switch session.Verdict.Status {
+		case VerdictMet:
+			summary.Met++
+		case VerdictPartial:
+			summary.Partial++
+		case VerdictMissed:
+			summary.Missed++
+		default:
+			summary.Pending++
+		}
+		summary.PlannedM[session.Activity] += deref(session.TargetDistanceM)
+		if session.Workout != nil {
+			summary.DoneM[session.Activity] += deref(session.Workout.DistanceM)
+		}
+	}
+	return summary, nil
 }
 
 // setsBetween returns every set logged after start and up to end (both
@@ -322,8 +384,8 @@ func strengthLevels(sets []insightSet, bodyweight float64) []StrengthLevel {
 }
 
 // adherence compares the days the plan schedules with the days anything was
-// logged, from the plan's first logged workout up to now.
-func (s *Store) adherence(plan TrainingPlan, sets []insightSet, from string, now time.Time) (*Adherence, error) {
+// logged, lifting or cardio, from the plan's first logged workout up to now.
+func (s *Store) adherence(plan TrainingPlan, sets []insightSet, cardio []CardioWorkout, from string, now time.Time) (*Adherence, error) {
 	today := now.Format(dateLayout)
 	a := &Adherence{Plan: plan.Name, Missed: []string{}}
 
@@ -348,6 +410,9 @@ func (s *Store) adherence(plan TrainingPlan, sets []insightSet, from string, now
 	trained := make(map[string]bool)
 	for _, set := range sets {
 		trained[set.date] = true
+	}
+	for _, w := range cardio {
+		trained[w.Date] = true
 	}
 
 	// Newest first, so the streak ends at the first miss.
@@ -536,4 +601,53 @@ func weekStart(date time.Time) time.Time {
 func round(v float64, decimals int) float64 {
 	p := math.Pow(10, float64(decimals))
 	return math.Round(v*p) / p
+}
+
+// cardioSummaries totals the cardio workouts (oldest first) from from
+// (YYYY-MM-DD, or "" for all time) up to now per activity, in the order of
+// CardioActivities. All time starts at the first cardio workout.
+func cardioSummaries(cardio []CardioWorkout, from string, now time.Time) []CardioSummary {
+	summaries := []CardioSummary{}
+	start := from
+	for _, w := range cardio {
+		if w.Date >= from {
+			if start == "" {
+				start = w.Date
+			}
+			break
+		}
+	}
+	if start == "" {
+		return summaries
+	}
+	first, err := time.Parse(dateLayout, start)
+	if err != nil {
+		return summaries
+	}
+	weeks := math.Max((now.Sub(first).Hours()/24+1)/7, 1)
+
+	byActivity := make(map[string]*CardioSummary)
+	for _, w := range cardio {
+		if w.Date < from {
+			continue
+		}
+		summary := byActivity[w.Activity]
+		if summary == nil {
+			summary = &CardioSummary{Activity: w.Activity}
+			byActivity[w.Activity] = summary
+		}
+		summary.Sessions++
+		summary.DurationSeconds += w.DurationSeconds
+		if w.DistanceM != nil {
+			summary.DistanceM += *w.DistanceM
+		}
+	}
+	for _, activity := range CardioActivities {
+		if summary := byActivity[activity]; summary != nil {
+			summary.DistanceM = math.Round(summary.DistanceM)
+			summary.WeeklyDistanceM = math.Round(summary.DistanceM / weeks)
+			summaries = append(summaries, *summary)
+		}
+	}
+	return summaries
 }

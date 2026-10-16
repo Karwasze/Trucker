@@ -1,0 +1,72 @@
+import { router } from 'expo-router';
+import { useState } from 'react';
+import { Alert } from 'react-native';
+
+import { ThemedText } from '@/components/themed-text';
+import { Button, Card } from '@/components/ui';
+import { useHealthState } from '@/health/health-state';
+import { connectHealth, isHealthAvailable } from '@/health/healthkit';
+
+/** Settings for importing workouts from Apple Health. */
+export function HealthCard() {
+  const { state, loaded, connect, disconnect } = useHealthState();
+  const [connecting, setConnecting] = useState(false);
+
+  if (!isHealthAvailable()) {
+    return (
+      <Card>
+        <ThemedText type="small" themeColor="textSecondary">
+          Apple Health is only available in the iPhone app.
+        </ThemedText>
+      </Card>
+    );
+  }
+
+  const onConnect = async () => {
+    setConnecting(true);
+    try {
+      await connectHealth();
+      await connect();
+    } catch (e) {
+      Alert.alert("Couldn't connect Apple Health", (e as Error).message);
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const confirmDisconnect = () =>
+    Alert.alert(
+      'Disconnect Apple Health?',
+      'Imported workouts are kept. Reconnecting only offers workouts from then on.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Disconnect', style: 'destructive', onPress: disconnect },
+      ]
+    );
+
+  if (!loaded) return null;
+  if (!state.connectedAt) {
+    return (
+      <Card>
+        <ThemedText type="small" themeColor="textSecondary">
+          Import runs, rides and swims recorded on your Apple Watch. Only workouts from now on are offered,
+          and you choose which ones to import.
+        </ThemedText>
+        <Button title="Connect Apple Health" loading={connecting} onPress={onConnect} />
+      </Card>
+    );
+  }
+  return (
+    <Card>
+      <ThemedText>
+        Connected since {new Date(state.connectedAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}
+      </ThemedText>
+      <ThemedText type="small" themeColor="textSecondary">
+        New workouts show up in History for you to review. To change what Trucker can read, use the Health app:
+        Sharing → Apps → Trucker.
+      </ThemedText>
+      <Button title="Check for new workouts" variant="secondary" onPress={() => router.navigate('/health-import')} />
+      <Button title="Disconnect" variant="secondary" compact onPress={confirmDisconnect} />
+    </Card>
+  );
+}

@@ -1,9 +1,17 @@
 import type {
   BodyweightEntry,
+  CardioActivity,
+  CardioWorkout,
   CreatedWorkout,
+  Goal,
+  GoalToday,
   ExerciseDB,
   Insights,
   MuscleTarget,
+  NewCardioWorkout,
+  NewGoal,
+  PlannedSession,
+  SavedGoal,
   NewWorkout,
   PlanToday,
   Set,
@@ -85,6 +93,56 @@ export function createApi(baseUrl: string) {
     deleteBodyweight: (date: string) =>
       request<{ success: boolean }>(`/api/bodyweight?date=${q(date)}`, { method: 'DELETE' }),
 
+    /** Cardio workouts, newest first, without their samples. */
+    listCardio: async (activity?: CardioActivity) =>
+      (await request<CardioWorkout[] | null>(
+        activity ? `/api/cardio?activity=${q(activity)}` : '/api/cardio'
+      )) ?? [],
+    /** A cardio workout with its samples and laps. */
+    getCardio: (id: number) => request<CardioWorkout>(`/api/cardio?id=${id}`),
+    /**
+     * Imports workouts, skipping ones already imported; returns the ones saved.
+     * Workouts filling planned sessions adapt the goal's plan as of `date`.
+     */
+    importCardio: async (workouts: NewCardioWorkout[], date = localDate()) =>
+      (await request<CardioWorkout[] | null>(`/api/cardio?date=${q(date)}`, {
+        method: 'POST',
+        body: JSON.stringify(workouts),
+      })) ?? [],
+    deleteCardio: (id: number) =>
+      request<{ success: boolean }>(`/api/cardio?id=${id}`, { method: 'DELETE' }),
+
+    listGoals: async () => (await request<Goal[] | null>('/api/goals')) ?? [],
+    /** Creates the active goal and its plan from `date`. */
+    createGoal: async (goal: NewGoal, date: string) =>
+      withWarnings(
+        await request<SavedGoal>(`/api/goals?date=${q(date)}`, { method: 'POST', body: JSON.stringify(goal) })
+      ),
+    /** Replaces a goal and regenerates its plan from `date`, keeping filled sessions. */
+    updateGoal: async (goal: NewGoal & { id: number }, date: string) =>
+      withWarnings(
+        await request<SavedGoal>(`/api/goals?date=${q(date)}`, { method: 'PUT', body: JSON.stringify(goal) })
+      ),
+    deleteGoal: (id: number) => request<{ success: boolean }>(`/api/goals?id=${id}`, { method: 'DELETE' }),
+    /** A goal's sessions between from and to (inclusive), judged as of date. */
+    goalSessions: async (id: number, date: string, from?: string, to?: string) => {
+      let path = `/api/goals/sessions?id=${id}&date=${q(date)}`;
+      if (from) path += `&from=${q(from)}`;
+      if (to) path += `&to=${q(to)}`;
+      return (await request<PlannedSession[] | null>(path)) ?? [];
+    },
+    /** The active goal and its sessions on date. */
+    goalToday: async (date: string) => {
+      const res = await request<GoalToday>(`/api/goals/today?date=${q(date)}`);
+      return { goal: res.goal ?? null, sessions: res.sessions ?? [] };
+    },
+    /** Makes a cardio workout fill a session, or empties it for null. */
+    matchSession: (sessionId: number, cardioId: number | null, date: string) =>
+      request<{ success: boolean }>(`/api/goals/match?date=${q(date)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ session_id: sessionId, cardio_id: cardioId }),
+      }),
+
     /** Analyses training up to date, over the timespan starting on from (null for all time). */
     insights: async (date: string, from: string | null, planId: number | null) => {
       let path = `/api/insights?date=${q(date)}`;
@@ -103,6 +161,8 @@ export function createApi(baseUrl: string) {
         },
         strength: res.strength ?? [],
         untagged: res.untagged ?? [],
+        cardio: res.cardio ?? [],
+        goal: res.goal ?? null,
         adherence: res.adherence && { ...res.adherence, missed: res.adherence.missed ?? [] },
       };
     },
@@ -147,6 +207,8 @@ export function createApi(baseUrl: string) {
 export type Api = ReturnType<typeof createApi>;
 
 /** Today's date as YYYY-MM-DD in the device's local timezone. */
+const withWarnings = (saved: SavedGoal) => ({ ...saved, warnings: saved.warnings ?? [] });
+
 export function localDate(d = new Date()) {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;

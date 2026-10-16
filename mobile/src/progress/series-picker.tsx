@@ -3,23 +3,45 @@ import { useState } from 'react';
 import { FlatList, Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import type { CardioActivity } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
-/** What the Progress tab shows: the bodyweight log, or one exercise's estimated 1RM. */
-export type Series = { kind: 'bodyweight' } | { kind: 'exercise'; name: string };
+/**
+ * What the Progress tab shows: the bodyweight log, one exercise's estimated
+ * 1RM, or one activity's cardio workouts.
+ */
+export type Series =
+  | { kind: 'bodyweight' }
+  | { kind: 'exercise'; name: string }
+  | { kind: 'cardio'; activity: CardioActivity };
 
-const seriesLabel = (s: Series) => (s.kind === 'bodyweight' ? 'Bodyweight' : s.name);
+const CARDIO_NAMES: Record<CardioActivity, string> = {
+  running: 'Running',
+  cycling: 'Cycling',
+  swimming: 'Swimming',
+  walking: 'Walking',
+  hiking: 'Hiking',
+};
+
+const seriesLabel = (s: Series) =>
+  s.kind === 'bodyweight' ? 'Bodyweight' : s.kind === 'cardio' ? CARDIO_NAMES[s.activity] : s.name;
+
+const seriesKey = (s: Series) =>
+  s.kind === 'bodyweight' ? ':bodyweight' : s.kind === 'cardio' ? `:cardio:${s.activity}` : s.name;
 
 /** Large heading naming the current series; tapping it opens a list to switch series. */
 export function SeriesPicker({
   value,
   exercises,
+  activities = [],
   onChange,
 }: {
   value: Series;
   exercises: string[];
+  /** Cardio activities with workouts, listed after bodyweight. */
+  activities?: CardioActivity[];
   onChange: (series: Series) => void;
 }) {
   const theme = useTheme();
@@ -29,6 +51,7 @@ export function SeriesPicker({
 
   const options: Series[] = [
     { kind: 'bodyweight' },
+    ...activities.map((activity) => ({ kind: 'cardio' as const, activity })),
     ...exercises.map((name) => ({ kind: 'exercise' as const, name })),
   ];
   const term = search.trim().toLowerCase();
@@ -79,14 +102,14 @@ export function SeriesPicker({
 
           <FlatList
             data={filtered}
-            keyExtractor={(s) => (s.kind === 'bodyweight' ? ':bodyweight' : s.name)}
+            keyExtractor={seriesKey}
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ paddingBottom: insets.bottom + Spacing.four }}
             ItemSeparatorComponent={() => (
               <View style={[styles.separator, { backgroundColor: theme.backgroundSelected }]} />
             )}
             renderItem={({ item }) => {
-              const selected = seriesLabel(item) === seriesLabel(value) && item.kind === value.kind;
+              const selected = seriesKey(item) === seriesKey(value);
               return (
                 <Pressable
                   accessibilityRole="button"

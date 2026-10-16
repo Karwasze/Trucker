@@ -32,6 +32,57 @@ type BodyweightEntry struct {
 	Weight float64 `json:"weight"`
 }
 
+// Activities of a CardioWorkout.
+const (
+	ActivityRunning  = "running"
+	ActivityCycling  = "cycling"
+	ActivitySwimming = "swimming"
+	ActivityWalking  = "walking"
+	ActivityHiking   = "hiking"
+)
+
+// CardioActivities are the activities a CardioWorkout can be.
+var CardioActivities = []string{ActivityRunning, ActivityCycling, ActivitySwimming, ActivityWalking, ActivityHiking}
+
+// CardioWorkout is an endurance workout, imported from Apple Health. Date is
+// the local date of StartedAt (RFC3339). Distances are in metres. Samples
+// and Laps are only loaded for a single workout, not in lists.
+type CardioWorkout struct {
+	ID              int            `json:"id"`
+	Date            string         `json:"date"`
+	StartedAt       string         `json:"started_at"`
+	Activity        string         `json:"activity"`
+	DurationSeconds float64        `json:"duration_seconds"`
+	DistanceM       *float64       `json:"distance_m,omitempty"`
+	EnergyKcal      *float64       `json:"energy_kcal,omitempty"`
+	AvgHeartRate    *float64       `json:"avg_heart_rate,omitempty"`
+	MaxHeartRate    *float64       `json:"max_heart_rate,omitempty"`
+	SwimStrokes     *int           `json:"swim_strokes,omitempty"`
+	LapLengthM      *float64       `json:"lap_length_m,omitempty"`
+	Samples         []CardioSample `json:"samples,omitempty"`
+	Laps            []CardioLap    `json:"laps,omitempty"`
+	Source          string         `json:"source,omitempty"`
+	SourceUUID      *string        `json:"source_uuid,omitempty"`
+	// PlannedSessionID, when importing, is the planned session it fills.
+	PlannedSessionID *int `json:"planned_session_id,omitempty"`
+}
+
+// CardioSample is where a workout stood T seconds in: D metres covered so
+// far and the heart rate, when one was measured around then.
+type CardioSample struct {
+	T  float64  `json:"t"`
+	D  float64  `json:"d"`
+	HR *float64 `json:"hr,omitempty"`
+}
+
+// CardioLap is a lap or segment marked during a workout, starting T seconds
+// in and covering D metres.
+type CardioLap struct {
+	T        float64 `json:"t"`
+	Duration float64 `json:"duration"`
+	D        float64 `json:"d"`
+}
+
 type Set struct {
 	Weight float64 `json:"weight"`
 	Reps   int     `json:"reps"`
@@ -86,8 +137,9 @@ type ProgressionResult struct {
 }
 
 // Insights summarises training over a timespan from From (empty for all
-// time) to Date: plan adherence and stalls, progression and tonnage per lift
-// and strength relative to bodyweight. Muscle volume always covers the last
+// time) to Date: plan adherence and stalls, progression and tonnage per lift,
+// strength relative to bodyweight and cardio per activity. Cardio days count
+// as sessions and towards adherence like lifting days. Muscle volume always covers the last
 // four weeks.
 type Insights struct {
 	Date            string           `json:"date"`
@@ -101,6 +153,36 @@ type Insights struct {
 	Tonnage         Tonnage          `json:"tonnage"`
 	Strength        []StrengthLevel  `json:"strength"`
 	Untagged        []string         `json:"untagged"`
+	Cardio          []CardioSummary  `json:"cardio"`
+	Goal            *GoalSummary     `json:"goal"`
+}
+
+// GoalSummary is where the active goal stands: how far off the race is,
+// the phase of this week (Monday to Sunday), how this week's sessions went
+// so far, its planned and done distance per discipline, and the threshold
+// speed (m/s) per discipline the plan's targets come from.
+type GoalSummary struct {
+	Goal        Goal               `json:"goal"`
+	WeeksToRace int                `json:"weeks_to_race"`
+	Phase       string             `json:"phase"`
+	Met         int                `json:"met"`
+	Partial     int                `json:"partial"`
+	Missed      int                `json:"missed"`
+	Pending     int                `json:"pending"`
+	PlannedM    map[string]float64 `json:"planned_m"`
+	DoneM       map[string]float64 `json:"done_m"`
+	Threshold   map[string]float64 `json:"threshold"`
+}
+
+// CardioSummary is an activity's cardio workouts over the timespan: how
+// many, how far (in metres) and how long in total, and the average distance
+// per week.
+type CardioSummary struct {
+	Activity        string  `json:"activity"`
+	Sessions        int     `json:"sessions"`
+	DistanceM       float64 `json:"distance_m"`
+	DurationSeconds float64 `json:"duration_seconds"`
+	WeeklyDistanceM float64 `json:"weekly_distance_m"`
 }
 
 // Adherence is how many of a plan's scheduled days had a workout, from Since
@@ -207,4 +289,96 @@ type StrengthLevel struct {
 	Level       string  `json:"level"`
 	NextLevel   string  `json:"next_level"`
 	NextLevelKg float64 `json:"next_level_kg"`
+}
+
+// Goal is an endurance race to train for: the legs to cover (in metres; a
+// single-sport goal has one) on RaceDate, training on Weekdays with the
+// long session on LongDay. Only one goal is Active at a time.
+type Goal struct {
+	ID        int      `json:"id"`
+	Name      string   `json:"name"`
+	RaceDate  string   `json:"race_date"`
+	StartDate string   `json:"start_date"`
+	SwimM     *float64 `json:"swim_m,omitempty"`
+	BikeM     *float64 `json:"bike_m,omitempty"`
+	RunM      *float64 `json:"run_m,omitempty"`
+	Weekdays  []string `json:"weekdays"`
+	LongDay   string   `json:"long_day"`
+	Active    bool     `json:"active"`
+}
+
+// Kinds of a PlannedSession.
+const (
+	KindEasy      = "easy"
+	KindLong      = "long"
+	KindTempo     = "tempo"
+	KindIntervals = "intervals"
+	KindRecovery  = "recovery"
+	KindTechnique = "technique"
+	KindBrick     = "brick"
+	KindRace      = "race"
+)
+
+// Phases of a goal's plan, in order.
+const (
+	PhaseBase  = "base"
+	PhaseBuild = "build"
+	PhasePeak  = "peak"
+	PhaseTaper = "taper"
+	PhaseRace  = "race"
+)
+
+// PlannedSession is one session of a goal's plan: an Activity on Date to a
+// distance or duration target, at an intensity. Speeds are in m/s for every
+// sport. Interval sessions repeat Reps of RepDistanceM or RepDurationS with
+// RecoveryS between them. CardioWorkoutID is the imported workout that
+// filled it; Workout and Verdict are filled in when sessions are read.
+type PlannedSession struct {
+	ID              int            `json:"id"`
+	GoalID          int            `json:"goal_id"`
+	Date            string         `json:"date"`
+	Activity        string         `json:"activity"`
+	Kind            string         `json:"kind"`
+	Phase           string         `json:"phase"`
+	TargetDistanceM *float64       `json:"target_distance_m,omitempty"`
+	TargetDurationS *float64       `json:"target_duration_s,omitempty"`
+	Intensity       string         `json:"intensity"`
+	Description     string         `json:"description"`
+	SpeedMin        *float64       `json:"speed_min,omitempty"`
+	SpeedMax        *float64       `json:"speed_max,omitempty"`
+	HRMin           *float64       `json:"hr_min,omitempty"`
+	HRMax           *float64       `json:"hr_max,omitempty"`
+	Reps            *int           `json:"reps,omitempty"`
+	RepDistanceM    *float64       `json:"rep_distance_m,omitempty"`
+	RepDurationS    *float64       `json:"rep_duration_s,omitempty"`
+	RecoveryS       *float64       `json:"recovery_s,omitempty"`
+	CardioWorkoutID *int           `json:"cardio_workout_id,omitempty"`
+	Workout         *CardioWorkout `json:"workout,omitempty"`
+	Verdict         *Verdict       `json:"verdict,omitempty"`
+}
+
+// Statuses of a Verdict.
+const (
+	VerdictMet     = "met"
+	VerdictPartial = "partial"
+	VerdictMissed  = "missed"
+	VerdictPending = "pending"
+)
+
+// Verdict is whether a planned session was done as planned, with the checks
+// behind it.
+type Verdict struct {
+	Status string  `json:"status"`
+	Checks []Check `json:"checks"`
+	// TooSlow is set when an intensity check failed by going too slow.
+	TooSlow bool `json:"-"`
+}
+
+// Check compares what was done with the target on one aspect of a session,
+// e.g. "Distance": "8.2 km" against "8 km".
+type Check struct {
+	Name   string `json:"name"`
+	Actual string `json:"actual"`
+	Target string `json:"target"`
+	OK     bool   `json:"ok"`
 }

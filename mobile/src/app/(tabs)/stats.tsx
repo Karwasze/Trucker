@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { localDate } from '@/api/client';
-import type { StatisticsData } from '@/api/types';
+import type { CardioActivity, StatisticsData } from '@/api/types';
 import { LineChart } from '@/components/line-chart';
 import { ThemedText } from '@/components/themed-text';
 import { TIMESPANS, TimespanControl, timespanStart, type Timespan } from '@/components/timespan';
@@ -11,6 +11,7 @@ import { Card, Message, Screen, SectionLabel } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useQuery } from '@/hooks/use-query';
 import { BodyweightStats } from '@/progress/bodyweight-stats';
+import { CardioStats } from '@/progress/cardio-stats';
 import { SeriesPicker, type Series } from '@/progress/series-picker';
 import { Tile, TileRow } from '@/progress/tile';
 import { SettingsButton } from '@/settings/settings-button';
@@ -22,6 +23,9 @@ export default function StatsScreen() {
   const [selected, setSelected] = useState<Series | null>(null);
   const [timespan, setTimespan] = useState<Timespan>(TIMESPANS[0]);
   const names = useQuery(`stats:${serverUrl}`, async () => (await api.statistics()).exercises);
+  // Oldest first, for the charts.
+  const cardio = useQuery(`cardio:${serverUrl}`, async () => (await api.listCardio()).reverse());
+  const activities = [...new Set((cardio.data ?? []).map((w) => w.activity))] as CardioActivity[];
 
   // Opened on a lift from elsewhere, e.g. Insights. The params are cleared once
   // applied, so opening the same lift again applies them again.
@@ -42,7 +46,11 @@ export default function StatsScreen() {
       ? { kind: 'exercise', name: exercises[0] }
       : { kind: 'bodyweight' };
   const series =
-    selected?.kind === 'bodyweight' || (selected && exercises.includes(selected.name)) ? selected : fallback;
+    selected?.kind === 'bodyweight' ||
+    (selected?.kind === 'cardio' && activities.includes(selected.activity)) ||
+    (selected?.kind === 'exercise' && exercises.includes(selected.name))
+      ? selected
+      : fallback;
   const exercise = series?.kind === 'exercise' ? series.name : null;
 
   const exerciseData = useQuery(exercise === null ? null : `stats:${serverUrl}:${exercise}`, async () =>
@@ -57,19 +65,27 @@ export default function StatsScreen() {
   return (
     <Screen
       title="Progress"
-      subtitle="Your lifts and bodyweight over time"
+      subtitle="Your lifts, cardio and bodyweight over time"
       action={<SettingsButton />}
       refreshing={names.refreshing}
       onRefresh={() => {
         names.refresh();
+        cardio.refresh();
         data.refresh();
       }}>
       {!names.data || !series ? (
         <Message loading={!names.error} error={names.error} />
       ) : (
         <>
-          <SeriesPicker value={series} exercises={exercises} onChange={setSelected} />
-          {series.kind === 'bodyweight' ? (
+          <SeriesPicker value={series} exercises={exercises} activities={activities} onChange={setSelected} />
+          {series.kind === 'cardio' ? (
+            <CardioStats
+              activity={series.activity}
+              workouts={(cardio.data ?? []).filter((w) => w.activity === series.activity)}
+              timespan={timespan}
+              onTimespanChange={setTimespan}
+            />
+          ) : series.kind === 'bodyweight' ? (
             !bodyweight.data ? (
               <Message loading={!bodyweight.error} error={bodyweight.error} />
             ) : (

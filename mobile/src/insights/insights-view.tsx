@@ -3,18 +3,37 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { localDate } from '@/api/client';
-import type { Adherence, Insights, LiftProgress, PlanStall, StrengthLevel, Tonnage } from '@/api/types';
+import type {
+  Adherence,
+  CardioActivity,
+  CardioSummary,
+  GoalSummary,
+  Insights,
+  LiftProgress,
+  PlanStall,
+  StrengthLevel,
+  Tonnage,
+} from '@/api/types';
 import { LineChart } from '@/components/line-chart';
 import { ThemedText } from '@/components/themed-text';
 import { TIMESPANS, TimespanControl, timespanStart, type Timespan } from '@/components/timespan';
 import { Card, Message, Screen, SectionLabel } from '@/components/ui';
 import { Spacing, type ThemeColor } from '@/constants/theme';
+import { PHASE_NAMES } from '@/goals/presets';
 import { useQuery } from '@/hooks/use-query';
 import { useTheme } from '@/hooks/use-theme';
 import { Tile, TileRow } from '@/progress/tile';
 import { SettingsButton } from '@/settings/settings-button';
 import { useSettings } from '@/settings/settings-context';
-import { formatDate, formatKg } from '@/workout/format';
+import {
+  ACTIVITY_ICONS,
+  ACTIVITY_NAMES,
+  formatDate,
+  formatDistance,
+  formatDuration,
+  formatKg,
+  formatPace,
+} from '@/workout/format';
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const formatNumber = (n: number) => String(Math.round(n * 10) / 10);
@@ -54,6 +73,8 @@ function InsightsContent({ data, timespan, hasPlan }: { data: Insights; timespan
   const span = `the last ${timespan.label}`;
   return (
     <>
+      {data.goal && <GoalSection summary={data.goal} />}
+
       <SectionLabel>Plan</SectionLabel>
       {!hasPlan || !data.adherence ? (
         <Card>
@@ -103,6 +124,17 @@ function InsightsContent({ data, timespan, hasPlan }: { data: Insights; timespan
         </Card>
       ) : (
         <TonnageSection tonnage={data.tonnage} today={data.date} />
+      )}
+
+      {data.cardio.length > 0 && (
+        <>
+          <SectionLabel>Cardio</SectionLabel>
+          <Card>
+            {data.cardio.map((c) => (
+              <CardioRow key={c.activity} summary={c} />
+            ))}
+          </Card>
+        </>
       )}
 
       <SectionLabel>Strength</SectionLabel>
@@ -231,6 +263,72 @@ function ProgressCard({ progress: p, timespan }: { progress: LiftProgress; times
           <Stat label="PRs" value={String(p.prs)} />
         </View>
       </Card>
+    </Pressable>
+  );
+}
+
+/** Where the active goal stands this week, and the paces its targets use. */
+function GoalSection({ summary: g }: { summary: GoalSummary }) {
+  const activities = (Object.keys(g.planned_m) as CardioActivity[]).sort();
+  const thresholds = (Object.keys(g.threshold) as CardioActivity[]).filter((a) => g.threshold[a]);
+  const threshold = (activity: CardioActivity) => {
+    const speed = g.threshold[activity]!;
+    if (activity === 'cycling') return `${(speed * 3.6).toFixed(1)} km/h`;
+    if (activity === 'swimming') return `${formatDuration(100 / speed)}/100 m`;
+    return `${formatDuration(1000 / speed)}/km`;
+  };
+  return (
+    <>
+      <SectionLabel>{g.goal.name}</SectionLabel>
+      <Pressable
+        onPress={() => router.navigate({ pathname: '/plans/goal-calendar', params: { id: g.goal.id } })}
+        accessibilityRole="button">
+        <Card>
+          <ThemedText type="smallBold">
+            {PHASE_NAMES[g.phase]} · {g.weeks_to_race === 0 ? 'race week' : plural(g.weeks_to_race, 'week')}{' '}
+            {g.weeks_to_race === 0 ? '' : 'to race day'}
+          </ThemedText>
+          <View style={{ flexDirection: 'row', gap: Spacing.two }}>
+            <Stat label="Met" value={String(g.met)} />
+            <Stat label="Partly" value={String(g.partial)} />
+            <Stat label="Missed" value={String(g.missed)} />
+            <Stat label="To do" value={String(g.pending)} />
+          </View>
+          {activities.map((a) => (
+            <ThemedText key={a} type="small" themeColor="textSecondary">
+              {ACTIVITY_ICONS[a]} {formatDistance(g.done_m[a] ?? 0, a)} of {formatDistance(g.planned_m[a] ?? 0, a)}{' '}
+              this week
+            </ThemedText>
+          ))}
+          {thresholds.length > 0 && (
+            <ThemedText type="small" themeColor="textSecondary">
+              Threshold: {thresholds.map((a) => `${ACTIVITY_ICONS[a]} ${threshold(a)}`).join(' · ')}
+            </ThemedText>
+          )}
+        </Card>
+      </Pressable>
+    </>
+  );
+}
+
+function CardioRow({ summary: c }: { summary: CardioSummary }) {
+  return (
+    <Pressable
+      onPress={() => router.navigate('/stats')}
+      accessibilityRole="button"
+      style={({ pressed }) => [{ gap: Spacing.one }, pressed && { opacity: 0.5 }]}>
+      <ThemedText type="smallBold">
+        {ACTIVITY_ICONS[c.activity]} {ACTIVITY_NAMES[c.activity]} · {plural(c.sessions, 'session')}
+      </ThemedText>
+      <View style={{ flexDirection: 'row', gap: Spacing.two }}>
+        <Stat label="Per week" value={formatDistance(c.weekly_distance_m, c.activity)} />
+        <Stat label="Total" value={formatDistance(c.distance_m, c.activity)} />
+        <Stat label="Time" value={formatDuration(c.duration_seconds)} />
+        <Stat
+          label={c.activity === 'cycling' ? 'Avg speed' : 'Avg pace'}
+          value={formatPace(c.activity, c.distance_m, c.duration_seconds) || '–'}
+        />
+      </View>
     </Pressable>
   );
 }

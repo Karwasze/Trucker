@@ -223,6 +223,9 @@ func generatePlan(in generatorInput) ([]PlannedSession, []string) {
 	if days := len(g.Weekdays); days < len(legs) {
 		warnings = append(warnings, fmt.Sprintf(
 			"%d training days can't fit all %d disciplines every week.", days, len(legs)))
+	} else if days == len(legs) && len(legs) > 1 && taperWeeks(g, in.Fitness) == 2 {
+		warnings = append(warnings, fmt.Sprintf(
+			"%d training days give one session a sport each week: light for a race this long. 5 or 6 days works better.", days))
 	}
 
 	// Volume is sized for a full week of sessions.
@@ -379,10 +382,6 @@ func trainingWeek(g Goal, f Fitness, week planWeek, level map[string]float64, da
 			easyCount--
 		}
 
-		longKind := KindLong
-		if full[activity] == 1 && triathlon {
-			longKind = KindEasy
-		}
 		easyKind := KindEasy
 		switch {
 		case week.recovery:
@@ -390,7 +389,17 @@ func trainingWeek(g Goal, f Fitness, week planWeek, level map[string]float64, da
 		case activity == ActivitySwimming && week.phase == PhaseBase:
 			easyKind = KindTechnique
 		}
-		planned = append(planned, newSession(activity, longKind, week.phase, roundDistance(activity, long), f))
+		longSession := newSession(activity, KindLong, week.phase, roundDistance(activity, long), f)
+		// A lone weekly ride or run carries the phase's quality as a block.
+		if n == 1 && activity != ActivitySwimming && !week.recovery && !ease {
+			switch week.phase {
+			case PhaseBuild:
+				longSession = withBlock(longSession, KindTempo, f)
+			case PhasePeak:
+				longSession = withBlock(longSession, KindIntervals, f)
+			}
+		}
+		planned = append(planned, longSession)
 		if quality != "" {
 			planned = append(planned, newSession(activity, quality, week.phase, roundDistance(activity, other), f))
 		}
@@ -423,6 +432,29 @@ func trainingWeek(g Goal, f Fitness, week planWeek, level map[string]float64, da
 	}
 	slices.SortStableFunc(sessions, func(a, b PlannedSession) int { return strings.Compare(a.Date, b.Date) })
 	return sessions
+}
+
+// withBlock adds a quality block of kind to a long session's description:
+// tempo over the middle third, or intervals over about 40% of it. The
+// session's targets stay those of the long session.
+func withBlock(s PlannedSession, kind string, f Fitness) PlannedSession {
+	distance := *s.TargetDistanceM
+	switch kind {
+	case KindTempo:
+		block := newSession(s.Activity, KindTempo, s.Phase, roundDistance(s.Activity, distance/3), f)
+		s.Description += fmt.Sprintf(", with %s @ %s in the middle",
+			formatMetres(s.Activity, *block.TargetDistanceM), describeTarget(block))
+	case KindIntervals:
+		block := newSession(s.Activity, KindIntervals, s.Phase, distance*0.4, f)
+		rep := fmt.Sprintf("%.0f m", deref(block.RepDistanceM))
+		rest := "jog"
+		if block.RepDurationS != nil {
+			rep, rest = formatSeconds(*block.RepDurationS), "easy"
+		}
+		s.Description += fmt.Sprintf(", with %d×%s @ %s, %s %s",
+			*block.Reps, rep, describeTarget(block), formatSeconds(*block.RecoveryS), rest)
+	}
+	return s
 }
 
 // raceWeekGap is how many weeks week is before race week.

@@ -2,6 +2,7 @@ package store
 
 import (
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -360,6 +361,53 @@ func TestGeneratePlan_HalfTriathlonRidesFromLowStart(t *testing.T) {
 	}
 	if longest < 85000 || longest > 100000 {
 		t.Errorf("expected the long ride to peak around the 90 km race leg, got %v", longest)
+	}
+}
+
+func TestGeneratePlan_ThreeDayTriathlon(t *testing.T) {
+	g := Goal{
+		Name: "Half triathlon", StartDate: "2026-10-19", RaceDate: "2027-04-04",
+		SwimM: fp(1900), BikeM: fp(90000), RunM: fp(21097),
+		Weekdays: []string{"tuesday", "thursday", "sunday"}, LongDay: "sunday",
+	}
+	sessions, warnings := generatePlan(generatorInput{Goal: g, From: day(g.StartDate)})
+
+	// One session a sport: each is the long one, with a brick after the
+	// long ride in build and peak.
+	kinds := make(map[string]map[string]int)
+	for _, s := range sessions {
+		if kinds[s.Phase] == nil {
+			kinds[s.Phase] = make(map[string]int)
+		}
+		kinds[s.Phase][s.Kind]++
+	}
+	for _, phase := range []string{PhaseBase, PhaseBuild, PhasePeak} {
+		if kinds[phase][KindEasy] > 0 || kinds[phase][KindLong] == 0 {
+			t.Errorf("expected long sessions, not easy ones, in %s: %v", phase, kinds[phase])
+		}
+	}
+	if kinds[PhaseBuild][KindBrick] == 0 || kinds[PhasePeak][KindBrick] == 0 {
+		t.Errorf("expected bricks in build and peak, got %v", kinds)
+	}
+
+	// Rides and runs carry a tempo block in build and intervals in peak;
+	// swims stay steady, and so do base and recovery weeks.
+	for _, s := range sessions {
+		week := int(day(s.Date).Sub(day(g.StartDate)).Hours() / 24 / 7)
+		if s.Kind != KindLong || (week+1)%4 == 0 {
+			continue
+		}
+		tempo := strings.Contains(s.Description, "in the middle")
+		intervals := strings.Contains(s.Description, "×")
+		wantTempo := s.Phase == PhaseBuild && s.Activity != ActivitySwimming
+		wantIntervals := s.Phase == PhasePeak && s.Activity != ActivitySwimming
+		if tempo != wantTempo || intervals != wantIntervals {
+			t.Errorf("%s %s on %s: got %q", s.Phase, s.Activity, s.Date, s.Description)
+		}
+	}
+
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "one session a sport") {
+		t.Errorf("expected a warning about one session a sport, got %v", warnings)
 	}
 }
 

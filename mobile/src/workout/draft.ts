@@ -15,6 +15,8 @@ export type DraftExercise = {
   target?: string;
   /** Why the target is what it is, e.g. "Weight up 2.5 kg: ...". */
   reason?: string;
+  /** Added outside the plan, so its sets × reps scheme can be changed. */
+  free?: boolean;
   sets: DraftSet[];
 };
 

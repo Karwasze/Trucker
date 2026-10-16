@@ -248,6 +248,46 @@ func TestLatestExerciseAPI(t *testing.T) {
 	}
 }
 
+func TestLatestExerciseAPI_ChosenScheme(t *testing.T) {
+	h, s := newTestHandlers(t)
+	seedWorkout(t, s, "2026-03-10", []store.Exercise{
+		{Name: "Squat", Sets: []store.Set{{Weight: 80, Reps: 6}, {Weight: 80, Reps: 6}, {Weight: 80, Reps: 6}, {Weight: 80, Reps: 6}}},
+	})
+	seedWorkout(t, s, "2026-03-12", []store.Exercise{
+		{Name: "Squat", Sets: []store.Set{{Weight: 100, Reps: 5}, {Weight: 100, Reps: 5}, {Weight: 100, Reps: 5}}},
+	})
+
+	req := httptest.NewRequest("GET", "/api/latest-exercise?name=Squat&date=2026-03-14&sets=4&reps=6", nil)
+	w := httptest.NewRecorder()
+	h.LatestExercise(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var result struct {
+		Target []store.Set `json:"target"`
+	}
+	json.NewDecoder(w.Body).Decode(&result)
+	want := []store.Set{{Weight: 82.5, Reps: 6}, {Weight: 82.5, Reps: 6}, {Weight: 82.5, Reps: 6}, {Weight: 82.5, Reps: 6}}
+	if !reflect.DeepEqual(result.Target, want) {
+		t.Errorf("expected 4 × 6 target %v, got %v", want, result.Target)
+	}
+}
+
+func TestLatestExerciseAPI_InvalidScheme(t *testing.T) {
+	h, _ := newTestHandlers(t)
+
+	for _, query := range []string{"sets=4", "reps=6", "sets=0&reps=6", "sets=4&reps=x"} {
+		req := httptest.NewRequest("GET", "/api/latest-exercise?name=Squat&"+query, nil)
+		w := httptest.NewRecorder()
+		h.LatestExercise(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("%s: expected 400, got %d", query, w.Code)
+		}
+	}
+}
+
 func TestLatestExerciseAPI_MissingName(t *testing.T) {
 	h, _ := newTestHandlers(t)
 

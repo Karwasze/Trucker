@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { SwipeToDelete } from '@/components/swipe-to-delete';
@@ -14,11 +15,29 @@ type Props = {
   onRemove: () => void;
   /** Off when editing a logged workout, where every set was done. */
   trackDone?: boolean;
+  /** Retargets the exercise at another sets × reps scheme, for exercises outside the plan. */
+  onChangeScheme?: (sets: number, reps: number) => void;
 };
 
-export function ExerciseCard({ exercise, onChange, onRemove, trackDone = true }: Props) {
+export function ExerciseCard({ exercise, onChange, onRemove, trackDone = true, onChangeScheme }: Props) {
   const theme = useTheme();
   const timer = useTimer();
+  // The scheme being typed in, or null when not changing it.
+  const [scheme, setScheme] = useState<{ sets: string; reps: string } | null>(null);
+
+  const editScheme = () =>
+    setScheme({
+      sets: String(exercise.sets.length || ''),
+      reps: String(Math.max(0, ...exercise.sets.map((s) => parseInt(s.reps, 10) || 0)) || ''),
+    });
+
+  const applyScheme = () => {
+    const sets = parseInt(scheme?.sets ?? '', 10);
+    const reps = parseInt(scheme?.reps ?? '', 10);
+    if (!(sets > 0 && reps > 0)) return;
+    setScheme(null);
+    onChangeScheme?.(sets, reps);
+  };
 
   // Ticking a set off starts the rest before the next one, restarting a running timer.
   const toggleDone = (index: number) => {
@@ -70,6 +89,14 @@ export function ExerciseCard({ exercise, onChange, onRemove, trackDone = true }:
                 {exercise.reason}
               </ThemedText>
             )}
+            {/* Changing the scheme replaces the sets, so not once one is done. */}
+            {onChangeScheme && doneCount === 0 && !scheme && (
+              <Pressable onPress={editScheme} accessibilityRole="button" style={styles.changeScheme}>
+                <ThemedText type="smallBold" style={{ color: theme.accent }}>
+                  Change sets × reps
+                </ThemedText>
+              </Pressable>
+            )}
           </View>
           {trackDone && (
             <ThemedText type="small" themeColor="textSecondary">
@@ -77,6 +104,39 @@ export function ExerciseCard({ exercise, onChange, onRemove, trackDone = true }:
             </ThemedText>
           )}
         </View>
+
+        {scheme && (
+          <View style={styles.schemeRow}>
+            <TextInput
+              value={scheme.sets}
+              onChangeText={(sets) => setScheme({ ...scheme, sets: sets.replace(/\D/g, '') })}
+              keyboardType="number-pad"
+              selectTextOnFocus
+              autoFocus
+              accessibilityLabel="Sets"
+              style={[styles.input, styles.schemeInput, { color: theme.text, backgroundColor: theme.backgroundSelected }]}
+            />
+            <ThemedText themeColor="textSecondary">×</ThemedText>
+            <TextInput
+              value={scheme.reps}
+              onChangeText={(reps) => setScheme({ ...scheme, reps: reps.replace(/\D/g, '') })}
+              keyboardType="number-pad"
+              selectTextOnFocus
+              accessibilityLabel="Reps"
+              style={[styles.input, styles.schemeInput, { color: theme.text, backgroundColor: theme.backgroundSelected }]}
+            />
+            <Pressable onPress={applyScheme} accessibilityRole="button" style={styles.schemeAction}>
+              <ThemedText type="smallBold" style={{ color: theme.accent }}>
+                Apply
+              </ThemedText>
+            </Pressable>
+            <Pressable onPress={() => setScheme(null)} accessibilityRole="button" style={styles.schemeAction}>
+              <ThemedText type="small" themeColor="textSecondary">
+                Cancel
+              </ThemedText>
+            </Pressable>
+          </View>
+        )}
 
         <View style={styles.headerRow}>
           <ThemedText type="small" themeColor="textSecondary" style={styles.setCol}>
@@ -208,6 +268,22 @@ const styles = StyleSheet.create({
   },
   addSet: {
     alignSelf: 'flex-start',
+    paddingVertical: Spacing.one,
+  },
+  changeScheme: {
+    alignSelf: 'flex-start',
+    paddingTop: Spacing.one,
+  },
+  schemeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  schemeInput: {
+    width: 56,
+    textAlign: 'center',
+  },
+  schemeAction: {
     paddingVertical: Spacing.one,
   },
 });

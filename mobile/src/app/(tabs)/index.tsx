@@ -157,7 +157,38 @@ export default function TodayScreen() {
     const exercise = sets.length
       ? draftExercise(name, sets, describeSets(sets), reason)
       : draftExercise(name, [{ weight: 0, reps: 0 }]);
-    setDraft((d) => ({ ...d, exercises: [...d.exercises, exercise] }));
+    setDraft((d) => ({
+      ...d,
+      exercises: [...d.exercises, { ...exercise, free: true }],
+    }));
+  };
+
+  // Replaces a free exercise's sets with the target for another scheme,
+  // progressed from the sessions done in it.
+  const changeScheme = async (key: string, sets: number, reps: number) => {
+    const exercise = draft?.exercises.find((e) => e.key === key);
+    if (!exercise) return;
+    try {
+      const target = await api.exerciseTarget(
+        exercise.name,
+        draft?.date ?? today,
+        { sets, reps },
+      );
+      const updated = draftExercise(
+        exercise.name,
+        target.sets,
+        describeSets(target.sets),
+        target.reason,
+      );
+      setDraft((d) => ({
+        ...d,
+        exercises: d.exercises.map((e) =>
+          e.key === key ? { ...updated, key, free: true } : e,
+        ),
+      }));
+    } catch (e) {
+      Alert.alert("Couldn't load target", (e as Error).message);
+    }
   };
 
   const finish = async () => {
@@ -293,6 +324,11 @@ export default function TodayScreen() {
                   ...d,
                   exercises: d.exercises.filter((e) => e.key !== exercise.key),
                 }))
+              }
+              onChangeScheme={
+                exercise.free
+                  ? (sets, reps) => changeScheme(exercise.key, sets, reps)
+                  : undefined
               }
             />
           ))}

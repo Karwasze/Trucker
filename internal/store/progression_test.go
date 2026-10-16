@@ -2,6 +2,7 @@ package store
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -384,7 +385,7 @@ func TestFreeExerciseTarget(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, _ := freeExerciseTarget(tt.sessions, 0)
+			got, _ := freeExerciseTarget(tt.sessions, PlanExercise{}, 0)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("got %v, want %v", got, tt.want)
 			}
@@ -398,7 +399,7 @@ func TestFreeExerciseTarget_FromStore(t *testing.T) {
 		{Name: "Bench Press", Sets: setList(10, 10, 10, 10, 10, 10, 10, 10)},
 	})
 
-	got, reason, err := s.FreeExerciseTarget("Bench Press", "2026-10-14")
+	got, reason, err := s.FreeExerciseTarget("Bench Press", "2026-10-14", PlanExercise{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -410,7 +411,7 @@ func TestFreeExerciseTarget_FromStore(t *testing.T) {
 	}
 
 	// Workouts after the date don't count.
-	got, _, err = s.FreeExerciseTarget("Bench Press", "2026-10-09")
+	got, _, err = s.FreeExerciseTarget("Bench Press", "2026-10-09", PlanExercise{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -425,7 +426,7 @@ func TestFreeExerciseTarget_AfterBreak(t *testing.T) {
 		{Name: "Bench Press", Sets: setList(10, 60, 10, 60)},
 	})
 
-	got, reason, err := s.FreeExerciseTarget("Bench Press", "2026-10-14")
+	got, reason, err := s.FreeExerciseTarget("Bench Press", "2026-10-14", PlanExercise{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -433,6 +434,72 @@ func TestFreeExerciseTarget_AfterBreak(t *testing.T) {
 		t.Errorf("got %v, want %v", got, want)
 	}
 	if want := "Back after 6 weeks off: weight down 20% from 60 kg to ease back in."; reason != want {
+		t.Errorf("expected reason %q, got %q", want, reason)
+	}
+}
+
+func TestFreeExerciseTarget_ChosenScheme(t *testing.T) {
+	sessions := [][]Set{
+		setList(6, 80, 6, 80, 6, 80, 6, 80),
+		setList(6, 82.5, 6, 82.5, 5, 82.5, 4, 82.5),
+		setList(5, 100, 5, 100, 5, 100),
+	}
+	scheme := PlanExercise{Sets: 4, Reps: 6}
+
+	// The 3 × 5 session is left out: 4 × 6 progresses from its own sessions.
+	got, reason := freeExerciseTarget(sessions, scheme, 0)
+	if want := setList(6, 82.5, 6, 82.5, 6, 82.5, 5, 82.5); !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+	if !strings.HasPrefix(reason, "You didn't finish 4 × 6 @ 82.5 kg") {
+		t.Errorf("unexpected reason %q", reason)
+	}
+
+	// Without the scheme, the last session's shape is progressed.
+	got, _ = freeExerciseTarget(sessions, PlanExercise{}, 0)
+	if want := setList(5, 102.5, 5, 102.5, 5, 102.5); !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestFreeExerciseTarget_ChosenSchemeWithoutHistory(t *testing.T) {
+	sessions := [][]Set{setList(5, 100, 5, 100, 5, 100)}
+
+	got, reason := freeExerciseTarget(sessions, PlanExercise{Sets: 4, Reps: 6}, 0)
+	if want := setList(6, 0, 6, 0, 6, 0, 6, 0); !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+	if want := "No 4 × 6 history yet: pick a starting weight."; reason != want {
+		t.Errorf("expected reason %q, got %q", want, reason)
+	}
+
+	// A chosen scheme gets a target even without any history at all.
+	got, _ = freeExerciseTarget(nil, PlanExercise{Sets: 2, Reps: 10}, 0)
+	if want := setList(10, 0, 10, 0); !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestFreeExerciseTarget_ChosenSchemeFromStore(t *testing.T) {
+	s := newTestStore(t)
+	seedWorkout(t, s, "2026-09-01", []Exercise{
+		{Name: "Bench Press", Sets: setList(6, 60, 6, 60, 6, 60, 6, 60)},
+	})
+	// Training the lift in another scheme in between keeps it fresh, as
+	// breaks count from the last session in any scheme, but 4 × 6 still
+	// progresses from its own last session.
+	seedWorkout(t, s, "2026-10-12", []Exercise{
+		{Name: "Bench Press", Sets: setList(5, 70, 5, 70, 5, 70)},
+	})
+
+	got, reason, err := s.FreeExerciseTarget("Bench Press", "2026-10-14", PlanExercise{Sets: 4, Reps: 6})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := setList(6, 62.5, 6, 62.5, 6, 62.5, 6, 62.5); !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+	if want := "Weight up 2.5 kg: you completed 4 × 6 @ 60 kg last time."; reason != want {
 		t.Errorf("expected reason %q, got %q", want, reason)
 	}
 }

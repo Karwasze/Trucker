@@ -123,10 +123,14 @@ export function createApi(baseUrl: string) {
 
     latestSets: async (name: string) =>
       (await request<{ sets: Set[] | null }>(`/api/latest-exercise?name=${q(name)}`)).sets ?? [],
-    /** The sets to do next for an exercise added outside a plan, progressed from history. */
-    exerciseTarget: async (name: string, date: string) => {
+    /**
+     * The sets to do next for an exercise added outside a plan, progressed from
+     * history: in `scheme` when given, or in the shape of the last session.
+     */
+    exerciseTarget: async (name: string, date: string, scheme?: { sets: number; reps: number }) => {
       const res = await request<{ target: Set[] | null; reason?: string }>(
-        `/api/latest-exercise?name=${q(name)}&date=${q(date)}`
+        `/api/latest-exercise?name=${q(name)}&date=${q(date)}` +
+          (scheme ? `&sets=${scheme.sets}&reps=${scheme.reps}` : '')
       );
       return { sets: res.target ?? [], reason: res.reason };
     },

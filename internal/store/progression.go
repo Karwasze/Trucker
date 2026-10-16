@@ -336,28 +336,55 @@ func (s *Store) ExerciseTargets(exercises, schemes []PlanExercise, date string) 
 }
 
 // freeExerciseTarget works out the next target sets for an exercise logged
-// outside a plan and the reason for them, or nil without history, daysOff
-// after the last session. The scheme is taken from the most
-// recent session: as many sets as were done at its working weight, at the
-// most reps any of them reached, progressed the same way as a plan exercise.
-func freeExerciseTarget(sessions [][]Set, daysOff int) ([]Set, string) {
-	if len(sessions) == 0 {
-		return nil, ""
+// outside a plan and the reason for them, daysOff after the last session.
+//
+// Without a chosen scheme (scheme.Sets or scheme.Reps of 0), the scheme is
+// taken from the most recent session (see sessionScheme) and progressed the
+// same way as a plan exercise, or nil without history.
+//
+// With a chosen scheme, only the sessions done in that shape count, so a
+// lift trained in more than one scheme progresses each from its own
+// sessions. Without any, the target is the scheme at no weight for the
+// lifter to fill in.
+func freeExerciseTarget(sessions [][]Set, scheme PlanExercise, daysOff int) ([]Set, string) {
+	if scheme.Sets <= 0 || scheme.Reps <= 0 {
+		if len(sessions) == 0 {
+			return nil, ""
+		}
+		scheme = sessionScheme(sessions[len(sessions)-1])
+		sets, _, reason := nextTarget(scheme, sessions, daysOff)
+		return sets, reason
 	}
-	last := sessions[len(sessions)-1]
-	working := workSets(last, workingWeight(last))
+
+	var kept [][]Set
+	for _, session := range sessions {
+		if shape := sessionScheme(session); shape.Sets == scheme.Sets && shape.Reps == scheme.Reps {
+			kept = append(kept, session)
+		}
+	}
+	sets, _, reason := nextTarget(scheme, kept, daysOff)
+	if len(kept) == 0 && len(sessions) > 0 {
+		reason = fmt.Sprintf("No %d × %d history yet: pick a starting weight.", scheme.Sets, scheme.Reps)
+	}
+	return sets, reason
+}
+
+// sessionScheme returns the shape of a session: as many sets as were done at
+// its working weight, at the most reps any of them reached.
+func sessionScheme(session []Set) PlanExercise {
+	working := workSets(session, workingWeight(session))
 	scheme := PlanExercise{Sets: len(working)}
 	for _, set := range working {
 		scheme.Reps = max(scheme.Reps, set.Reps)
 	}
-	sets, _, reason := nextTarget(scheme, sessions, daysOff)
-	return sets, reason
+	return scheme
 }
 
 // FreeExerciseTarget works out the target sets for an exercise added outside
 // a plan from its logged workouts on or before date, and the reason for
-// them, or nil without history.
-func (s *Store) FreeExerciseTarget(name, date string) ([]Set, string, error) {
+// them, in scheme when one is chosen (see freeExerciseTarget). Breaks count
+// from the last session in any scheme.
+func (s *Store) FreeExerciseTarget(name, date string, scheme PlanExercise) ([]Set, string, error) {
 	sessions, lastDate, err := s.exerciseSessions(name, date, 0)
 	if err != nil {
 		return nil, "", err
@@ -366,7 +393,7 @@ func (s *Store) FreeExerciseTarget(name, date string) ([]Set, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	sets, reason := freeExerciseTarget(sessions, off)
+	sets, reason := freeExerciseTarget(sessions, scheme, off)
 	return sets, reason, nil
 }
 

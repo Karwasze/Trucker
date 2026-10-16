@@ -180,7 +180,8 @@ func (h *Handlers) deleteWorkout(w http.ResponseWriter, r *http.Request) {
 }
 
 // LatestExercise returns the sets of the most recent workout that logged an
-// exercise, and the target for doing it again on date (today by default).
+// exercise, and the target for doing it again on date (today by default),
+// in the scheme given by sets and reps, or the last session's without them.
 func (h *Handlers) LatestExercise(w http.ResponseWriter, r *http.Request) {
 	exerciseName := r.URL.Query().Get("name")
 	if exerciseName == "" {
@@ -197,12 +198,23 @@ func (h *Handlers) LatestExercise(w http.ResponseWriter, r *http.Request) {
 		date = dateStr
 	}
 
+	var scheme store.PlanExercise
+	if r.URL.Query().Has("sets") || r.URL.Query().Has("reps") {
+		var errSets, errReps error
+		scheme.Sets, errSets = strconv.Atoi(r.URL.Query().Get("sets"))
+		scheme.Reps, errReps = strconv.Atoi(r.URL.Query().Get("reps"))
+		if errSets != nil || errReps != nil || scheme.Sets < 1 || scheme.Reps < 1 {
+			http.Error(w, "Sets and reps must both be positive numbers", http.StatusBadRequest)
+			return
+		}
+	}
+
 	sets, err := h.store.GetLatestExerciseSets(exerciseName)
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
-	target, reason, err := h.store.FreeExerciseTarget(exerciseName, date)
+	target, reason, err := h.store.FreeExerciseTarget(exerciseName, date, scheme)
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		log.Printf("Error working out exercise target: %v", err)

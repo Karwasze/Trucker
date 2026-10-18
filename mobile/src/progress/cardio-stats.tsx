@@ -3,6 +3,8 @@ import { Pressable, StyleSheet } from 'react-native';
 
 import { localDate } from '@/api/client';
 import type { CardioActivity, CardioWorkout } from '@/api/types';
+import { WeeklyBarChart } from '@/components/bar-chart';
+import { mondayOf } from '@/components/chart-scale';
 import { LineChart } from '@/components/line-chart';
 import { ThemedText } from '@/components/themed-text';
 import { TimespanControl, timespanStart, type Timespan } from '@/components/timespan';
@@ -10,13 +12,6 @@ import { Card, Message, SectionLabel } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { Tile, TileRow } from '@/progress/tile';
 import { formatDate, formatDistance, formatDuration, formatPace } from '@/workout/format';
-
-/** The Monday starting the week of a YYYY-MM-DD date. */
-function weekOf(date: string) {
-  const d = new Date(`${date}T12:00:00`);
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-  return localDate(d);
-}
 
 /**
  * How fast a workout went, as the chart plots it: km/h for rides, minutes
@@ -56,11 +51,11 @@ export function CardioStats({
 
   const weekly = new Map<string, number>();
   for (const w of workouts) {
-    const week = weekOf(w.date);
+    const week = mondayOf(w.date);
     weekly.set(week, (weekly.get(week) ?? 0) + (w.distance_m ?? 0));
   }
-  const weeklyPoints = [...weekly].map(([date, metres]) => ({
-    date,
+  const weeklyTotals = [...weekly].map(([week, metres]) => ({
+    week,
     value: swim ? metres : metres / 1000,
   }));
   const speedPoints = withDistance.map((w) => ({ date: w.date, value: speedValue(activity, w) }));
@@ -88,8 +83,7 @@ export function CardioStats({
       <Card>
         <ThemedText type="smallBold">Weekly distance</ThemedText>
         <TimespanControl value={timespan} onChange={onTimespanChange} />
-        {/* Weekly points sit on their Monday, which can precede `from`. */}
-        <LineChart points={weeklyPoints} from={weekOf(from)} to={localDate()} unit={swim ? 'm' : 'km'} />
+        <WeeklyBarChart weeks={weeklyTotals} from={from} to={localDate()} unit={swim ? 'm' : 'km'} />
       </Card>
 
       {speedPoints.length > 0 && (

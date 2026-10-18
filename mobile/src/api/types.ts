@@ -198,6 +198,8 @@ export type Insights = {
   cardio: CardioSummary[];
   /** This week of the active goal; null without one. */
   goal: GoalSummary | null;
+  /** Triathlons over the timespan; null without any. */
+  triathlon: TriathlonSummary | null;
 };
 
 export type GoalSummary = {
@@ -317,3 +319,46 @@ export type PlannedSession = {
 export type GoalToday = { goal: Goal | null; sessions: PlannedSession[] };
 
 export type SavedGoal = { goal: Goal; warnings: string[] };
+
+/** Mirrors the store's triathlon classes, by distance. */
+export type TriathlonClass = 'sprint' | 'olympic' | 'half' | 'full' | 'custom';
+
+export type TriathlonLegKey = 'swim' | 'bike' | 'run';
+
+/** A discipline of a triathlon: the day's workouts of that activity added up. */
+export type TriathlonLeg = {
+  workout_ids: number[];
+  distance_m: number;
+  duration_seconds: number;
+};
+
+/**
+ * A day with at least one swim, ride and run, in any order. The total adds
+ * up the legs, without transitions. `pr` is set when it was the fastest of
+ * its class so far; custom distances never are.
+ */
+export type Triathlon = {
+  date: string;
+  class: TriathlonClass;
+  swim: TriathlonLeg;
+  bike: TriathlonLeg;
+  run: TriathlonLeg;
+  total_seconds: number;
+  pr: boolean;
+};
+
+/** Mirrors store.TriathlonSummary. */
+export type TriathlonSummary = {
+  count: number;
+  latest: Triathlon;
+  /** The earliest in the timespan, when there were several. */
+  first?: Triathlon;
+  /** The fastest of each standard class of all time, shortest class first. */
+  records: Triathlon[];
+  /** The share of the latest's time each leg took. */
+  share: Record<TriathlonLegKey, number>;
+  /** Typical shares for the latest's class; unset for custom distances. */
+  typical_share?: Record<TriathlonLegKey, number>;
+  /** The leg taking clearly more of the time than typical. */
+  weakest?: TriathlonLegKey;
+};

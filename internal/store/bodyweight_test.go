@@ -72,3 +72,45 @@ func TestDeleteBodyweight(t *testing.T) {
 		t.Errorf("expected only 2026-03-11 to remain, got %+v", entries)
 	}
 }
+
+func TestReplaceBodyweight_ReplacesEveryEntry(t *testing.T) {
+	s := newTestStore(t)
+
+	s.SaveBodyweight("2026-03-01", 83)
+	s.SaveBodyweight("2026-03-10", 82)
+	err := s.ReplaceBodyweight([]BodyweightEntry{
+		{Date: "2026-03-10", Weight: 81.5},
+		{Date: "2026-03-12", Weight: 81},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	entries, _ := s.ListBodyweight()
+	want := []BodyweightEntry{{Date: "2026-03-10", Weight: 81.5}, {Date: "2026-03-12", Weight: 81}}
+	if len(entries) != len(want) {
+		t.Fatalf("expected %+v, got %+v", want, entries)
+	}
+	for i := range want {
+		if entries[i] != want[i] {
+			t.Errorf("entry %d: expected %+v, got %+v", i, want[i], entries[i])
+		}
+	}
+}
+
+func TestReplaceBodyweight_LastEntryForADateWins(t *testing.T) {
+	s := newTestStore(t)
+
+	err := s.ReplaceBodyweight([]BodyweightEntry{
+		{Date: "2026-03-10", Weight: 82},
+		{Date: "2026-03-10", Weight: 81.5},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	entries, _ := s.ListBodyweight()
+	if len(entries) != 1 || entries[0].Weight != 81.5 {
+		t.Errorf("expected only 81.5 on 2026-03-10, got %+v", entries)
+	}
+}

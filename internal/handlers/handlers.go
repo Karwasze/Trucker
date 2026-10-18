@@ -28,6 +28,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/bodyweight", h.BodyweightAPI)
 	mux.HandleFunc("/api/insights", h.InsightsAPI)
 	mux.HandleFunc("/api/cardio", h.CardioAPI)
+	mux.HandleFunc("/api/triathlons", h.TriathlonsAPI)
 	mux.HandleFunc("/api/goals", h.GoalsAPI)
 	mux.HandleFunc("/api/goals/sessions", h.GoalSessionsAPI)
 	mux.HandleFunc("/api/goals/today", h.GoalTodayAPI)

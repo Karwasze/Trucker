@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 
 import { localDate } from '@/api/client';
-import type { CardioActivity, NewCardioWorkout } from '@/api/types';
+import type { BodyweightEntry, CardioActivity, NewCardioWorkout } from '@/api/types';
 import { bucketSamples, lapsFrom, type Reading } from '@/health/samples';
 
 type HealthKitModule = typeof import('@kingstinct/react-native-healthkit');
@@ -41,6 +41,7 @@ const DISTANCE = {
 } as const satisfies Record<CardioActivity, string>;
 
 const HEART_RATE = 'HKQuantityTypeIdentifierHeartRate';
+const BODY_MASS = 'HKQuantityTypeIdentifierBodyMass';
 
 /** Whether Apple Health can be read on this device. */
 export function isHealthAvailable(): boolean {
@@ -52,9 +53,10 @@ export function isHealthAvailable(): boolean {
 }
 
 /**
- * Asks for read access to workouts and what they measured. iOS only shows
- * the prompt once; afterwards access is changed in the Health app, and
- * reads of denied types just come back empty.
+ * Asks for read access to workouts, what they measured and weight. iOS only
+ * shows the prompt once per type (asking again just prompts for types added
+ * since); afterwards access is changed in the Health app, and reads of
+ * denied types just come back empty.
  */
 export async function connectHealth(): Promise<void> {
   if (!healthkit) throw new Error('Apple Health is only available in the iOS app.');
@@ -67,8 +69,21 @@ export async function connectHealth(): Promise<void> {
       'HKQuantityTypeIdentifierActiveEnergyBurned',
       'HKQuantityTypeIdentifierSwimmingStrokeCount',
       HEART_RATE,
+      BODY_MASS,
     ],
   });
+}
+
+/**
+ * Every weigh-in recorded in Health, in kg, oldest first: the latest one of
+ * each day in the device's time zone, as the server keeps one per date.
+ */
+export async function healthBodyweight(): Promise<BodyweightEntry[]> {
+  if (!healthkit) return [];
+  const samples = await healthkit.queryQuantitySamples(BODY_MASS, { limit: 0, ascending: true, unit: 'kg' });
+  const byDate = new Map<string, number>();
+  for (const s of samples) byDate.set(localDate(s.startDate), Math.round(s.quantity * 100) / 100);
+  return [...byDate].map(([date, weight]) => ({ date, weight }));
 }
 
 /**

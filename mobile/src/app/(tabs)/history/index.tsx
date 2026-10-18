@@ -2,7 +2,7 @@ import { Link } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 
-import type { CardioWorkout, Workout } from '@/api/types';
+import type { CardioWorkout, Triathlon, Workout } from '@/api/types';
 import { SwipeToDelete, type SwipeRow } from '@/components/swipe-to-delete';
 import { ThemedText } from '@/components/themed-text';
 import { Card, Message, Screen } from '@/components/ui';
@@ -13,29 +13,39 @@ import { HealthImportBanner } from '@/health/import-banner';
 import { useQuery } from '@/hooks/use-query';
 import { SettingsButton } from '@/settings/settings-button';
 import { useSettings } from '@/settings/settings-context';
+import { TriathlonOverview } from '@/triathlon/triathlon-overview';
 import { confirmDeleteCardio, confirmDeleteWorkout } from '@/workout/confirm-delete';
 import { describeSets } from '@/workout/draft';
 import { formatDate, formatKg, volumeOf } from '@/workout/format';
 
-type Entry = { kind: 'strength'; workout: Workout } | { kind: 'cardio'; workout: CardioWorkout };
+type Entry =
+  | { kind: 'strength'; workout: Workout; date: string }
+  | { kind: 'cardio'; workout: CardioWorkout; date: string }
+  | { kind: 'triathlon'; triathlon: Triathlon; date: string };
 
 /**
- * Lifting and cardio workouts, newest day first. Within a day, cardio comes
- * latest start first, then lifting workouts, which have no time.
+ * Lifting and cardio workouts, newest day first, with a triathlon's swims,
+ * rides and runs as one entry. Within a day, a triathlon comes first, then
+ * cardio latest start first, then lifting workouts, which have no time.
  */
-function timeline(workouts: Workout[], cardio: CardioWorkout[]): Entry[] {
+function timeline(workouts: Workout[], cardio: CardioWorkout[], triathlons: Triathlon[] = []): Entry[] {
+  const legs = new Set(triathlons.flatMap((t) => [...t.swim.workout_ids, ...t.bike.workout_ids, ...t.run.workout_ids]));
   const entries: Entry[] = [
-    ...cardio.map((workout) => ({ kind: 'cardio' as const, workout })),
-    ...workouts.map((workout) => ({ kind: 'strength' as const, workout })),
+    ...triathlons.map((triathlon) => ({ kind: 'triathlon' as const, triathlon, date: triathlon.date })),
+    ...cardio
+      .filter((w) => !legs.has(w.id))
+      .map((workout) => ({ kind: 'cardio' as const, workout, date: workout.date })),
+    ...workouts.map((workout) => ({ kind: 'strength' as const, workout, date: workout.date })),
   ];
-  // Both lists come newest first, which a stable sort by date keeps.
-  return entries.sort((a, b) => b.workout.date.localeCompare(a.workout.date));
+  // Every list comes newest first, which a stable sort by date keeps.
+  return entries.sort((a, b) => b.date.localeCompare(a.date));
 }
 
 export default function HistoryScreen() {
   const { api, serverUrl } = useSettings();
   const workouts = useQuery(`workouts:${serverUrl}`, api.listWorkouts);
   const cardio = useQuery(`cardio:${serverUrl}`, () => api.listCardio());
+  const triathlons = useQuery(`triathlons:${serverUrl}`, api.listTriathlons);
   const plans = useQuery(`plans:${serverUrl}`, api.listPlans);
   const imports = useHealthImports();
   const { dismiss } = useHealthState();
@@ -43,7 +53,7 @@ export default function HistoryScreen() {
   // Keyed by kind too, since lifting and cardio IDs overlap.
   const [deleting, setDeleting] = useState<string | null>(null);
 
-  const deleteEntry = async (entry: Entry, row?: SwipeRow) => {
+  const deleteEntry = async (entry: Exclude<Entry, { kind: 'triathlon' }>, row?: SwipeRow) => {
     const key = `${entry.kind}:${entry.workout.id}`;
     setDeleting(key);
     try {
@@ -55,6 +65,7 @@ export default function HistoryScreen() {
         // Deleted on purpose, so don't offer it for import again.
         if (entry.workout.source_uuid) await dismiss([entry.workout.source_uuid]);
         cardio.refresh();
+        triathlons.refresh();
       }
     } catch (e) {
       Alert.alert("Couldn't delete workout", (e as Error).message);
@@ -65,7 +76,7 @@ export default function HistoryScreen() {
   };
 
   // A full swipe is deliberate enough to skip the confirmation.
-  const onDelete = (entry: Entry, row?: SwipeRow, fullSwipe = false) =>
+  const onDelete = (entry: Exclude<Entry, { kind: 'triathlon' }>, row?: SwipeRow, fullSwipe = false) =>
     fullSwipe
       ? deleteEntry(entry, row)
       : (entry.kind === 'strength' ? confirmDeleteWorkout : confirmDeleteCardio)(
@@ -73,8 +84,9 @@ export default function HistoryScreen() {
           () => row?.close()
         );
 
+  // Triathlons only group what's loaded, so a failure to load them leaves the legs apart.
   const loaded = workouts.data && cardio.data;
-  const entries = loaded ? timeline(workouts.data!, cardio.data!) : [];
+  const entries = loaded ? timeline(workouts.data!, cardio.data!, triathlons.data) : [];
 
   return (
     <Screen
@@ -84,6 +96,7 @@ export default function HistoryScreen() {
       onRefresh={() => {
         workouts.refresh();
         cardio.refresh();
+        triathlons.refresh();
         plans.refresh();
         imports.refresh();
       }}>
@@ -94,6 +107,8 @@ export default function HistoryScreen() {
         <Message>No workouts yet. Log one from the Today tab.</Message>
       ) : (
         entries.map((entry) => {
+          if (entry.kind === 'triathlon')
+            return <TriathlonRow key={`triathlon:${entry.date}`} triathlon={entry.triathlon} />;
           const key = `${entry.kind}:${entry.workout.id}`;
           const onEntryDelete = (row?: SwipeRow, fullSwipe?: boolean) => onDelete(entry, row, fullSwipe);
           return entry.kind === 'strength' ? (
@@ -190,6 +205,22 @@ function CardioRow({
         </Pressable>
       </Link>
     </SwipeToDelete>
+  );
+}
+
+/**
+ * A triathlon's swims, rides and runs as one card. Its legs are deleted one
+ * by one from their own screens, a tap away.
+ */
+function TriathlonRow({ triathlon: t }: { triathlon: Triathlon }) {
+  return (
+    <Link href={{ pathname: '/history/triathlon/[date]', params: { date: t.date } }} asChild>
+      <Pressable style={({ pressed }) => pressed && { opacity: 0.6 }}>
+        <Card>
+          <TriathlonOverview triathlon={t} />
+        </Card>
+      </Pressable>
+    </Link>
   );
 }
 

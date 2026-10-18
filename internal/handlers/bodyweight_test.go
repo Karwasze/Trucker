@@ -102,3 +102,49 @@ func TestBodyweightAPI_MethodNotAllowed(t *testing.T) {
 		t.Errorf("expected 405, got %d", w.Code)
 	}
 }
+
+func TestBodyweightAPI_PUT_ReplacesEveryEntry(t *testing.T) {
+	h, s := newTestHandlers(t)
+	s.SaveBodyweight("2026-03-01", 83)
+
+	body := `[{"date":"2026-03-10","weight":82.5},{"date":"2026-03-11","weight":82.1}]`
+	req := httptest.NewRequest("PUT", "/api/bodyweight", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	h.BodyweightAPI(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var returned []store.BodyweightEntry
+	json.NewDecoder(w.Body).Decode(&returned)
+	stored, _ := s.ListBodyweight()
+	for _, entries := range [][]store.BodyweightEntry{returned, stored} {
+		if len(entries) != 2 || entries[0].Date != "2026-03-10" || entries[1].Weight != 82.1 {
+			t.Errorf("unexpected entries %+v", entries)
+		}
+	}
+}
+
+func TestBodyweightAPI_PUT_InvalidKeepsExistingEntries(t *testing.T) {
+	h, s := newTestHandlers(t)
+	s.SaveBodyweight("2026-03-01", 83)
+
+	for _, body := range []string{
+		`not json`,
+		`{"date":"2026-03-10","weight":80}`,
+		`[{"date":"2026-03-10","weight":80},{"date":"2026-03-11","weight":0}]`,
+		`[{"date":"11/03/2026","weight":80}]`,
+	} {
+		req := httptest.NewRequest("PUT", "/api/bodyweight", strings.NewReader(body))
+		w := httptest.NewRecorder()
+		h.BodyweightAPI(w, req)
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("%s: expected 400, got %d", body, w.Code)
+		}
+	}
+
+	entries, _ := s.ListBodyweight()
+	if len(entries) != 1 || entries[0].Date != "2026-03-01" {
+		t.Errorf("expected the existing entry kept, got %+v", entries)
+	}
+}

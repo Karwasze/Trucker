@@ -1,0 +1,158 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { screen, userEvent } from '@testing-library/react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+
+import type { CardioWorkout, Insights, Triathlon } from '@/api/types';
+import HistoryScreen from '@/app/(tabs)/history/index';
+import TriathlonDetailScreen from '@/app/(tabs)/history/triathlon/[date]';
+import StatsScreen from '@/app/(tabs)/stats';
+import { InsightsView } from '@/insights/insights-view';
+import { mockServer, renderInApp, selectPlan, setNow } from '@/test-utils';
+
+const leg = (id: number, activity: CardioWorkout['activity'], distance_m: number, duration_seconds: number) => ({
+  id,
+  date: '2026-10-17',
+  started_at: `2026-10-17T0${id}:00:00+02:00`,
+  activity,
+  duration_seconds,
+  distance_m,
+});
+const cardio: CardioWorkout[] = [
+  leg(4, 'walking', 3000, 2000),
+  leg(3, 'running', 10000, 3900),
+  leg(2, 'cycling', 40000, 4500),
+  leg(1, 'swimming', 1500, 1800),
+];
+
+const tri = (date: string, total: number, overrides: Partial<Triathlon> = {}): Triathlon => ({
+  date,
+  class: 'olympic',
+  swim: { workout_ids: [1], distance_m: 1500, duration_seconds: 1800 },
+  bike: { workout_ids: [2], distance_m: 40000, duration_seconds: 4500 },
+  run: { workout_ids: [3], distance_m: 10000, duration_seconds: total - 6300 },
+  total_seconds: total,
+  pr: false,
+  ...overrides,
+});
+const latest = tri('2026-10-17', 10200);
+const best = tri('2026-09-12', 9100, {
+  swim: { workout_ids: [11], distance_m: 1500, duration_seconds: 1700 },
+  bike: { workout_ids: [12], distance_m: 40000, duration_seconds: 4500 },
+  run: { workout_ids: [13], distance_m: 10000, duration_seconds: 2900 },
+  pr: true,
+});
+const sprint = tri('2026-09-26', 4800, {
+  class: 'sprint',
+  swim: { workout_ids: [21], distance_m: 750, duration_seconds: 900 },
+  bike: { workout_ids: [22], distance_m: 20000, duration_seconds: 2400 },
+  run: { workout_ids: [23], distance_m: 5000, duration_seconds: 1500 },
+  pr: true,
+});
+
+function server(triathlons: Triathlon[] = [latest, sprint, best], insights: Partial<Insights> = {}) {
+  return mockServer({
+    'GET /api/workouts': [],
+    'GET /api/plans': [],
+    'GET /api/cardio': cardio,
+    'GET /api/triathlons': triathlons,
+    'GET /api/statistics': { exercises: ['Squat'], data: [] },
+    'GET /api/insights': { date: '2026-10-18', ...insights },
+  });
+}
+
+beforeEach(async () => {
+  jest.clearAllMocks();
+  setNow('2026-10-18T12:00:00+02:00');
+  await AsyncStorage.clear();
+  await selectPlan(null);
+  jest.mocked(useLocalSearchParams).mockReturnValue({});
+});
+afterEach(() => jest.useRealTimers());
+
+test('History shows a triathlon’s legs as one card, leaving other workouts apart', async () => {
+  server([latest]);
+  const user = userEvent.setup();
+  await renderInApp(<HistoryScreen />);
+  expect(await screen.findByText('🏊🚴🏃 Olympic triathlon')).toBeOnTheScreen();
+  expect(screen.getByText('🏊 30:00 · 🚴 1:15:00 · 🏃 1:05:00')).toBeOnTheScreen();
+  expect(screen.getByText('2:50:00')).toBeOnTheScreen();
+  // The walk that day stays its own card; the legs don't.
+  expect(screen.getByText('🚶 Walk')).toBeOnTheScreen();
+  expect(screen.queryByText('🏃 Run')).toBeNull();
+  await user.press(screen.getByText('🏊🚴🏃 Olympic triathlon'));
+  expect(router.push).toHaveBeenCalledWith(
+    expect.objectContaining({ pathname: '/history/triathlon/[date]', params: { date: '2026-10-17' } })
+  );
+});
+
+test('the triathlon screen compares the total to the class record and splits it by leg', async () => {
+  jest.mocked(useLocalSearchParams).mockReturnValue({ date: '2026-10-17' });
+  server();
+  await renderInApp(<TriathlonDetailScreen />);
+  expect(await screen.findByText('Olympic triathlon')).toBeOnTheScreen();
+  expect(screen.getByText('Best · 12 Sept')).toBeOnTheScreen();
+  expect(screen.getByText('+18:20')).toBeOnTheScreen();
+  expect(screen.getByLabelText('Swim 18%, Ride 44%, Run 38%')).toBeOnTheScreen();
+  expect(screen.getByText('10.0 km · 6:30/km')).toBeOnTheScreen();
+  // Every leg's workout, but not the walk.
+  expect(screen.getByText('1,500 m · 30:00 · 2:00/100 m')).toBeOnTheScreen();
+  expect(screen.getByText('40.0 km · 1:15:00 · 32.0 km/h')).toBeOnTheScreen();
+  expect(screen.getByText('10.0 km · 1:05:00 · 6:30/km')).toBeOnTheScreen();
+  expect(screen.queryByText('🚶 Walk')).toBeNull();
+});
+
+test('Progress lists triathlons, one class at a time, opening on the latest’s', async () => {
+  server();
+  const user = userEvent.setup();
+  await renderInApp(<StatsScreen />);
+  await user.press(await screen.findByRole('button', { name: 'Squat, change exercise' }));
+  await user.press(screen.getByText('Triathlon'));
+  expect(await screen.findByText('Total time · Olympic')).toBeOnTheScreen();
+  expect(screen.getByText('Best')).toBeOnTheScreen();
+  // In the Best tile and the best triathlon's card.
+  expect(screen.getAllByText('2:31:40')).toHaveLength(2);
+  expect(screen.queryByText('1:20:00')).toBeNull();
+
+  await user.press(screen.getByRole('button', { name: 'Sprint' }));
+  expect(screen.getByText('Total time · Sprint')).toBeOnTheScreen();
+  expect(screen.getAllByText('1:20:00').length).toBeGreaterThan(0);
+});
+
+test('Insights shows the latest triathlon, the leg costing the most, pace trends and records', async () => {
+  server([latest, sprint, best], {
+    triathlon: {
+      count: 3,
+      latest,
+      first: best,
+      records: [sprint, best],
+      share: { swim: 0.176, bike: 0.441, run: 0.382 },
+      typical_share: { swim: 0.17, bike: 0.5, run: 0.33 },
+      weakest: 'run',
+    },
+  });
+  const user = userEvent.setup();
+  await renderInApp(<InsightsView />);
+  expect(await screen.findByText('Latest · Olympic triathlon · 17 Oct')).toBeOnTheScreen();
+  expect(screen.getByText('+18:20 off your best')).toBeOnTheScreen();
+  expect(screen.getByText('3 triathlons in total')).toBeOnTheScreen();
+  expect(screen.getByText('typical 33%')).toBeOnTheScreen();
+  expect(
+    screen.getByText('Your run takes 38% of your time, against a typical 33%: the leg with the most to gain.')
+  ).toBeOnTheScreen();
+  // The swim got faster and the run slower since the first.
+  expect(screen.getByText('🏊 1:53/100 m → 2:00/100 m')).toBeOnTheScreen();
+  expect(screen.getByText('▼ 5.6%')).toBeOnTheScreen();
+  expect(screen.getByText('🏃 4:50/km → 6:30/km')).toBeOnTheScreen();
+  expect(screen.getByText('Best times')).toBeOnTheScreen();
+  expect(screen.getByText('Sprint')).toBeOnTheScreen();
+
+  await user.press(screen.getByText('Latest · Olympic triathlon · 17 Oct'));
+  expect(router.navigate).toHaveBeenCalledWith({ pathname: '/stats', params: { series: 'triathlon', span: 'all' } });
+});
+
+test('opened from Insights, Progress shows triathlons', async () => {
+  jest.mocked(useLocalSearchParams).mockReturnValue({ series: 'triathlon', span: 'all' });
+  server();
+  await renderInApp(<StatsScreen />);
+  expect(await screen.findByText('Total time · Olympic')).toBeOnTheScreen();
+});

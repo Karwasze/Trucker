@@ -120,6 +120,7 @@ func (s *Store) GetInsights(today, from string, planID int) (Insights, error) {
 		Tonnage:     tonnage(window, now),
 		Untagged:    []string{},
 		Cardio:      cardioSummaries(cardio, from, now),
+		Triathlon:   triathlonSummary(triathlons(cardio), from),
 	}
 
 	if planID != 0 {

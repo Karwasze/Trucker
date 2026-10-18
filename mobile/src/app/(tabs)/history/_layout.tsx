@@ -6,6 +6,7 @@ export default function HistoryLayout() {
       <Stack.Screen name="index" options={{ headerShown: false, title: 'History' }} />
       <Stack.Screen name="[id]" options={{ title: 'Workout', headerBackTitle: 'History' }} />
       <Stack.Screen name="cardio/[id]" options={{ title: 'Workout', headerBackTitle: 'History' }} />
+      <Stack.Screen name="triathlon/[date]" options={{ title: 'Triathlon', headerBackTitle: 'History' }} />
     </Stack>
   );
 }

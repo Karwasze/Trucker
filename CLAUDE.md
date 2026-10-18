@@ -28,3 +28,28 @@ Make sure changes can be applied to an existing database without a loss of data.
 
 # Fixing bugs
 Every time you break something, add a test to cover that scenario.
+
+# Mobile app (mobile/)
+
+Expo/React Native app; see mobile/AGENTS.md for Expo-specific rules.
+
+Tests use Jest (jest-expo) and React Native Testing Library v14, whose
+render, renderHook, fireEvent and userEvent calls are all async: await them.
+
+# 1. Add a test next to the code: src/**/foo.test.ts(x) for modules,
+# hooks and components; screens under src/app go in src/__tests__/ (a test
+# file inside src/app would become a route).
+
+# 2. Use the helpers in src/test-utils.tsx: mockServer (fake API over fetch,
+# keyed "GET /api/plans"), renderInApp (the app's providers), selectPlan,
+# mockAlerts (press Alert buttons), setNow (fix today's date). jest.setup.ts
+# mocks AsyncStorage, expo-router (router calls are jest.fn), the timer's
+# native module, Reanimated and gesture handler.
+
+# 3. Run from mobile/ before declaring a change done:
+npm test            # Jest, in Europe/Warsaw and en-GB so dates are stable
+npx tsc --noEmit    # typecheck
+npx expo lint       # lint, includes Prettier
+
+Run tests through npm test (npm test -- path/to/file), not bare jest: the
+script pins the time zone and locale that date assertions expect.

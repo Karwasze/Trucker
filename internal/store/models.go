@@ -141,23 +141,24 @@ type ProgressionResult struct {
 
 // Insights summarises training over a timespan from From (empty for all
 // time) to Date: plan adherence and stalls, progression and tonnage per lift,
-// strength relative to bodyweight and cardio per activity. Cardio days count
-// as sessions and towards adherence like lifting days. Muscle volume always covers the last
-// four weeks.
+// strength relative to bodyweight, cardio per activity and triathlons.
+// Cardio days count as sessions and towards adherence like lifting days.
+// Muscle volume always covers the last four weeks.
 type Insights struct {
-	Date            string           `json:"date"`
-	From            string           `json:"from,omitempty"`
-	Bodyweight      *BodyweightTrend `json:"bodyweight"`
-	SessionsPerWeek float64          `json:"sessions_per_week"`
-	Muscles         []MuscleVolume   `json:"muscles"`
-	Adherence       *Adherence       `json:"adherence"`
-	Stalls          []PlanStall      `json:"stalls"`
-	Progression     []LiftProgress   `json:"progression"`
-	Tonnage         Tonnage          `json:"tonnage"`
-	Strength        []StrengthLevel  `json:"strength"`
-	Untagged        []string         `json:"untagged"`
-	Cardio          []CardioSummary  `json:"cardio"`
-	Goal            *GoalSummary     `json:"goal"`
+	Date            string            `json:"date"`
+	From            string            `json:"from,omitempty"`
+	Bodyweight      *BodyweightTrend  `json:"bodyweight"`
+	SessionsPerWeek float64           `json:"sessions_per_week"`
+	Muscles         []MuscleVolume    `json:"muscles"`
+	Adherence       *Adherence        `json:"adherence"`
+	Stalls          []PlanStall       `json:"stalls"`
+	Progression     []LiftProgress    `json:"progression"`
+	Tonnage         Tonnage           `json:"tonnage"`
+	Strength        []StrengthLevel   `json:"strength"`
+	Untagged        []string          `json:"untagged"`
+	Cardio          []CardioSummary   `json:"cardio"`
+	Triathlon       *TriathlonSummary `json:"triathlon"`
+	Goal            *GoalSummary      `json:"goal"`
 }
 
 // GoalSummary is where the active goal stands: how far off the race is,

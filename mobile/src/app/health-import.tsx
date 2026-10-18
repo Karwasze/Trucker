@@ -65,6 +65,8 @@ export default function HealthImportScreen() {
   const choose = (uuid: string, sessionId: number | null) => setChosen((c) => new Map(c).set(uuid, sessionId));
 
   const uuidOf = (i: number) => imports.candidates[i].source_uuid ?? String(i);
+  // Workouts without a Health UUID are keyed by position, like everywhere else here.
+  const keyOf = (w: NewCardioWorkout) => uuidOf(imports.candidates.indexOf(w));
   const toggle = (uuid: string) =>
     setUnticked((u) => {
       const next = new Set(u);
@@ -81,7 +83,7 @@ export default function HealthImportScreen() {
       if (importing.length > 0) {
         await api.importCardio(
           importing.map((w) => {
-            const sessionId = matchOf(w.source_uuid ?? '');
+            const sessionId = matchOf(keyOf(w));
             return sessionId === null ? w : { ...w, planned_session_id: sessionId };
           })
         );

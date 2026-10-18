@@ -14,7 +14,7 @@ import type {
   StrengthLevel,
   Tonnage,
 } from '@/api/types';
-import { LineChart } from '@/components/line-chart';
+import { WeeklyBarChart } from '@/components/bar-chart';
 import { ThemedText } from '@/components/themed-text';
 import { TIMESPANS, TimespanControl, timespanStart, type Timespan } from '@/components/timespan';
 import { Card, Message, Screen, SectionLabel } from '@/components/ui';
@@ -24,6 +24,7 @@ import { useQuery } from '@/hooks/use-query';
 import { useTheme } from '@/hooks/use-theme';
 import { Tile, TileRow } from '@/progress/tile';
 import { SettingsButton } from '@/settings/settings-button';
+import { TriathlonInsights } from '@/triathlon/triathlon-insights';
 import { useSettings } from '@/settings/settings-context';
 import {
   ACTIVITY_ICONS,
@@ -71,6 +72,8 @@ export function InsightsView() {
 
 function InsightsContent({ data, timespan, hasPlan }: { data: Insights; timespan: Timespan; hasPlan: boolean }) {
   const span = `the last ${timespan.label}`;
+  // "In the last From beginning" doesn't read; over all time there were simply none.
+  const allTime = timespan.months === null;
   return (
     <>
       {data.goal && <GoalSection summary={data.goal} />}
@@ -108,7 +111,7 @@ function InsightsContent({ data, timespan, hasPlan }: { data: Insights; timespan
       {data.progression.length === 0 ? (
         <Card>
           <ThemedText type="small" themeColor="textSecondary">
-            No weighted {hasPlan ? 'plan ' : ''}lifts in {span}.
+            {allTime ? 'No workouts.' : `No weighted ${hasPlan ? 'plan ' : ''}lifts in ${span}.`}
           </ThemedText>
         </Card>
       ) : (
@@ -119,7 +122,7 @@ function InsightsContent({ data, timespan, hasPlan }: { data: Insights; timespan
       {data.tonnage.total === 0 ? (
         <Card>
           <ThemedText type="small" themeColor="textSecondary">
-            Nothing lifted in {span}.
+            {allTime ? 'No workouts.' : `Nothing lifted in ${span}.`}
           </ThemedText>
         </Card>
       ) : (
@@ -137,11 +140,13 @@ function InsightsContent({ data, timespan, hasPlan }: { data: Insights; timespan
         </>
       )}
 
+      {data.triathlon && <TriathlonInsights summary={data.triathlon} timespan={timespan} />}
+
       <SectionLabel>Strength</SectionLabel>
       <Card>
         {!data.bodyweight ? (
           <ThemedText type="small" themeColor="textSecondary">
-            Log your bodyweight on the Progress tab to see how strong your lifts are for your size.
+            Connect Apple Health in Settings to import your bodyweight and see how strong your lifts are for your size.
           </ThemedText>
         ) : data.strength.length === 0 ? (
           <ThemedText type="small" themeColor="textSecondary">
@@ -361,14 +366,12 @@ function TonnageSection({ tonnage, today }: { tonnage: Tonnage; today: string })
       {tonnage.weekly.length > 1 && (
         <Card>
           <ThemedText type="smallBold">Weekly tonnage</ThemedText>
-          <LineChart
-            points={tonnage.weekly.map((w) => ({
-              date: w.week,
-              value: w.tonnage,
-            }))}
+          <WeeklyBarChart
+            weeks={tonnage.weekly.map((w) => ({ week: w.week, value: w.tonnage }))}
             from={tonnage.weekly[0].week}
             to={today}
             unit="kg"
+            formatValue={formatKg}
           />
         </Card>
       )}

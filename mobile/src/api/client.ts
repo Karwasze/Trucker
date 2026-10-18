@@ -14,6 +14,7 @@ import type {
   SavedGoal,
   NewWorkout,
   PlanToday,
+  Triathlon,
   Set,
   StatisticsResponse,
   TrainingPlan,
@@ -84,11 +85,15 @@ export function createApi(baseUrl: string) {
       }),
 
     listBodyweight: async () => (await request<BodyweightEntry[] | null>('/api/bodyweight')) ?? [],
-    /** Records the bodyweight for a date, replacing that date's entry. */
-    saveBodyweight: (entry: BodyweightEntry) =>
-      request<BodyweightEntry>('/api/bodyweight', { method: 'POST', body: JSON.stringify(entry) }),
+    /** Replaces every bodyweight entry with `entries`; returns the stored entries, oldest first. */
+    replaceBodyweight: async (entries: BodyweightEntry[]) =>
+      (await request<BodyweightEntry[] | null>('/api/bodyweight', { method: 'PUT', body: JSON.stringify(entries) })) ??
+      [],
     deleteBodyweight: (date: string) =>
       request<{ success: boolean }>(`/api/bodyweight?date=${q(date)}`, { method: 'DELETE' }),
+
+    /** Days with a swim, ride and run, newest first. */
+    listTriathlons: async () => (await request<Triathlon[] | null>('/api/triathlons')) ?? [],
 
     /** Cardio workouts, newest first, without their samples. */
     listCardio: async (activity?: CardioActivity) =>
@@ -166,6 +171,7 @@ export function createApi(baseUrl: string) {
         untagged: res.untagged ?? [],
         cardio: res.cardio ?? [],
         goal: res.goal ?? null,
+        triathlon: res.triathlon ? { ...res.triathlon, records: res.triathlon.records ?? [] } : null,
         adherence: res.adherence && { ...res.adherence, missed: res.adherence.missed ?? [] },
       };
     },

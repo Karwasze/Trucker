@@ -50,6 +50,36 @@ func (h *Handlers) BodyweightAPI(w http.ResponseWriter, r *http.Request) {
 		}
 		json.NewEncoder(w).Encode(entry)
 
+	case "PUT":
+		// Replaces every entry, e.g. with the weigh-ins from Apple Health.
+		var entries []store.BodyweightEntry
+		if err := json.NewDecoder(r.Body).Decode(&entries); err != nil {
+			http.Error(w, "Invalid JSON: expected an array of entries", http.StatusBadRequest)
+			return
+		}
+		for _, e := range entries {
+			if !validDate(e.Date) {
+				http.Error(w, "Date must be YYYY-MM-DD", http.StatusBadRequest)
+				return
+			}
+			if e.Weight <= 0 {
+				http.Error(w, "Weight must be positive", http.StatusBadRequest)
+				return
+			}
+		}
+		if err := h.store.ReplaceBodyweight(entries); err != nil {
+			http.Error(w, "Database error", http.StatusInternalServerError)
+			log.Printf("Error replacing bodyweight: %v", err)
+			return
+		}
+		saved, err := h.store.ListBodyweight()
+		if err != nil {
+			http.Error(w, "Database error", http.StatusInternalServerError)
+			log.Printf("Error loading bodyweight: %v", err)
+			return
+		}
+		json.NewEncoder(w).Encode(saved)
+
 	case "DELETE":
 		date := r.URL.Query().Get("date")
 		if !validDate(date) {

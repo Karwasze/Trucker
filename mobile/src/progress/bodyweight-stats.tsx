@@ -1,5 +1,6 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, StyleSheet, TextInput, View } from 'react-native';
+import { Alert } from 'react-native';
 
 import { localDate } from '@/api/client';
 import type { BodyweightEntry } from '@/api/types';
@@ -7,25 +8,27 @@ import { LineChart } from '@/components/line-chart';
 import { ThemedText } from '@/components/themed-text';
 import { TimespanControl, timespanStart, type Timespan } from '@/components/timespan';
 import { Button, Card, Message } from '@/components/ui';
-import { Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+import { syncBodyweight } from '@/health/bodyweight';
+import { isHealthAvailable } from '@/health/healthkit';
 import { Tile, TileRow } from '@/progress/tile';
 import { useSettings } from '@/settings/settings-context';
 import { formatDate } from '@/workout/format';
 
 const formatNumber = (n: number) => String(Math.round(n * 10) / 10);
 
-/** Bodyweight log and chart, shown as a series on the Progress tab. `history` is sorted by date. */
+/** Bodyweight log, synced from Apple Health, and chart, shown as a series on the Progress tab. `history` is sorted by date. */
 export function BodyweightStats({
   history: all,
   timespan,
   onTimespanChange,
-  onSaved,
+  healthConnected,
+  onSynced,
 }: {
   history: BodyweightEntry[];
   timespan: Timespan;
   onTimespanChange: (timespan: Timespan) => void;
-  onSaved: () => void;
+  healthConnected: boolean;
+  onSynced: () => void;
 }) {
   const start = timespanStart(timespan);
   const history = start ? all.filter((e) => e.date >= start) : all;
@@ -34,9 +37,9 @@ export function BodyweightStats({
 
   return (
     <>
-      <WeighIn latest={all.at(-1)} onSaved={onSaved} />
+      <HealthSync connected={healthConnected} onSynced={onSynced} />
       {all.length === 0 ? (
-        <Message>Add your bodyweight to track it over time.</Message>
+        <Message>No weigh-ins yet.</Message>
       ) : (
         <>
           {latest && (
@@ -68,60 +71,56 @@ export function BodyweightStats({
   );
 }
 
-function WeighIn({ latest, onSaved }: { latest: BodyweightEntry | undefined; onSaved: () => void }) {
-  const theme = useTheme();
+/**
+ * Weigh-ins come from Apple Health only: syncing replaces the log with
+ * Health's, and without Health the log is read-only.
+ */
+function HealthSync({ connected, onSynced }: { connected: boolean; onSynced: () => void }) {
   const { api } = useSettings();
-  const [input, setInput] = useState('');
-  const [saving, setSaving] = useState(false);
-  const today = localDate();
-  const weight = Number(input.replace(',', '.'));
-  const valid = input.trim() !== '' && Number.isFinite(weight) && weight > 0;
+  const [syncing, setSyncing] = useState(false);
 
-  const save = async () => {
-    if (!valid) return;
-    setSaving(true);
+  if (!isHealthAvailable()) {
+    return (
+      <Card>
+        <ThemedText type="small" themeColor="textSecondary">
+          Bodyweight is imported from Apple Health in the iPhone app.
+        </ThemedText>
+      </Card>
+    );
+  }
+  if (!connected) {
+    return (
+      <Card>
+        <ThemedText type="small" themeColor="textSecondary">
+          Connect Apple Health in Settings to import your weigh-ins.
+        </ThemedText>
+        <Button title="Open Settings" variant="secondary" onPress={() => router.push('/settings')} />
+      </Card>
+    );
+  }
+
+  const sync = async () => {
+    setSyncing(true);
     try {
-      await api.saveBodyweight({ date: today, weight });
-      setInput('');
-      onSaved();
+      if (await syncBodyweight(api)) onSynced();
+      else
+        Alert.alert(
+          'No weigh-ins in Apple Health',
+          'Your bodyweight log was left as it is. Check that Trucker can read Weight in the Health app: Sharing → Apps → Trucker.'
+        );
     } catch (e) {
-      Alert.alert("Couldn't save bodyweight", (e as Error).message);
+      Alert.alert("Couldn't sync bodyweight", (e as Error).message);
     } finally {
-      setSaving(false);
+      setSyncing(false);
     }
   };
 
   return (
     <Card>
-      <View style={styles.row}>
-        <TextInput
-          value={input}
-          onChangeText={setInput}
-          onSubmitEditing={save}
-          placeholder={latest?.date === today ? `Today: ${formatNumber(latest.weight)} kg` : "Today's weight (kg)"}
-          placeholderTextColor={theme.textSecondary}
-          keyboardType="decimal-pad"
-          returnKeyType="done"
-          accessibilityLabel="Today's bodyweight in kilograms"
-          style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundSelected }]}
-        />
-        <Button title="Save" compact disabled={!valid} loading={saving} onPress={save} />
-      </View>
+      <ThemedText type="small" themeColor="textSecondary">
+        Weigh-ins are imported from Apple Health, replacing your bodyweight log.
+      </ThemedText>
+      <Button title="Sync from Apple Health" variant="secondary" loading={syncing} onPress={sync} />
     </Card>
   );
 }
-
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
-  input: {
-    flex: 1,
-    height: 36,
-    borderRadius: 10,
-    paddingHorizontal: Spacing.three,
-    fontSize: 16,
-  },
-});

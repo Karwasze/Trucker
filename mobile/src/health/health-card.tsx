@@ -4,11 +4,14 @@ import { Alert } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card } from '@/components/ui';
+import { syncBodyweight } from '@/health/bodyweight';
 import { IMPORT_LOOKBACK_DAYS, useHealthState } from '@/health/health-state';
 import { connectHealth, isHealthAvailable } from '@/health/healthkit';
+import { useSettings } from '@/settings/settings-context';
 
-/** Settings for importing workouts from Apple Health. */
+/** Settings for importing workouts and bodyweight from Apple Health. */
 export function HealthCard() {
+  const { api } = useSettings();
   const { state, loaded, connect, disconnect } = useHealthState();
   const [connecting, setConnecting] = useState(false);
 
@@ -27,6 +30,8 @@ export function HealthCard() {
     try {
       await connectHealth();
       await connect();
+      // In the background, so Insights has the bodyweight before Progress is opened.
+      syncBodyweight(api).catch(() => {});
     } catch (e) {
       Alert.alert("Couldn't connect Apple Health", (e as Error).message);
     } finally {
@@ -37,7 +42,7 @@ export function HealthCard() {
   const confirmDisconnect = () =>
     Alert.alert(
       'Disconnect Apple Health?',
-      `Imported workouts are kept. Reconnecting offers workouts from ${IMPORT_LOOKBACK_DAYS} days before then on.`,
+      `Imported workouts and bodyweight are kept. Reconnecting offers workouts from ${IMPORT_LOOKBACK_DAYS} days before then on.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Disconnect', style: 'destructive', onPress: disconnect },
@@ -50,7 +55,7 @@ export function HealthCard() {
       <Card>
         <ThemedText type="small" themeColor="textSecondary">
           Import runs, rides and swims recorded on your Apple Watch. Workouts from the last {IMPORT_LOOKBACK_DAYS} days
-          on are offered, and you choose which ones to import.
+          on are offered, and you choose which ones to import. Your bodyweight is imported from Health too.
         </ThemedText>
         <Button title="Connect Apple Health" loading={connecting} onPress={onConnect} />
       </Card>

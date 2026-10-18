@@ -9,11 +9,15 @@ import { ThemedText } from '@/components/themed-text';
 import { TIMESPANS, TimespanControl, timespanStart, type Timespan } from '@/components/timespan';
 import { Card, Message, Screen, SectionLabel } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
+import { syncBodyweight } from '@/health/bodyweight';
+import { useHealthState } from '@/health/health-state';
+import { isHealthAvailable } from '@/health/healthkit';
 import { useQuery } from '@/hooks/use-query';
 import { BodyweightStats } from '@/progress/bodyweight-stats';
 import { CardioStats } from '@/progress/cardio-stats';
 import { SeriesPicker, type Series } from '@/progress/series-picker';
 import { Tile, TileRow } from '@/progress/tile';
+import { TriathlonStats } from '@/progress/triathlon-stats';
 import { SettingsButton } from '@/settings/settings-button';
 import { useSettings } from '@/settings/settings-context';
 import { formatDate, formatKg } from '@/workout/format';
@@ -26,13 +30,18 @@ export default function StatsScreen() {
   // Oldest first, for the charts.
   const cardio = useQuery(`cardio:${serverUrl}`, async () => (await api.listCardio()).reverse());
   const activities = [...new Set((cardio.data ?? []).map((w) => w.activity))] as CardioActivity[];
+  // Oldest first, for the chart.
+  const triathlons = useQuery(`triathlons:${serverUrl}`, async () => (await api.listTriathlons()).reverse());
+  const hasTriathlons = (triathlons.data ?? []).length > 0;
 
-  // Opened on a lift or cardio activity from elsewhere, e.g. Insights. The params
-  // are applied while rendering whenever they change, then cleared, so opening
-  // the same series again applies them again.
-  const params = useLocalSearchParams<{ exercise?: string; activity?: string; span?: string }>();
+  // Opened on a lift, cardio activity or triathlons from elsewhere, e.g.
+  // Insights. The params are applied while rendering whenever they change,
+  // then cleared, so opening the same series again applies them again.
+  const params = useLocalSearchParams<{ exercise?: string; activity?: string; series?: string; span?: string }>();
   const request =
-    params.exercise || params.activity ? JSON.stringify([params.exercise, params.activity, params.span]) : undefined;
+    params.exercise || params.activity || params.series === 'triathlon'
+      ? JSON.stringify([params.exercise, params.activity, params.series, params.span])
+      : undefined;
   const [appliedRequest, setAppliedRequest] = useState<string>();
   if (request !== appliedRequest) {
     setAppliedRequest(request);
@@ -40,14 +49,16 @@ export default function StatsScreen() {
       setSelected(
         params.exercise
           ? { kind: 'exercise', name: params.exercise }
-          : { kind: 'cardio', activity: params.activity as CardioActivity }
+          : params.activity
+            ? { kind: 'cardio', activity: params.activity as CardioActivity }
+            : { kind: 'triathlon' }
       );
       const span = TIMESPANS.find((t) => t.key === params.span);
       if (span) setTimespan(span);
     }
   }
   useEffect(() => {
-    if (request) router.setParams({ exercise: undefined, activity: undefined, span: undefined });
+    if (request) router.setParams({ exercise: undefined, activity: undefined, series: undefined, span: undefined });
   }, [request]);
 
   const exercises = names.data ?? [];
@@ -59,6 +70,7 @@ export default function StatsScreen() {
       : { kind: 'bodyweight' };
   const series =
     selected?.kind === 'bodyweight' ||
+    (selected?.kind === 'triathlon' && hasTriathlons) ||
     (selected?.kind === 'cardio' && activities.includes(selected.activity)) ||
     (selected?.kind === 'exercise' && exercises.includes(selected.name))
       ? selected
@@ -68,8 +80,16 @@ export default function StatsScreen() {
   const exerciseData = useQuery(exercise === null ? null : `stats:${serverUrl}:${exercise}`, async () =>
     (await api.statistics(exercise!)).data.sort((a, b) => a.date.localeCompare(b.date))
   );
-  const bodyweight = useQuery(series?.kind === 'bodyweight' ? `bodyweight:${serverUrl}` : null, async () =>
-    (await api.listBodyweight()).sort((a, b) => a.date.localeCompare(b.date))
+  // Opening bodyweight syncs it from Apple Health, falling back to the
+  // stored log when Health can't be read.
+  const health = useHealthState();
+  const healthConnected = !!health.state.connectedAt && isHealthAvailable();
+  const bodyweight = useQuery(
+    series?.kind === 'bodyweight' && health.loaded ? `bodyweight:${serverUrl}:${healthConnected}` : null,
+    async () => {
+      const synced = healthConnected ? await syncBodyweight(api).catch(() => null) : null;
+      return (synced ?? (await api.listBodyweight())).sort((a, b) => a.date.localeCompare(b.date));
+    }
   );
   const data = series?.kind === 'bodyweight' ? bodyweight : exerciseData;
 
@@ -82,14 +102,23 @@ export default function StatsScreen() {
       onRefresh={() => {
         names.refresh();
         cardio.refresh();
+        triathlons.refresh();
         data.refresh();
       }}>
       {!names.data || !series ? (
         <Message loading={!names.error} error={names.error} />
       ) : (
         <>
-          <SeriesPicker value={series} exercises={exercises} activities={activities} onChange={setSelected} />
-          {series.kind === 'cardio' ? (
+          <SeriesPicker
+            value={series}
+            exercises={exercises}
+            activities={activities}
+            triathlon={hasTriathlons}
+            onChange={setSelected}
+          />
+          {series.kind === 'triathlon' ? (
+            <TriathlonStats triathlons={triathlons.data ?? []} timespan={timespan} onTimespanChange={setTimespan} />
+          ) : series.kind === 'cardio' ? (
             <CardioStats
               activity={series.activity}
               workouts={(cardio.data ?? []).filter((w) => w.activity === series.activity)}
@@ -104,7 +133,8 @@ export default function StatsScreen() {
                 history={bodyweight.data}
                 timespan={timespan}
                 onTimespanChange={setTimespan}
-                onSaved={bodyweight.refresh}
+                healthConnected={healthConnected}
+                onSynced={bodyweight.refresh}
               />
             )
           ) : !exerciseData.data || exerciseData.data.length === 0 ? (

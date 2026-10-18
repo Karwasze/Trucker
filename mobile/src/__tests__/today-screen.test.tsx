@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { screen, userEvent } from '@testing-library/react-native';
 
 import type { NewWorkout, PlanToday, Workout } from '@/api/types';
-import TodayScreen from '@/app/(tabs)/index';
+import TodayScreen from '@/app/(tabs)/(workout)/index';
 import { mockAlerts, mockServer, renderInApp, selectPlan, setNow, type Request } from '@/test-utils';
 
 const TODAY = '2026-10-18';

@@ -80,18 +80,28 @@ export default function StatsScreen() {
   const exerciseData = useQuery(exercise === null ? null : `stats:${serverUrl}:${exercise}`, async () =>
     (await api.statistics(exercise!)).data.sort((a, b) => a.date.localeCompare(b.date))
   );
-  // Opening bodyweight syncs it from Apple Health, falling back to the
-  // stored log when Health can't be read.
+  // Opening bodyweight shows the stored log and syncs it from Apple Health
+  // alongside, so a slow or stalled Health read can't hold the log back.
   const health = useHealthState();
   const healthConnected = !!health.state.connectedAt && isHealthAvailable();
-  const bodyweight = useQuery(
-    series?.kind === 'bodyweight' && health.loaded ? `bodyweight:${serverUrl}:${healthConnected}` : null,
-    async () => {
-      const synced = healthConnected ? await syncBodyweight(api).catch(() => null) : null;
-      return (synced ?? (await api.listBodyweight())).sort((a, b) => a.date.localeCompare(b.date));
-    }
+  const storedBodyweight = useQuery(series?.kind === 'bodyweight' ? `bodyweight:${serverUrl}` : null, async () =>
+    (await api.listBodyweight()).sort((a, b) => a.date.localeCompare(b.date))
   );
-  const data = series?.kind === 'bodyweight' ? bodyweight : exerciseData;
+  const healthSync = useQuery(
+    series?.kind === 'bodyweight' && health.loaded && healthConnected ? `bodyweight-sync:${serverUrl}` : null,
+    () => syncBodyweight(api)
+  );
+  // Health's log once synced; null means Health had no weigh-ins.
+  const bodyweight = healthSync.data ?? storedBodyweight.data;
+  const data =
+    series?.kind === 'bodyweight'
+      ? {
+          refresh: () => {
+            storedBodyweight.refresh();
+            if (healthConnected) healthSync.refresh();
+          },
+        }
+      : exerciseData;
 
   return (
     <Screen
@@ -126,15 +136,17 @@ export default function StatsScreen() {
               onTimespanChange={setTimespan}
             />
           ) : series.kind === 'bodyweight' ? (
-            !bodyweight.data ? (
-              <Message loading={!bodyweight.error} error={bodyweight.error} />
+            !bodyweight ? (
+              <Message loading={!storedBodyweight.error} error={storedBodyweight.error} />
             ) : (
               <BodyweightStats
-                history={bodyweight.data}
+                history={bodyweight}
                 timespan={timespan}
                 onTimespanChange={setTimespan}
                 healthConnected={healthConnected}
-                onSynced={bodyweight.refresh}
+                healthSyncing={healthSync.loading}
+                healthSyncError={healthSync.error}
+                onSynced={healthSync.refresh}
               />
             )
           ) : !exerciseData.data || exerciseData.data.length === 0 ? (

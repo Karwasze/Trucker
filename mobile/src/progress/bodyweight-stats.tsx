@@ -22,12 +22,18 @@ export function BodyweightStats({
   timespan,
   onTimespanChange,
   healthConnected,
+  healthSyncing = false,
+  healthSyncError = null,
   onSynced,
 }: {
   history: BodyweightEntry[];
   timespan: Timespan;
   onTimespanChange: (timespan: Timespan) => void;
   healthConnected: boolean;
+  /** Whether the sync on opening is still reading Health. */
+  healthSyncing?: boolean;
+  /** Why the sync on opening failed, if it did. */
+  healthSyncError?: string | null;
   onSynced: () => void;
 }) {
   const start = timespanStart(timespan);
@@ -37,7 +43,12 @@ export function BodyweightStats({
 
   return (
     <>
-      <HealthSync connected={healthConnected} onSynced={onSynced} />
+      <HealthSync
+        connected={healthConnected}
+        autoSyncing={healthSyncing}
+        autoSyncError={healthSyncError}
+        onSynced={onSynced}
+      />
       {all.length === 0 ? (
         <Message>No weigh-ins yet.</Message>
       ) : (
@@ -75,7 +86,17 @@ export function BodyweightStats({
  * Weigh-ins come from Apple Health only: syncing replaces the log with
  * Health's, and without Health the log is read-only.
  */
-function HealthSync({ connected, onSynced }: { connected: boolean; onSynced: () => void }) {
+function HealthSync({
+  connected,
+  autoSyncing,
+  autoSyncError,
+  onSynced,
+}: {
+  connected: boolean;
+  autoSyncing: boolean;
+  autoSyncError: string | null;
+  onSynced: () => void;
+}) {
   const { api } = useSettings();
   const [syncing, setSyncing] = useState(false);
 
@@ -120,7 +141,16 @@ function HealthSync({ connected, onSynced }: { connected: boolean; onSynced: () 
       <ThemedText type="small" themeColor="textSecondary">
         Weigh-ins are imported from Apple Health, replacing your bodyweight log.
       </ThemedText>
-      <Button title="Sync from Apple Health" variant="secondary" loading={syncing} onPress={sync} />
+      {autoSyncing ? (
+        <ThemedText type="small" themeColor="textSecondary">
+          Syncing with Apple Health…
+        </ThemedText>
+      ) : autoSyncError ? (
+        <ThemedText type="small" themeColor="textSecondary">
+          Couldn’t sync with Apple Health: {autoSyncError}
+        </ThemedText>
+      ) : null}
+      <Button title="Sync from Apple Health" variant="secondary" loading={syncing || autoSyncing} onPress={sync} />
     </Card>
   );
 }

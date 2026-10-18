@@ -12,8 +12,8 @@ export default function AppTabs() {
       backgroundColor={colors.background}
       indicatorColor={colors.backgroundElement}
       labelStyle={{ selected: { color: colors.text } }}>
-      <NativeTabs.Trigger name="index">
-        <NativeTabs.Trigger.Label>Today</NativeTabs.Trigger.Label>
+      <NativeTabs.Trigger name="(workout)">
+        <NativeTabs.Trigger.Label>Workout</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="figure.strengthtraining.traditional" md="fitness_center" />
       </NativeTabs.Trigger>
 

@@ -204,7 +204,7 @@ export default function TodayScreen() {
 
   if (draft?.logged) {
     return (
-      <Screen title="Today" subtitle={subtitle} action={<SettingsButton />}>
+      <Screen title="Today" subtitle={subtitle} action={<SettingsButton />} hasHeader>
         <HealthImportBanner count={imports.candidates.length} error={imports.error} />
         <LoggedSummary progression={draft.logged.progression ?? []} exercises={draft.logged.exercises} />
         <EnduranceToday date={today} waiting={waitingToday} />
@@ -233,6 +233,7 @@ export default function TodayScreen() {
       title="Today"
       subtitle={subtitle}
       action={<SettingsButton />}
+      hasHeader
       refreshing={planDay.refreshing}
       onRefresh={refresh}>
       <HealthImportBanner count={imports.candidates.length} error={imports.error} />

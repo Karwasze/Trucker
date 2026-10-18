@@ -142,3 +142,22 @@ test('opened on cycling from elsewhere, the weekly distance names the ride’s w
   expect(await screen.findByText('Latest · Week of 12 Oct – 18 Oct')).toBeOnTheScreen();
   expect(screen.getByRole('tab', { name: '1 year' })).toBeSelected();
 });
+
+test('while Health is still reading, the stored log shows with a syncing note', async () => {
+  await connectHealth();
+  jest.mocked(healthBodyweight).mockReturnValue(new Promise(() => {}));
+  const requests = server({ exercises: [] });
+  await renderInApp(<StatsScreen />);
+  expect(await screen.findByText('Syncing with Apple Health…')).toBeOnTheScreen();
+  expect(screen.getAllByText('82.4 kg')[0]).toBeOnTheScreen();
+  expect(requests.some((r) => r.method === 'PUT')).toBe(false);
+});
+
+test('a failed Health sync keeps the stored log and says why', async () => {
+  await connectHealth();
+  jest.mocked(healthBodyweight).mockRejectedValue(new Error('Authorization not determined'));
+  server({ exercises: [] });
+  await renderInApp(<StatsScreen />);
+  expect(await screen.findByText('Couldn’t sync with Apple Health: Authorization not determined')).toBeOnTheScreen();
+  expect(screen.getAllByText('82.4 kg')[0]).toBeOnTheScreen();
+});

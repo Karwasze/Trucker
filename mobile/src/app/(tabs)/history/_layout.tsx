@@ -1,5 +1,9 @@
 import { Stack } from 'expo-router';
 
+// Opened on a workout from elsewhere, e.g. the week on Workout, History stays
+// underneath to go back to.
+export const unstable_settings = { anchor: 'index' };
+
 export default function HistoryLayout() {
   return (
     <Stack>

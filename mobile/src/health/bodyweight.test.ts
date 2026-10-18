@@ -1,5 +1,5 @@
 import { createApi } from '@/api/client';
-import { syncBodyweight } from '@/health/bodyweight';
+import { HEALTH_TIMEOUT_MS, syncBodyweight } from '@/health/bodyweight';
 import { connectHealth, healthBodyweight } from '@/health/healthkit';
 import { mockServer, type Request } from '@/test-utils';
 
@@ -60,4 +60,20 @@ test('without weigh-ins in Health the log is left alone', async () => {
   jest.mocked(healthBodyweight).mockResolvedValue([]);
   expect(await syncBodyweight(api)).toBeNull();
   expect(requests.some((r) => r.method === 'PUT')).toBe(false);
+});
+
+// A stalled HealthKit read mustn't leave the sync pending forever.
+test('a Health read that never answers times out', async () => {
+  jest.useFakeTimers();
+  try {
+    const requests = server([{ date: '2026-10-16', weight: 82.4 }]);
+    jest.mocked(healthBodyweight).mockReturnValue(new Promise(() => {}));
+    const sync = syncBodyweight(api);
+    const failed = expect(sync).rejects.toThrow('Apple Health didn’t return your weigh-ins');
+    await jest.advanceTimersByTimeAsync(HEALTH_TIMEOUT_MS);
+    await failed;
+    expect(requests.some((r) => r.method === 'PUT')).toBe(false);
+  } finally {
+    jest.useRealTimers();
+  }
 });

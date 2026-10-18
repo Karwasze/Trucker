@@ -62,11 +62,16 @@ func TestEvaluateSession_EasyRun(t *testing.T) {
 		t.Errorf("expected met, got %+v", v)
 	}
 
-	// 4:50/km is well under the 5:30/km top of the range.
+	if c := check(t, evaluateSession(s, onPace, "2026-10-14"), "Pace"); c.Warning != "" {
+		t.Errorf("expected no warning on pace, got %+v", c)
+	}
+
+	// 4:50/km is well under the 5:30/km top of the range: it counts, with a
+	// warning.
 	tooFast := synthetic(ActivityRunning, stretch{8 * 290, pace(290)})
 	v := evaluateSession(s, tooFast, "2026-10-14")
-	if c := check(t, v, "Pace"); v.Status != VerdictPartial || c.OK || c.Actual != "4:50/km" || c.Target != "5:30–6:00/km" {
-		t.Errorf("expected partial for going too fast, got %+v", v)
+	if c := check(t, v, "Pace"); v.Status != VerdictMet || !c.OK || c.Warning == "" || c.Actual != "4:50/km" || c.Target != "5:30–6:00/km" {
+		t.Errorf("expected met with a warning for going too fast, got %+v", v)
 	}
 
 	short := synthetic(ActivityRunning, stretch{4.8 * 345, pace(345)})
@@ -84,8 +89,9 @@ func TestEvaluateSession_EasyByHeartRate(t *testing.T) {
 	s := PlannedSession{Activity: ActivityCycling, Kind: KindEasy, TargetDistanceM: fp(30000), HRMin: fp(114), HRMax: fp(143)}
 	w := synthetic(ActivityCycling, stretch{3600, 30000.0 / 3600})
 	w.AvgHeartRate = fp(155)
-	if v := evaluateSession(s, w, "2026-10-14"); v.Status != VerdictPartial || check(t, v, "Heart rate").OK {
-		t.Errorf("expected partial for a heart rate too high, got %+v", v)
+	v := evaluateSession(s, w, "2026-10-14")
+	if c := check(t, v, "Heart rate"); v.Status != VerdictMet || !c.OK || c.Warning == "" {
+		t.Errorf("expected met with a warning for a heart rate too high, got %+v", v)
 	}
 }
 
@@ -109,6 +115,12 @@ func TestEvaluateSession_TempoLeavesOutWarmUp(t *testing.T) {
 	slow := synthetic(ActivityRunning, stretch{600, pace(400)}, stretch{1500, pace(330)}, stretch{600, pace(400)})
 	if v := evaluateSession(s, slow, "2026-10-14"); !v.TooSlow || check(t, v, "Tempo pace").OK {
 		t.Errorf("expected a tempo run too slow, got %+v", v)
+	}
+
+	// 4:30/km counts, with a warning.
+	fast := synthetic(ActivityRunning, stretch{600, pace(400)}, stretch{1500, pace(270)}, stretch{600, pace(400)})
+	if c := check(t, evaluateSession(s, fast, "2026-10-14"), "Tempo pace"); !c.OK || c.Warning == "" {
+		t.Errorf("expected a fast tempo run to count with a warning, got %+v", c)
 	}
 }
 
@@ -148,6 +160,7 @@ func TestEvaluateSession_Intervals(t *testing.T) {
 		{"one rep short", intervalRun(5, 275), VerdictMet, "5", false},
 		{"two reps short", intervalRun(4, 275), VerdictPartial, "4", false},
 		{"reps too slow", intervalRun(6, 300), VerdictPartial, "6", true},
+		{"reps too fast", intervalRun(6, 250), VerdictMet, "6", false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			// Distance is judged too; only the rep checks matter here.
@@ -165,6 +178,12 @@ func TestEvaluateSession_Intervals(t *testing.T) {
 	v := evaluateSession(s, intervalRun(6, 275), "2026-10-14")
 	if c := check(t, v, "Median rep length"); !c.OK {
 		t.Errorf("expected reps of about 800 m, got %+v", c)
+	}
+	if c := check(t, v, "Median rep pace"); c.Warning != "" {
+		t.Errorf("expected no warning on pace, got %+v", c)
+	}
+	if c := check(t, evaluateSession(s, intervalRun(6, 250), "2026-10-14"), "Median rep pace"); !c.OK || c.Warning == "" {
+		t.Errorf("expected fast reps to count with a warning, got %+v", c)
 	}
 }
 
@@ -242,5 +261,178 @@ func TestEvaluateSession_IntervalsWithoutSampleDistance(t *testing.T) {
 	}
 	if c := check(t, v, "Distance"); !c.OK {
 		t.Errorf("expected the distance met, got %+v", c)
+	}
+}
+
+// withHeartRate sets each sample's heart rate to hr at its time.
+func withHeartRate(w *CardioWorkout, hr func(t float64) float64) *CardioWorkout {
+	for i := range w.Samples {
+		w.Samples[i].HR = fp(hr(w.Samples[i].T))
+	}
+	return w
+}
+
+// longRideWithTempo is a 60 km long ride at 101–126 bpm with 20 km at
+// 134–148 bpm in the middle, planned without a speed range.
+func longRideWithTempo() PlannedSession {
+	return PlannedSession{
+		Date: "2026-10-14", Activity: ActivityCycling, Kind: KindLong, TargetDistanceM: fp(60000),
+		HRMin: fp(101), HRMax: fp(126),
+		TempoBlock: &TempoBlock{DistanceM: 20000, HRMin: fp(134), HRMax: fp(148)},
+	}
+}
+
+// thirds rides 60 km at 30 km/h, in three 20 km stretches of 40 minutes,
+// at a heart rate for the outer and the middle ones.
+func thirds(outer, middle float64) *CardioWorkout {
+	w := synthetic(ActivityCycling, stretch{2400, 30 / 3.6}, stretch{2400, 30 / 3.6}, stretch{2400, 30 / 3.6})
+	return withHeartRate(w, func(t float64) float64 {
+		if t > 2400 && t <= 4800 {
+			return middle
+		}
+		return outer
+	})
+}
+
+func TestEvaluateSession_TempoBlockByHeartRate(t *testing.T) {
+	w := thirds(120, 141)
+	// The whole ride averages above the long ride's range, as the block
+	// pulls it up; only the rest of it is held to that range.
+	w.AvgHeartRate = fp(127)
+	v := evaluateSession(longRideWithTempo(), w, "2026-10-14")
+	if c := check(t, v, "Tempo block heart rate"); !c.OK || c.Actual != "141 bpm" || c.Target != "134–148 bpm" {
+		t.Errorf("expected the block at 141 bpm, got %+v", c)
+	}
+	if c := check(t, v, "Heart rate around the block"); !c.OK || c.Actual != "120 bpm" || c.Target != "101–126 bpm" {
+		t.Errorf("expected the rest at 120 bpm, got %+v", c)
+	}
+	if v.Status != VerdictMet {
+		t.Errorf("expected met, got %+v", v)
+	}
+}
+
+func TestEvaluateSession_TempoBlockTooEasy(t *testing.T) {
+	v := evaluateSession(longRideWithTempo(), thirds(120, 122), "2026-10-14")
+	if c := check(t, v, "Tempo block heart rate"); c.OK {
+		t.Errorf("expected the block too easy, got %+v", c)
+	}
+	if v.Status != VerdictPartial {
+		t.Errorf("expected partial, got %+v", v)
+	}
+}
+
+func TestEvaluateSession_TempoBlockTooHardCountsWithAWarning(t *testing.T) {
+	v := evaluateSession(longRideWithTempo(), thirds(120, 160), "2026-10-14")
+	if c := check(t, v, "Tempo block heart rate"); !c.OK || c.Actual != "160 bpm" || c.Warning == "" {
+		t.Errorf("expected the hard block to count with a warning, got %+v", c)
+	}
+	if v.Status != VerdictMet {
+		t.Errorf("expected met, got %+v", v)
+	}
+	// On target, there's nothing to warn about.
+	if c := check(t, evaluateSession(longRideWithTempo(), thirds(120, 141), "2026-10-14"), "Tempo block heart rate"); c.Warning != "" {
+		t.Errorf("expected no warning on target, got %+v", c)
+	}
+}
+
+func TestEvaluateSession_TempoBlockRestTooHardCountsWithAWarning(t *testing.T) {
+	v := evaluateSession(longRideWithTempo(), thirds(135, 141), "2026-10-14")
+	if c := check(t, v, "Heart rate around the block"); !c.OK || c.Actual != "135 bpm" || c.Warning == "" {
+		t.Errorf("expected the hard rest to count with a warning, got %+v", c)
+	}
+	if v.Status != VerdictMet {
+		t.Errorf("expected met, got %+v", v)
+	}
+	// Kept easy, there's nothing to warn about.
+	if c := check(t, evaluateSession(longRideWithTempo(), thirds(120, 141), "2026-10-14"), "Heart rate around the block"); c.Warning != "" {
+		t.Errorf("expected no warning when easy, got %+v", c)
+	}
+}
+
+func TestEvaluateSession_TempoBlockNotQuiteInTheMiddle(t *testing.T) {
+	// The block started 2 km late and its heart rate took a minute to rise.
+	w := synthetic(ActivityCycling, stretch{7200, 30 / 3.6})
+	withHeartRate(w, func(t float64) float64 {
+		if t > 2640+60 && t <= 5040 {
+			return 141
+		}
+		return 120
+	})
+	v := evaluateSession(longRideWithTempo(), w, "2026-10-14")
+	if c := check(t, v, "Tempo block heart rate"); !c.OK || c.Actual != "141 bpm" {
+		t.Errorf("expected the block's heart rate found, got %+v", c)
+	}
+}
+
+func TestEvaluateSession_TempoBlockByPace(t *testing.T) {
+	// A 15 km long run at 5:30–6:00/km with 5 km at 4:55–5:05/km in the middle.
+	s := PlannedSession{
+		Date: "2026-10-14", Activity: ActivityRunning, Kind: KindLong, TargetDistanceM: fp(15000),
+		SpeedMin: fp(pace(360)), SpeedMax: fp(pace(330)),
+		TempoBlock: &TempoBlock{DistanceM: 5000, SpeedMin: fp(pace(305)), SpeedMax: fp(pace(295))},
+	}
+	onPlan := synthetic(ActivityRunning, stretch{5 * 345, pace(345)}, stretch{5 * 300, pace(300)}, stretch{5 * 345, pace(345)})
+	v := evaluateSession(s, onPlan, "2026-10-14")
+	if c := check(t, v, "Tempo block pace"); !c.OK || c.Actual != "5:00/km" {
+		t.Errorf("expected the block at 5:00/km, got %+v", c)
+	}
+	if c := check(t, v, "Pace around the block"); !c.OK || c.Actual != "5:45/km" {
+		t.Errorf("expected the rest at 5:45/km, got %+v", c)
+	}
+	if v.Status != VerdictMet {
+		t.Errorf("expected met, got %+v", v)
+	}
+
+	// A block run at 4:30/km counts, with a warning.
+	tooFast := synthetic(ActivityRunning, stretch{5 * 345, pace(345)}, stretch{5 * 270, pace(270)}, stretch{5 * 345, pace(345)})
+	v = evaluateSession(s, tooFast, "2026-10-14")
+	if c := check(t, v, "Tempo block pace"); !c.OK || c.Actual != "4:30/km" || c.Warning == "" {
+		t.Errorf("expected the fast block to count with a warning, got %+v", c)
+	}
+	if v.Status != VerdictMet {
+		t.Errorf("expected met, got %+v", v)
+	}
+
+	// The rest run at 5:00/km counts, with a warning.
+	hardRest := synthetic(ActivityRunning, stretch{5 * 300, pace(300)}, stretch{5 * 300, pace(300)}, stretch{5 * 300, pace(300)})
+	v = evaluateSession(s, hardRest, "2026-10-14")
+	if c := check(t, v, "Pace around the block"); !c.OK || c.Actual != "5:00/km" || c.Warning == "" {
+		t.Errorf("expected the fast rest to count with a warning, got %+v", c)
+	}
+	if v.Status != VerdictMet {
+		t.Errorf("expected met, got %+v", v)
+	}
+
+	allEasy := synthetic(ActivityRunning, stretch{15 * 345, pace(345)})
+	if v := evaluateSession(s, allEasy, "2026-10-14"); v.Status != VerdictPartial || check(t, v, "Tempo block pace").OK {
+		t.Errorf("expected partial without the block, got %+v", v)
+	}
+}
+
+func TestEvaluateSession_TempoBlockIndoorsByTime(t *testing.T) {
+	// An indoor ride's samples have heart rate but no distance, so the block
+	// is the middle third of the time.
+	w := thirds(120, 141)
+	for i := range w.Samples {
+		w.Samples[i].D = 0
+	}
+	w.ManualDistance = true
+	v := evaluateSession(longRideWithTempo(), w, "2026-10-14")
+	if c := check(t, v, "Tempo block heart rate"); !c.OK || c.Actual != "141 bpm" {
+		t.Errorf("expected the block at 141 bpm, got %+v", c)
+	}
+	if v.Status != VerdictMet {
+		t.Errorf("expected met, got %+v", v)
+	}
+}
+
+func TestEvaluateSession_TempoBlockWithoutSamples(t *testing.T) {
+	// Without samples the block can't be told from the rest, so only the
+	// distance is checked, rather than the whole ride's heart rate against
+	// the long ride's range.
+	w := &CardioWorkout{Activity: ActivityCycling, DurationSeconds: 7200, DistanceM: fp(60000), AvgHeartRate: fp(127)}
+	v := evaluateSession(longRideWithTempo(), w, "2026-10-14")
+	if v.Status != VerdictMet || len(v.Checks) != 1 {
+		t.Errorf("expected met on distance alone, got %+v", v)
 	}
 }

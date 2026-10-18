@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -46,8 +47,8 @@ func TestMigrate_IsIdempotent(t *testing.T) {
 	if err := s.db.QueryRow("SELECT COUNT(*) FROM schema_migrations").Scan(&count); err != nil {
 		t.Fatalf("failed to count schema_migrations: %v", err)
 	}
-	if count != 11 {
-		t.Errorf("expected 11 applied migrations, got %d", count)
+	if count != 12 {
+		t.Errorf("expected 12 applied migrations, got %d", count)
 	}
 }
 
@@ -564,5 +565,57 @@ func TestMigrate_UpgradeFromV10BackfillsDistanceFromSamples(t *testing.T) {
 	}
 	if d := distance(4); d == nil || *d != 5000 {
 		t.Errorf("expected the reported 5 km kept, got %v", d)
+	}
+}
+
+func TestMigrate_UpgradeFromV11KeepsSessionsWithoutTempoBlocks(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "v11.db")
+
+	db, err := sql.Open("sqlite3", path)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	stmts := []string{"CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)"}
+	for i := 1; i <= 11; i++ {
+		matches, err := fs.Glob(migrationsFS, fmt.Sprintf("migrations/%04d_*.sql", i))
+		if err != nil || len(matches) != 1 {
+			t.Fatalf("failed to find migration %d: %v", i, err)
+		}
+		contents, err := migrationsFS.ReadFile(matches[0])
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", matches[0], err)
+		}
+		stmts = append(stmts, string(contents),
+			fmt.Sprintf("INSERT INTO schema_migrations (version, applied_at) VALUES (%d, '2026-01-01T00:00:00Z')", i))
+	}
+	stmts = append(stmts,
+		`INSERT INTO goals (id, name, race_date, start_date, run_m, weekdays, long_day)
+			VALUES (1, '10k', '2027-01-10', '2026-10-19', 10000, 64, 7)`,
+		// A long run planned with a tempo block only in its description.
+		`INSERT INTO planned_sessions (id, goal_id, date, activity, kind, phase, target_distance_m,
+				description, hr_min, hr_max)
+			VALUES (1, 1, '2026-11-22', 'running', 'long', 'build', 12000,
+				'Long run 12.0 km · 101–126 bpm, with 4.0 km @ 134–148 bpm in the middle', 101, 126)`,
+	)
+	for _, stmt := range stmts {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatalf("failed to build v11 database: %v", err)
+		}
+	}
+	db.Close()
+
+	s, err := Open(path)
+	if err != nil {
+		t.Fatalf("failed to open and migrate v11 database: %v", err)
+	}
+	defer s.Close()
+
+	sessions, err := querySessions(s.db, "id = 1")
+	if err != nil || len(sessions) != 1 {
+		t.Fatalf("expected the session kept, got %+v (%v)", sessions, err)
+	}
+	if got := sessions[0]; got.TempoBlock != nil || got.HRMax == nil || *got.HRMax != 126 ||
+		!strings.Contains(got.Description, "in the middle") {
+		t.Errorf("expected the session kept as it was, without a block to check, got %+v", got)
 	}
 }

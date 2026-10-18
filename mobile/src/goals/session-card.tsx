@@ -32,7 +32,8 @@ export function VerdictBadge({ status }: { status: VerdictStatus }) {
 
 /**
  * A planned session: what to do, and once done what was done, how it went
- * and each check against the target. `compact` leaves out the checks.
+ * and each check against the target, with a warning on one passed by doing
+ * more than planned. `compact` leaves out the checks.
  */
 export function SessionDetails({ session: s, compact }: { session: PlannedSession; compact?: boolean }) {
   const theme = useTheme();
@@ -61,9 +62,16 @@ export function SessionDetails({ session: s, compact }: { session: PlannedSessio
       )}
       {!compact &&
         s.verdict?.checks.map((c) => (
-          <ThemedText key={c.name} type="small" style={{ color: c.ok ? theme.textSecondary : theme.warning }}>
-            {c.ok ? '✓' : '✗'} {c.name} {c.actual} (target {c.target})
-          </ThemedText>
+          <View key={c.name}>
+            <ThemedText type="small" style={{ color: c.ok ? theme.textSecondary : theme.warning }}>
+              {c.ok ? '✓' : '✗'} {c.name} {c.actual} (target {c.target})
+            </ThemedText>
+            {c.warning && (
+              <ThemedText type="small" style={{ color: theme.warning }}>
+                ⚠ {c.warning}
+              </ThemedText>
+            )}
+          </View>
         ))}
     </View>
   );

@@ -287,7 +287,8 @@ export type VerdictStatus = 'met' | 'partial' | 'missed' | 'pending';
 
 export type Verdict = {
   status: VerdictStatus;
-  checks: { name: string; actual: string; target: string; ok: boolean }[];
+  /** warning is set on a check passed by doing more than planned. */
+  checks: { name: string; actual: string; target: string; ok: boolean; warning?: string }[];
 };
 
 /** A session of a goal's plan; speeds are m/s. */
@@ -321,7 +322,7 @@ export type GoalToday = { goal: Goal | null; sessions: PlannedSession[] };
 export type SavedGoal = { goal: Goal; warnings: string[] };
 
 /** Mirrors the store's triathlon classes, by distance. */
-export type TriathlonClass = 'sprint' | 'olympic' | 'half' | 'full' | 'custom';
+export type TriathlonClass = 'sprint' | 'quarter' | 'half' | 'full' | 'custom';
 
 export type TriathlonLegKey = 'swim' | 'bike' | 'run';
 

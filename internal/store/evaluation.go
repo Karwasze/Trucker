@@ -25,6 +25,18 @@ const (
 	repMinShare   = 0.6
 	// The median rep may be this far off the rep length.
 	repLengthSlack = 0.15
+	// A tempo block is judged over this middle share of it, as it won't sit
+	// exactly in the middle of the session and heart rate takes a while to
+	// rise; its heart rate may be off the range by this many bpm.
+	tempoBlockCore    = 0.6
+	tempoBlockHRSlack = 3
+)
+
+// Warnings on checks done harder than planned, which still count.
+const (
+	tooHardWarning     = "Harder than planned: ease off to keep fresh for the next sessions."
+	easyTooHardWarning = "Harder than planned: keep easy sessions easy, so you recover for the hard ones."
+	restTooHardWarning = "Harder than planned: keep the rest of a long session easy, so the block is the hard part."
 )
 
 // evaluateSession judges how a planned session went: pending until its day
@@ -33,12 +45,16 @@ const (
 //
 //   - volume: distance (or duration) of at least volumeMet of the target;
 //     below volumeMissed misses the session
-//   - easy, long, recovery and technique sessions: not faster than the top
-//     of the speed range (or heart rate range) plus some slack
-//   - tempo: the speed between warm-up and cool-down within the range
+//   - easy, long, recovery and technique sessions: the speed (or heart
+//     rate) against the top of its range plus some slack
+//   - long sessions with a tempo block: the middle of the samples at least
+//     the block's speed range (or heart rate range), and the rest as easy
+//   - tempo: the speed between warm-up and cool-down at least the range
 //   - intervals: at least Reps - 1 reps, found from laps when the workout
 //     has them, else from fast stretches of its samples, at a median speed
-//     within the range and a median length close to the rep length
+//     of at least the range and a median length close to the rep length
+//
+// Going harder than a range never fails a check: it counts, with a warning.
 //
 // Race sessions only check volume.
 func evaluateSession(s PlannedSession, w *CardioWorkout, today string) Verdict {
@@ -74,7 +90,11 @@ func evaluateSession(s PlannedSession, w *CardioWorkout, today string) Verdict {
 
 	switch s.Kind {
 	case KindEasy, KindLong, KindRecovery, KindTechnique:
-		v.Checks = append(v.Checks, easyChecks(s, w)...)
+		if s.TempoBlock != nil {
+			v.Checks = append(v.Checks, tempoBlockChecks(s, w)...)
+		} else {
+			v.Checks = append(v.Checks, easyChecks(s, w)...)
+		}
 	case KindTempo, KindBrick:
 		if check, slow, ok := tempoCheck(s, w); ok {
 			v.Checks = append(v.Checks, check)
@@ -107,26 +127,130 @@ func averageSpeed(w *CardioWorkout) float64 {
 	return *w.DistanceM / w.DurationSeconds
 }
 
-// easyChecks checks an easy session wasn't done too hard: by speed when the
-// session has a speed range, else by heart rate.
+// easyChecks checks whether an easy session was done too hard: by speed when
+// the session has a speed range, else by heart rate.
 func easyChecks(s PlannedSession, w *CardioWorkout) []Check {
 	if speed := averageSpeed(w); s.SpeedMax != nil && speed > 0 {
-		return []Check{{
+		return []Check{intensityCheck(Check{
 			Name:   speedName(s.Activity),
 			Actual: formatSpeed(s.Activity, speed),
 			Target: formatSpeedRange(s.Activity, *s.SpeedMin, *s.SpeedMax),
-			OK:     speed <= *s.SpeedMax*(1+easySpeedSlack),
-		}}
+		}, false, speed > *s.SpeedMax*(1+easySpeedSlack), easyTooHardWarning)}
 	}
 	if s.HRMax != nil && w.AvgHeartRate != nil {
-		return []Check{{
+		return []Check{intensityCheck(Check{
 			Name:   "Heart rate",
 			Actual: fmt.Sprintf("%.0f bpm", *w.AvgHeartRate),
 			Target: fmt.Sprintf("%.0f–%.0f bpm", *s.HRMin, *s.HRMax),
-			OK:     *w.AvgHeartRate <= *s.HRMax+easyHRSlack,
-		}}
+		}, false, *w.AvgHeartRate > *s.HRMax+easyHRSlack, easyTooHardWarning)}
 	}
 	return nil
+}
+
+// tempoBlockChecks checks a long session's tempo block, by speed when it has
+// a speed range and the samples distance, else by their heart rate, and the
+// rest of the session as easy. The block is the middle of the samples, by
+// distance when they have it, else by time. Without samples the block can't
+// be told from the rest, so neither is checked.
+func tempoBlockChecks(s PlannedSession, w *CardioWorkout) []Check {
+	b := s.TempoBlock
+	n := len(w.Samples)
+	if n < 3 || w.Samples[n-1].T <= 0 || s.TargetDistanceM == nil || *s.TargetDistanceM <= 0 {
+		return nil
+	}
+	last := w.Samples[n-1]
+	share := math.Min(b.DistanceM / *s.TargetDistanceM, 1)
+	// middle is the time span of the middle part of the session.
+	middle := func(part float64) (float64, float64) {
+		lo, hi := 0.5-part/2, 0.5+part/2
+		if last.D > 0 {
+			return sampleTimeAt(w.Samples, lo*last.D), sampleTimeAt(w.Samples, hi*last.D)
+		}
+		return lo * last.T, hi * last.T
+	}
+	from, to := middle(share * tempoBlockCore)
+	blockFrom, blockTo := middle(share)
+	inBlock := func(t float64) bool { return t > blockFrom && t <= blockTo }
+	name := speedName(s.Activity)
+
+	var checks []Check
+	if b.SpeedMin != nil && b.SpeedMax != nil && last.D > 0 && to > from {
+		speed := (sampleDistanceAt(w.Samples, to) - sampleDistanceAt(w.Samples, from)) / (to - from)
+		checks = append(checks, intensityCheck(Check{
+			Name:   "Tempo block " + lowerFirst(name),
+			Actual: formatSpeed(s.Activity, speed),
+			Target: formatSpeedRange(s.Activity, *b.SpeedMin, *b.SpeedMax),
+		}, speed < *b.SpeedMin*(1-qualitySpeedSlack), speed > *b.SpeedMax*(1+qualitySpeedSlack), tooHardWarning))
+	} else if b.HRMin != nil && b.HRMax != nil {
+		if hr, ok := sampleHeartRate(w.Samples, func(t float64) bool { return t > from && t <= to }); ok {
+			checks = append(checks, intensityCheck(Check{
+				Name:   "Tempo block heart rate",
+				Actual: fmt.Sprintf("%.0f bpm", hr),
+				Target: fmt.Sprintf("%.0f–%.0f bpm", *b.HRMin, *b.HRMax),
+			}, hr < *b.HRMin-tempoBlockHRSlack, hr > *b.HRMax+tempoBlockHRSlack, tooHardWarning))
+		}
+	}
+
+	rest := last.T - (blockTo - blockFrom)
+	if s.SpeedMin != nil && s.SpeedMax != nil && last.D > 0 && rest > 0 {
+		blockDistance := sampleDistanceAt(w.Samples, blockTo) - sampleDistanceAt(w.Samples, blockFrom)
+		speed := (last.D - blockDistance) / rest
+		checks = append(checks, intensityCheck(Check{
+			Name:   name + " around the block",
+			Actual: formatSpeed(s.Activity, speed),
+			Target: formatSpeedRange(s.Activity, *s.SpeedMin, *s.SpeedMax),
+		}, false, speed > *s.SpeedMax*(1+easySpeedSlack), restTooHardWarning))
+	} else if s.HRMin != nil && s.HRMax != nil {
+		if hr, ok := sampleHeartRate(w.Samples, func(t float64) bool { return !inBlock(t) }); ok {
+			checks = append(checks, intensityCheck(Check{
+				Name:   "Heart rate around the block",
+				Actual: fmt.Sprintf("%.0f bpm", hr),
+				Target: fmt.Sprintf("%.0f–%.0f bpm", *s.HRMin, *s.HRMax),
+			}, false, hr > *s.HRMax+easyHRSlack, restTooHardWarning))
+		}
+	}
+	return checks
+}
+
+// intensityCheck judges c against its range: too easy fails it, while too
+// hard still counts, with warning.
+func intensityCheck(c Check, tooEasy, tooHard bool, warning string) Check {
+	c.OK = !tooEasy
+	if tooHard {
+		c.Warning = warning
+	}
+	return c
+}
+
+// sampleHeartRate is the average heart rate of the samples at times keep
+// holds for, and whether any of them had one.
+func sampleHeartRate(samples []CardioSample, keep func(t float64) bool) (float64, bool) {
+	sum, count := 0.0, 0
+	for _, sample := range samples {
+		if sample.HR != nil && keep(sample.T) {
+			sum += *sample.HR
+			count++
+		}
+	}
+	if count == 0 {
+		return 0, false
+	}
+	return sum / float64(count), true
+}
+
+// sampleTimeAt is when d metres were first covered, interpolated between
+// samples.
+func sampleTimeAt(samples []CardioSample, d float64) float64 {
+	for i := 1; i < len(samples); i++ {
+		a, b := samples[i-1], samples[i]
+		if d <= b.D {
+			if b.D == a.D {
+				return a.T
+			}
+			return a.T + (b.T-a.T)*math.Max(0, d-a.D)/(b.D-a.D)
+		}
+	}
+	return samples[len(samples)-1].T
 }
 
 // tempoCheck checks the speed of a tempo session without its warm-up and
@@ -149,12 +273,11 @@ func tempoCheck(s PlannedSession, w *CardioWorkout) (check Check, slow, ok bool)
 		return Check{}, false, false
 	}
 	slow = speed < *s.SpeedMin*(1-qualitySpeedSlack)
-	return Check{
+	return intensityCheck(Check{
 		Name:   name,
 		Actual: formatSpeed(s.Activity, speed),
 		Target: formatSpeedRange(s.Activity, *s.SpeedMin, *s.SpeedMax),
-		OK:     !slow && speed <= *s.SpeedMax*(1+qualitySpeedSlack),
-	}, slow, true
+	}, slow, speed > *s.SpeedMax*(1+qualitySpeedSlack), tooHardWarning), slow, true
 }
 
 // rep is one fast stretch of an interval session.
@@ -199,12 +322,11 @@ func intervalChecks(s PlannedSession, w *CardioWorkout) ([]Check, bool) {
 	if s.SpeedMin != nil && s.SpeedMax != nil {
 		speed := median(speeds)
 		slow = speed < *s.SpeedMin*(1-qualitySpeedSlack)
-		checks = append(checks, Check{
+		checks = append(checks, intensityCheck(Check{
 			Name:   "Median rep " + lowerFirst(speedName(s.Activity)),
 			Actual: formatSpeed(s.Activity, speed),
 			Target: formatSpeedRange(s.Activity, *s.SpeedMin, *s.SpeedMax),
-			OK:     !slow && speed <= *s.SpeedMax*(1+qualitySpeedSlack),
-		})
+		}, slow, speed > *s.SpeedMax*(1+qualitySpeedSlack), tooHardWarning))
 	}
 	if target := repLength(s); target > 0 {
 		length := median(lengths)

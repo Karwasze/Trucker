@@ -435,8 +435,9 @@ func trainingWeek(g Goal, f Fitness, week planWeek, level map[string]float64, da
 }
 
 // withBlock adds a quality block of kind to a long session's description:
-// tempo over the middle third, or intervals over about 40% of it. The
-// session's targets stay those of the long session.
+// tempo over the middle third, kept as its TempoBlock to be checked, or
+// intervals over about 40% of it. The session's targets stay those of the
+// long session.
 func withBlock(s PlannedSession, kind string, f Fitness) PlannedSession {
 	distance := *s.TargetDistanceM
 	switch kind {
@@ -444,6 +445,10 @@ func withBlock(s PlannedSession, kind string, f Fitness) PlannedSession {
 		block := newSession(s.Activity, KindTempo, s.Phase, roundDistance(s.Activity, distance/3), f)
 		s.Description += fmt.Sprintf(", with %s @ %s in the middle",
 			formatMetres(s.Activity, *block.TargetDistanceM), describeTarget(block))
+		s.TempoBlock = &TempoBlock{
+			DistanceM: *block.TargetDistanceM,
+			SpeedMin:  block.SpeedMin, SpeedMax: block.SpeedMax, HRMin: block.HRMin, HRMax: block.HRMax,
+		}
 	case KindIntervals:
 		block := newSession(s.Activity, KindIntervals, s.Phase, distance*0.4, f)
 		rep := fmt.Sprintf("%.0f m", deref(block.RepDistanceM))

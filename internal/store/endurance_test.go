@@ -404,6 +404,12 @@ func TestGeneratePlan_ThreeDayTriathlon(t *testing.T) {
 		if tempo != wantTempo || intervals != wantIntervals {
 			t.Errorf("%s %s on %s: got %q", s.Phase, s.Activity, s.Date, s.Description)
 		}
+		// The tempo block is kept to be checked, a third of the session.
+		if tempo != (s.TempoBlock != nil) {
+			t.Errorf("%s %s on %s: expected a tempo block with %q, got %+v", s.Phase, s.Activity, s.Date, s.Description, s.TempoBlock)
+		} else if tempo && s.TempoBlock.DistanceM != roundDistance(s.Activity, *s.TargetDistanceM/3) {
+			t.Errorf("expected a third of %v in the block, got %v", *s.TargetDistanceM, s.TempoBlock.DistanceM)
+		}
 	}
 
 	if len(warnings) != 1 || !strings.Contains(warnings[0], "one session a sport") {

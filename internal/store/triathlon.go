@@ -8,7 +8,7 @@ import (
 // Classes of a Triathlon, by its distances.
 const (
 	TriathlonSprint  = "sprint"
-	TriathlonOlympic = "olympic"
+	TriathlonQuarter = "quarter"
 	TriathlonHalf    = "half"
 	TriathlonFull    = "full"
 	TriathlonCustom  = "custom"
@@ -25,7 +25,8 @@ type triathlonStandard struct {
 // triathlonStandards are the standard classes, shortest first.
 var triathlonStandards = []triathlonStandard{
 	{TriathlonSprint, 750, 20000, 5000, map[string]float64{"swim": 0.18, "bike": 0.50, "run": 0.32}},
-	{TriathlonOlympic, 1500, 40000, 10000, map[string]float64{"swim": 0.17, "bike": 0.50, "run": 0.33}},
+	// A quarter Ironman.
+	{TriathlonQuarter, 950, 45000, 10550, map[string]float64{"swim": 0.12, "bike": 0.52, "run": 0.36}},
 	{TriathlonHalf, 1900, 90000, 21097, map[string]float64{"swim": 0.11, "bike": 0.52, "run": 0.37}},
 	{TriathlonFull, 3800, 180000, 42195, map[string]float64{"swim": 0.10, "bike": 0.52, "run": 0.38}},
 }

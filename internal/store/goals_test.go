@@ -301,3 +301,29 @@ func TestSetCardioDistance_JudgesSessionByIt(t *testing.T) {
 		t.Errorf("expected missed on distance, got %+v", after.Verdict)
 	}
 }
+
+func TestCreateGoal_KeepsTempoBlocks(t *testing.T) {
+	s := newTestStore(t)
+	run := cardioRun("a", "2026-10-18", 10)
+	run.MaxHeartRate = float(168)
+	seedCardio(t, s, run)
+	// One run a week carries a tempo block in build.
+	g := newGoal()
+	g.Weekdays = []string{"sunday"}
+	g = mustCreateGoal(t, s, g, "2026-10-19")
+
+	var block *TempoBlock
+	for _, session := range sessionsOn(t, s, g.ID, "", "", "2026-10-19") {
+		if session.TempoBlock != nil {
+			block = session.TempoBlock
+			break
+		}
+	}
+	if block == nil {
+		t.Fatal("expected a session with a tempo block")
+	}
+	if block.DistanceM <= 0 || block.SpeedMin == nil || block.SpeedMax == nil ||
+		block.HRMin == nil || *block.HRMin != 134 || block.HRMax == nil || *block.HRMax != 148 {
+		t.Errorf("expected the block's distance, speed and 134–148 bpm kept, got %+v", block)
+	}
+}

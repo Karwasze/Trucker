@@ -335,7 +335,8 @@ const (
 // PlannedSession is one session of a goal's plan: an Activity on Date to a
 // distance or duration target, at an intensity. Speeds are in m/s for every
 // sport. Interval sessions repeat Reps of RepDistanceM or RepDurationS with
-// RecoveryS between them. CardioWorkoutID is the imported workout that
+// RecoveryS between them. A long session may carry a TempoBlock in its
+// middle. CardioWorkoutID is the imported workout that
 // filled it; Workout and Verdict are filled in when sessions are read.
 type PlannedSession struct {
 	ID              int            `json:"id"`
@@ -356,9 +357,20 @@ type PlannedSession struct {
 	RepDistanceM    *float64       `json:"rep_distance_m,omitempty"`
 	RepDurationS    *float64       `json:"rep_duration_s,omitempty"`
 	RecoveryS       *float64       `json:"recovery_s,omitempty"`
+	TempoBlock      *TempoBlock    `json:"tempo_block,omitempty"`
 	CardioWorkoutID *int           `json:"cardio_workout_id,omitempty"`
 	Workout         *CardioWorkout `json:"workout,omitempty"`
 	Verdict         *Verdict       `json:"verdict,omitempty"`
+}
+
+// TempoBlock is DistanceM at tempo in the middle of a long session, to a
+// speed range (m/s) or a heart rate range.
+type TempoBlock struct {
+	DistanceM float64  `json:"distance_m"`
+	SpeedMin  *float64 `json:"speed_min,omitempty"`
+	SpeedMax  *float64 `json:"speed_max,omitempty"`
+	HRMin     *float64 `json:"hr_min,omitempty"`
+	HRMax     *float64 `json:"hr_max,omitempty"`
 }
 
 // Statuses of a Verdict.
@@ -385,4 +397,6 @@ type Check struct {
 	Actual string `json:"actual"`
 	Target string `json:"target"`
 	OK     bool   `json:"ok"`
+	// Warning is set on a check that passed by doing more than planned.
+	Warning string `json:"warning,omitempty"`
 }

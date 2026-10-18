@@ -2,14 +2,14 @@ import type { CardioActivity, Triathlon, TriathlonClass, TriathlonLeg, Triathlon
 
 export const TRIATHLON_CLASS_NAMES: Record<TriathlonClass, string> = {
   sprint: 'Sprint',
-  olympic: 'Olympic',
+  quarter: 'Quarter',
   half: 'Half',
   full: 'Full',
   custom: 'Custom distance',
 };
 
 /** Classes shortest first, custom distances last. */
-export const TRIATHLON_CLASSES: TriathlonClass[] = ['sprint', 'olympic', 'half', 'full', 'custom'];
+export const TRIATHLON_CLASSES: TriathlonClass[] = ['sprint', 'quarter', 'half', 'full', 'custom'];
 
 /** The legs in race order, with the activity each is. */
 export const TRIATHLON_LEGS: { key: TriathlonLegKey; activity: CardioActivity }[] = [
@@ -22,7 +22,7 @@ export const TRIATHLON_LEGS: { key: TriathlonLegKey; activity: CardioActivity }[
 export const legSpeed = (leg: TriathlonLeg) =>
   leg.distance_m > 0 && leg.duration_seconds > 0 ? leg.distance_m / leg.duration_seconds : undefined;
 
-/** "Olympic triathlon", or "Triathlon" for custom distances. */
+/** "Quarter triathlon", or "Triathlon" for custom distances. */
 export const triathlonName = (t: Triathlon) =>
   t.class === 'custom' ? 'Triathlon' : `${TRIATHLON_CLASS_NAMES[t.class]} triathlon`;
 

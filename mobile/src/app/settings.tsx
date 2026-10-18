@@ -54,10 +54,7 @@ export default function SettingsScreen() {
     );
 
   return (
-    <Screen
-      hasHeader
-      refreshing={exercises.refreshing}
-      onRefresh={exercises.refresh}>
+    <Screen hasHeader refreshing={exercises.refreshing} onRefresh={exercises.refresh}>
       <SectionLabel>Server</SectionLabel>
       {!serverLocked && (
         <View style={styles.chips}>
@@ -84,9 +81,7 @@ export default function SettingsScreen() {
       {!exercises.data ? (
         <Message loading={!exercises.error} error={exercises.error} />
       ) : customExercises.length === 0 ? (
-        <Message>
-          No custom exercises. Exercises you create while logging a workout show up here.
-        </Message>
+        <Message>No custom exercises. Exercises you create while logging a workout show up here.</Message>
       ) : (
         <Card style={{ gap: 0, paddingVertical: Spacing.one }}>
           {customExercises.map((exercise) => (

@@ -27,16 +27,28 @@ export default function StatsScreen() {
   const cardio = useQuery(`cardio:${serverUrl}`, async () => (await api.listCardio()).reverse());
   const activities = [...new Set((cardio.data ?? []).map((w) => w.activity))] as CardioActivity[];
 
-  // Opened on a lift from elsewhere, e.g. Insights. The params are cleared once
-  // applied, so opening the same lift again applies them again.
-  const params = useLocalSearchParams<{ exercise?: string; span?: string }>();
+  // Opened on a lift or cardio activity from elsewhere, e.g. Insights. The params
+  // are applied while rendering whenever they change, then cleared, so opening
+  // the same series again applies them again.
+  const params = useLocalSearchParams<{ exercise?: string; activity?: string; span?: string }>();
+  const request =
+    params.exercise || params.activity ? JSON.stringify([params.exercise, params.activity, params.span]) : undefined;
+  const [appliedRequest, setAppliedRequest] = useState<string>();
+  if (request !== appliedRequest) {
+    setAppliedRequest(request);
+    if (request) {
+      setSelected(
+        params.exercise
+          ? { kind: 'exercise', name: params.exercise }
+          : { kind: 'cardio', activity: params.activity as CardioActivity }
+      );
+      const span = TIMESPANS.find((t) => t.key === params.span);
+      if (span) setTimespan(span);
+    }
+  }
   useEffect(() => {
-    if (!params.exercise) return;
-    setSelected({ kind: 'exercise', name: params.exercise });
-    const span = TIMESPANS.find((t) => t.key === params.span);
-    if (span) setTimespan(span);
-    router.setParams({ exercise: undefined, span: undefined });
-  }, [params.exercise, params.span]);
+    if (request) router.setParams({ exercise: undefined, activity: undefined, span: undefined });
+  }, [request]);
 
   const exercises = names.data ?? [];
   // Default to the first exercise; bodyweight is the fallback before anything is logged.
@@ -56,9 +68,8 @@ export default function StatsScreen() {
   const exerciseData = useQuery(exercise === null ? null : `stats:${serverUrl}:${exercise}`, async () =>
     (await api.statistics(exercise!)).data.sort((a, b) => a.date.localeCompare(b.date))
   );
-  const bodyweight = useQuery(
-    series?.kind === 'bodyweight' ? `bodyweight:${serverUrl}` : null,
-    async () => (await api.listBodyweight()).sort((a, b) => a.date.localeCompare(b.date))
+  const bodyweight = useQuery(series?.kind === 'bodyweight' ? `bodyweight:${serverUrl}` : null, async () =>
+    (await api.listBodyweight()).sort((a, b) => a.date.localeCompare(b.date))
   );
   const data = series?.kind === 'bodyweight' ? bodyweight : exerciseData;
 

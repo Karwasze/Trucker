@@ -1,21 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {
-  createContext,
-  use,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from 'react';
+import { createContext, use, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 
-import {
-  cancelFinishAlert,
-  scheduleFinishAlert,
-  syncLiveActivity,
-  vibrate,
-} from '@/timer/native';
+import { cancelFinishAlert, scheduleFinishAlert, syncLiveActivity, vibrate } from '@/timer/native';
 import {
   clampDuration,
   endsAt,

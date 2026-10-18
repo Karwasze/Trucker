@@ -32,8 +32,8 @@ export default function PlansScreen() {
       {goals.data && !activeGoal && (
         <Card>
           <ThemedText type="small" themeColor="textSecondary">
-            Training for a race? Set a goal like a 10k or a triathlon and get a plan of runs, rides and swims
-            that builds up to race day, filled in from Apple Health.
+            Training for a race? Set a goal like a 10k or a triathlon and get a plan of runs, rides and swims that
+            builds up to race day, filled in from Apple Health.
           </ThemedText>
           <Button
             title="+ New goal"
@@ -65,10 +65,7 @@ export default function PlansScreen() {
           )}
         </>
       )}
-      <Button
-        title="+ New plan"
-        onPress={() => router.push({ pathname: '/plans/[id]', params: { id: 'new' } })}
-      />
+      <Button title="+ New plan" onPress={() => router.push({ pathname: '/plans/[id]', params: { id: 'new' } })} />
     </Screen>
   );
 }
@@ -106,15 +103,7 @@ function GoalCard({ goal }: { goal: Goal }) {
   );
 }
 
-function PlanCard({
-  plan,
-  active,
-  onActivate,
-}: {
-  plan: TrainingPlan;
-  active: boolean;
-  onActivate: () => void;
-}) {
+function PlanCard({ plan, active, onActivate }: { plan: TrainingPlan; active: boolean; onActivate: () => void }) {
   const theme = useTheme();
   const exerciseCount = plan.days.reduce((n, d) => n + d.exercises.length, 0);
 

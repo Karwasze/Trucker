@@ -97,11 +97,7 @@ export function TimerIsland() {
     borderTopRightRadius: frame.docked ? 0 : withSpring(radius, spring),
   }));
 
-  const onPress = running
-    ? () => setExpandRequested(!expanded)
-    : celebrating
-      ? celebration.dismiss
-      : start;
+  const onPress = running ? () => setExpandRequested(!expanded) : celebrating ? celebration.dismiss : start;
 
   return (
     <>
@@ -116,9 +112,7 @@ export function TimerIsland() {
         />
       )}
       {/* Idle, only the notch or island itself is a tap target, as nothing shows elsewhere. */}
-      <View
-        style={[styles.anchor, { top: frame.top }]}
-        pointerEvents={shown || frame.hardware ? 'box-none' : 'none'}>
+      <View style={[styles.anchor, { top: frame.top }]} pointerEvents={shown || frame.hardware ? 'box-none' : 'none'}>
         <Animated.View style={[styles.island, shape]}>
           <Pressable
             style={styles.fill}
@@ -217,15 +211,7 @@ function ProgressRing({ progress, color }: { progress: number; color: string }) 
   );
 }
 
-function IslandButton({
-  title,
-  onPress,
-  destructive,
-}: {
-  title: string;
-  onPress: () => void;
-  destructive?: boolean;
-}) {
+function IslandButton({ title, onPress, destructive }: { title: string; onPress: () => void; destructive?: boolean }) {
   return (
     <Pressable
       accessibilityRole="button"

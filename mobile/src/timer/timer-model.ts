@@ -27,8 +27,7 @@ export const FINISH_BEHAVIOR_NAMES: Record<FinishBehavior, string> = {
   vibration: 'Vibration',
 };
 
-export const clampDuration = (sec: number) =>
-  Math.min(MAX_DURATION_SEC, Math.max(MIN_DURATION_SEC, Math.round(sec)));
+export const clampDuration = (sec: number) => Math.min(MAX_DURATION_SEC, Math.max(MIN_DURATION_SEC, Math.round(sec)));
 
 /** Formats milliseconds as M:SS, rounding down to whole seconds. */
 export function formatClock(ms: number) {
@@ -51,9 +50,7 @@ export function parseTimerSettings(raw: string | null): TimerSettings {
           : DEFAULT_TIMER_SETTINGS[behavior];
     return {
       durationSec:
-        typeof stored.durationSec === 'number'
-          ? clampDuration(stored.durationSec)
-          : DEFAULT_TIMER_SETTINGS.durationSec,
+        typeof stored.durationSec === 'number' ? clampDuration(stored.durationSec) : DEFAULT_TIMER_SETTINGS.durationSec,
       animation: flag('animation'),
       vibration: flag('vibration'),
     };

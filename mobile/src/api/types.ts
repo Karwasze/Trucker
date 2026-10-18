@@ -27,16 +27,7 @@ export type ProgressionResult = {
 export type CreatedWorkout = Workout & { progression?: ProgressionResult[] };
 
 export type Muscle =
-  | 'chest'
-  | 'back'
-  | 'shoulders'
-  | 'biceps'
-  | 'triceps'
-  | 'quads'
-  | 'hamstrings'
-  | 'glutes'
-  | 'calves'
-  | 'core';
+  'chest' | 'back' | 'shoulders' | 'biceps' | 'triceps' | 'quads' | 'hamstrings' | 'glutes' | 'calves' | 'core';
 
 /** Mirrors store.Muscles, in display order. */
 export const MUSCLES: Muscle[] = [

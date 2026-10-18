@@ -118,12 +118,7 @@ export default function CardioDetailScreen() {
             </Card>
           )}
           {sessions.data && sessions.data.length > 0 && (
-            <CountsAs
-              workoutId={w.id}
-              sessions={sessions.data}
-              disabled={matching}
-              onMatch={match}
-            />
+            <CountsAs workoutId={w.id} sessions={sessions.data} disabled={matching} onMatch={match} />
           )}
           <Button title="Delete workout" variant="danger" loading={deleting} onPress={() => confirmDelete(w)} />
         </>
@@ -164,11 +159,13 @@ function DistanceEntry({ workout: w, onSaved }: { workout: CardioWorkout; onSave
 
   return (
     <Card>
-      <ThemedText type="smallBold">{w.manual_distance ? 'Distance entered by hand' : 'No distance recorded'}</ThemedText>
+      <ThemedText type="smallBold">
+        {w.manual_distance ? 'Distance entered by hand' : 'No distance recorded'}
+      </ThemedText>
       {!w.manual_distance && (
         <ThemedText type="small" themeColor="textSecondary">
-          Apple Health has no distance for this workout. Enter it, e.g. from your bike computer or the machine, so
-          it counts toward your plan.
+          Apple Health has no distance for this workout. Enter it, e.g. from your bike computer or the machine, so it
+          counts toward your plan.
         </ThemedText>
       )}
       <View style={styles.row}>

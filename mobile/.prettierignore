@@ -1,0 +1,6 @@
+ios/
+android/
+.expo/
+dist/
+web-build/
+tmp/

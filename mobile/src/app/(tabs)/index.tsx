@@ -1,19 +1,19 @@
-import { router, useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, StyleSheet, View } from "react-native";
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, StyleSheet, View } from 'react-native';
 
-import type { Exercise, ProgressionResult } from "@/api/types";
-import { ThemedText } from "@/components/themed-text";
-import { Button, Card, Message, Screen } from "@/components/ui";
-import { SettingsButton } from "@/settings/settings-button";
-import { Spacing } from "@/constants/theme";
-import { EnduranceToday } from "@/goals/endurance-today";
-import { useHealthImports } from "@/health/health-state";
-import { HealthImportBanner } from "@/health/import-banner";
-import { useQuery } from "@/hooks/use-query";
-import { useTheme } from "@/hooks/use-theme";
-import { useToday } from "@/hooks/use-today";
-import { useSettings } from "@/settings/settings-context";
+import type { Exercise, ProgressionResult } from '@/api/types';
+import { ThemedText } from '@/components/themed-text';
+import { Button, Card, Message, Screen } from '@/components/ui';
+import { SettingsButton } from '@/settings/settings-button';
+import { Spacing } from '@/constants/theme';
+import { EnduranceToday } from '@/goals/endurance-today';
+import { useHealthImports } from '@/health/health-state';
+import { HealthImportBanner } from '@/health/import-banner';
+import { useQuery } from '@/hooks/use-query';
+import { useTheme } from '@/hooks/use-theme';
+import { useToday } from '@/hooks/use-today';
+import { useSettings } from '@/settings/settings-context';
 import {
   completedSetCount,
   describeSets,
@@ -24,15 +24,14 @@ import {
   toWorkout,
   useDraft,
   type Draft,
-} from "@/workout/draft";
-import { ExerciseCard } from "@/workout/exercise-card";
-import { ExercisePicker } from "@/workout/exercise-picker";
-import { formatDate, formatKg, volumeOf } from "@/workout/format";
+} from '@/workout/draft';
+import { ExerciseCard } from '@/workout/exercise-card';
+import { ExercisePicker } from '@/workout/exercise-picker';
+import { formatDate, formatKg, volumeOf } from '@/workout/format';
 
 const hasProgress = (d: Draft) => !d.logged && completedSetCount(d) > 0;
 
-const formatDay = (date: string) =>
-  formatDate(date, { weekday: "long", month: "short", day: "numeric" });
+const formatDay = (date: string) => formatDate(date, { weekday: 'long', month: 'short', day: 'numeric' });
 
 export default function TodayScreen() {
   const { api, planId, serverUrl } = useSettings();
@@ -42,9 +41,8 @@ export default function TodayScreen() {
   const [saving, setSaving] = useState(false);
 
   const plans = useQuery(`plans:${serverUrl}`, api.listPlans);
-  const planDay = useQuery(
-    planId === null ? null : `today:${serverUrl}:${planId}:${today}`,
-    () => api.planToday(planId!, today),
+  const planDay = useQuery(planId === null ? null : `today:${serverUrl}:${planId}:${today}`, () =>
+    api.planToday(planId!, today)
   );
   const planName = plans.data?.find((p) => p.id === planId)?.name;
   const planReady = planId === null || planDay.data?.plan_id === planId;
@@ -54,9 +52,7 @@ export default function TodayScreen() {
   // the plan. Checked on focus against a fresh workout list, never a cached
   // one, so a workout that was just logged isn't mistaken for a deleted one.
   const afterLogging =
-    !!draft &&
-    draft.date === today &&
-    (!!draft.logged || (draft.source === undefined && !hasProgress(draft)));
+    !!draft && draft.date === today && (!!draft.logged || (draft.source === undefined && !hasProgress(draft)));
   useFocusEffect(
     useCallback(() => {
       if (!afterLogging) return;
@@ -69,16 +65,14 @@ export default function TodayScreen() {
           setDraft((d) => {
             if (d.date !== today) return d;
             if (d.logged) return ids.includes(d.logged.id) ? d : null;
-            return d.source === undefined && !hasProgress(d) && ids.length === 0
-              ? null
-              : d;
+            return d.source === undefined && !hasProgress(d) && ids.length === 0 ? null : d;
           });
         })
         .catch(() => {});
       return () => {
         cancelled = true;
       };
-    }, [afterLogging, api, today, setDraft]),
+    }, [afterLogging, api, today, setDraft])
   );
 
   // Start a fresh draft from the plan unless there is unsaved work to keep.
@@ -105,17 +99,9 @@ export default function TodayScreen() {
     setDraft(
       logged
         ? { date: today, planId, basedOn: planId, exercises: [], logged }
-        : draftFromPlan(today, planId, planDay.data?.exercises ?? []),
+        : draftFromPlan(today, planId, planDay.data?.exercises ?? [])
     );
-  }, [
-    draft,
-    planReady,
-    planId,
-    today,
-    planDay.data,
-    planDay.loading,
-    setDraft,
-  ]);
+  }, [draft, planReady, planId, today, planDay.data, planDay.loading, setDraft]);
 
   // Pull-to-refresh rebuilds a plan draft nothing has been ticked in from the
   // refreshed targets, bringing back exercises removed from it.
@@ -131,7 +117,7 @@ export default function TodayScreen() {
     setDraft((d) =>
       !d.logged && d.source !== undefined && !hasProgress(d)
         ? draftFromPlan(today, planId, planDay.data?.exercises ?? [])
-        : d,
+        : d
     );
   }, [planDay.data, planDay.error, planReady, planId, today, setDraft]);
 
@@ -148,13 +134,12 @@ export default function TodayScreen() {
     }
   };
 
-  const resetToPlan = () =>
-    setDraft(draftFromPlan(today, planId, planDay.data?.exercises ?? []));
+  const resetToPlan = () => setDraft(draftFromPlan(today, planId, planDay.data?.exercises ?? []));
 
   const confirmReset = () =>
-    Alert.alert("Discard this workout?", "Your entered sets will be cleared.", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Discard", style: "destructive", onPress: resetToPlan },
+    Alert.alert('Discard this workout?', 'Your entered sets will be cleared.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Discard', style: 'destructive', onPress: resetToPlan },
     ]);
 
   const addExercise = async (name: string) => {
@@ -176,22 +161,11 @@ export default function TodayScreen() {
     const exercise = draft?.exercises.find((e) => e.key === key);
     if (!exercise) return;
     try {
-      const target = await api.exerciseTarget(
-        exercise.name,
-        draft?.date ?? today,
-        { sets, reps },
-      );
-      const updated = draftExercise(
-        exercise.name,
-        target.sets,
-        describeSets(target.sets),
-        target.reason,
-      );
+      const target = await api.exerciseTarget(exercise.name, draft?.date ?? today, { sets, reps });
+      const updated = draftExercise(exercise.name, target.sets, describeSets(target.sets), target.reason);
       setDraft((d) => ({
         ...d,
-        exercises: d.exercises.map((e) =>
-          e.key === key ? { ...updated, key, free: true } : e,
-        ),
+        exercises: d.exercises.map((e) => (e.key === key ? { ...updated, key, free: true } : e)),
       }));
     } catch (e) {
       Alert.alert("Couldn't load target", (e as Error).message);
@@ -214,36 +188,25 @@ export default function TodayScreen() {
   const confirmFinish = () => {
     if (!draft) return;
     const done = completedSetCount(draft);
-    const skipped =
-      toExercises(draft.exercises, false).reduce(
-        (n, e) => n + e.sets.length,
-        0,
-      ) - done;
+    const skipped = toExercises(draft.exercises, false).reduce((n, e) => n + e.sets.length, 0) - done;
     Alert.alert(
-      "Finish workout?",
-      `${done} ${done === 1 ? "set" : "sets"} will be logged.` +
-        (skipped > 0
-          ? ` ${skipped} unticked ${skipped === 1 ? "set" : "sets"} will be left out.`
-          : ""),
+      'Finish workout?',
+      `${done} ${done === 1 ? 'set' : 'sets'} will be logged.` +
+        (skipped > 0 ? ` ${skipped} unticked ${skipped === 1 ? 'set' : 'sets'} will be left out.` : ''),
       [
-        { text: "Cancel", style: "cancel" },
-        { text: "Finish", onPress: finish },
-      ],
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Finish', onPress: finish },
+      ]
     );
   };
 
-  const subtitle = [formatDay(draft?.date ?? today), planName]
-    .filter(Boolean)
-    .join(" · ");
+  const subtitle = [formatDay(draft?.date ?? today), planName].filter(Boolean).join(' · ');
 
   if (draft?.logged) {
     return (
       <Screen title="Today" subtitle={subtitle} action={<SettingsButton />}>
         <HealthImportBanner count={imports.candidates.length} error={imports.error} />
-        <LoggedSummary
-          progression={draft.logged.progression ?? []}
-          exercises={draft.logged.exercises}
-        />
+        <LoggedSummary progression={draft.logged.progression ?? []} exercises={draft.logged.exercises} />
         <EnduranceToday date={today} waiting={waitingToday} />
         <Button
           title="Start another workout"
@@ -263,8 +226,7 @@ export default function TodayScreen() {
 
   const loadingPlan = planId !== null && !planReady;
   const doneSets = draft ? completedSetCount(draft) : 0;
-  const isRestDay =
-    planId !== null && planReady && planDay.data?.exercises.length === 0;
+  const isRestDay = planId !== null && planReady && planDay.data?.exercises.length === 0;
 
   return (
     <Screen
@@ -272,17 +234,13 @@ export default function TodayScreen() {
       subtitle={subtitle}
       action={<SettingsButton />}
       refreshing={planDay.refreshing}
-      onRefresh={refresh}
-    >
+      onRefresh={refresh}>
       <HealthImportBanner count={imports.candidates.length} error={imports.error} />
       {draft && draft.date !== today && (
         <Card>
-          <ThemedText type="smallBold">
-            Unfinished workout from {formatDay(draft.date)}
-          </ThemedText>
+          <ThemedText type="smallBold">Unfinished workout from {formatDay(draft.date)}</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            Finish it to log it on that date, or discard it to start
-            today&apos;s plan.
+            Finish it to log it on that date, or discard it to start today&apos;s plan.
           </ThemedText>
         </Card>
       )}
@@ -295,25 +253,15 @@ export default function TodayScreen() {
         <>
           {planId === null && draft?.exercises.length === 0 && (
             <Card>
-              <ThemedText type="smallBold">
-                No training plan selected
-              </ThemedText>
+              <ThemedText type="smallBold">No training plan selected</ThemedText>
               <ThemedText type="small" themeColor="textSecondary">
-                Pick a plan in Settings to get today&apos;s targets, or add
-                exercises freely.
+                Pick a plan in Settings to get today&apos;s targets, or add exercises freely.
               </ThemedText>
-              <Button
-                title="Choose plan"
-                variant="secondary"
-                compact
-                onPress={() => router.navigate("/plans")}
-              />
+              <Button title="Choose plan" variant="secondary" compact onPress={() => router.navigate('/plans')} />
             </Card>
           )}
           {isRestDay && draft?.exercises.length === 0 && (
-            <Message>
-              No lifting today 😴{"\n"}Add exercises if you train anyway.
-            </Message>
+            <Message>No lifting today 😴{'\n'}Add exercises if you train anyway.</Message>
           )}
 
           {draft?.exercises.map((exercise) => (
@@ -323,9 +271,7 @@ export default function TodayScreen() {
               onChange={(updated) =>
                 setDraft((d) => ({
                   ...d,
-                  exercises: d.exercises.map((e) =>
-                    e.key === updated.key ? updated : e,
-                  ),
+                  exercises: d.exercises.map((e) => (e.key === updated.key ? updated : e)),
                 }))
               }
               onRemove={() =>
@@ -334,95 +280,57 @@ export default function TodayScreen() {
                   exercises: d.exercises.filter((e) => e.key !== exercise.key),
                 }))
               }
-              onChangeScheme={
-                exercise.free
-                  ? (sets, reps) => changeScheme(exercise.key, sets, reps)
-                  : undefined
-              }
+              onChangeScheme={exercise.free ? (sets, reps) => changeScheme(exercise.key, sets, reps) : undefined}
             />
           ))}
 
-          <Button
-            title="+ Add exercise"
-            variant="secondary"
-            onPress={() => setPickerOpen(true)}
-          />
+          <Button title="+ Add exercise" variant="secondary" onPress={() => setPickerOpen(true)} />
 
           <EnduranceToday date={today} waiting={waitingToday} />
 
           {draft && draft.exercises.length > 0 && (
             <View style={styles.footer}>
               <Button
-                title={
-                  doneSets
-                    ? `Finish workout · ${doneSets} sets`
-                    : "Tick off sets as you go"
-                }
+                title={doneSets ? `Finish workout · ${doneSets} sets` : 'Tick off sets as you go'}
                 disabled={doneSets === 0}
                 loading={saving}
                 onPress={confirmFinish}
               />
-              <Button
-                title="Discard"
-                variant="secondary"
-                compact
-                onPress={confirmReset}
-              />
+              <Button title="Discard" variant="secondary" compact onPress={confirmReset} />
             </View>
           )}
         </>
       )}
 
-      <ExercisePicker
-        visible={pickerOpen}
-        onClose={() => setPickerOpen(false)}
-        onPick={addExercise}
-      />
+      <ExercisePicker visible={pickerOpen} onClose={() => setPickerOpen(false)} onPick={addExercise} />
     </Screen>
   );
 }
 
-const RESULT_LABEL: Record<ProgressionResult["result"], string> = {
-  progressed: "Weight goes up next time",
-  missed: "Missed — same weight, one more rep next time",
-  deloaded: "Deloaded — 10% lighter next time",
+const RESULT_LABEL: Record<ProgressionResult['result'], string> = {
+  progressed: 'Weight goes up next time',
+  missed: 'Missed — same weight, one more rep next time',
+  deloaded: 'Deloaded — 10% lighter next time',
 };
 
 /** Bodyweight exercises progress by reps, not weight. */
 const isBodyweight = (exercises: Exercise[], name: string) =>
-  exercises
-    .filter((e) => e.name === name)
-    .every((e) => e.sets.every((s) => s.weight === 0));
+  exercises.filter((e) => e.name === name).every((e) => e.sets.every((s) => s.weight === 0));
 
 const resultLabel = (p: ProgressionResult, exercises: Exercise[]) =>
-  p.result === "progressed" && isBodyweight(exercises, p.exercise)
-    ? "One more rep next time"
-    : RESULT_LABEL[p.result];
+  p.result === 'progressed' && isBodyweight(exercises, p.exercise) ? 'One more rep next time' : RESULT_LABEL[p.result];
 
-function LoggedSummary({
-  progression,
-  exercises,
-}: {
-  progression: ProgressionResult[];
-  exercises: Exercise[];
-}) {
+function LoggedSummary({ progression, exercises }: { progression: ProgressionResult[]; exercises: Exercise[] }) {
   const theme = useTheme();
-  const colorFor = (r: ProgressionResult["result"]) =>
-    r === "progressed"
-      ? theme.success
-      : r === "deloaded"
-        ? theme.danger
-        : theme.textSecondary;
+  const colorFor = (r: ProgressionResult['result']) =>
+    r === 'progressed' ? theme.success : r === 'deloaded' ? theme.danger : theme.textSecondary;
 
   return (
     <>
       <Card>
-        <ThemedText style={{ fontSize: 22, fontWeight: 700 }}>
-          Workout logged ✓
-        </ThemedText>
+        <ThemedText style={{ fontSize: 22, fontWeight: 700 }}>Workout logged ✓</ThemedText>
         <ThemedText themeColor="textSecondary">
-          {exercises.length} exercises ·{" "}
-          {exercises.reduce((n, e) => n + e.sets.length, 0)} sets ·{" "}
+          {exercises.length} exercises · {exercises.reduce((n, e) => n + e.sets.length, 0)} sets ·{' '}
           {formatKg(volumeOf(exercises))} volume
         </ThemedText>
       </Card>
@@ -431,16 +339,8 @@ function LoggedSummary({
           <ThemedText type="smallBold">Plan progression</ThemedText>
           {progression.map((p) => (
             <View key={p.exercise} style={styles.progressionRow}>
-              <ThemedText style={styles.progressionName}>
-                {p.exercise}
-              </ThemedText>
-              <ThemedText
-                type="small"
-                style={[
-                  styles.progressionResult,
-                  { color: colorFor(p.result) },
-                ]}
-              >
+              <ThemedText style={styles.progressionName}>{p.exercise}</ThemedText>
+              <ThemedText type="small" style={[styles.progressionResult, { color: colorFor(p.result) }]}>
                 {resultLabel(p, exercises)}
               </ThemedText>
             </View>
@@ -457,8 +357,8 @@ const styles = StyleSheet.create({
     marginTop: Spacing.two,
   },
   progressionRow: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: Spacing.two,
   },
   progressionName: {
@@ -466,7 +366,7 @@ const styles = StyleSheet.create({
   },
   progressionResult: {
     flexShrink: 1,
-    marginLeft: "auto",
-    textAlign: "right",
+    marginLeft: 'auto',
+    textAlign: 'right',
   },
 });

@@ -75,8 +75,7 @@ export function useHealthState() {
   );
   const disconnect = useCallback(() => save(serverUrl, () => EMPTY), [serverUrl]);
   const dismiss = useCallback(
-    (uuids: string[]) =>
-      save(serverUrl, (s) => ({ ...s, dismissed: [...new Set([...s.dismissed, ...uuids])] })),
+    (uuids: string[]) => save(serverUrl, (s) => ({ ...s, dismissed: [...new Set([...s.dismissed, ...uuids])] })),
     [serverUrl]
   );
 

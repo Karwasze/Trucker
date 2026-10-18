@@ -31,11 +31,9 @@ export default function WorkoutDetailScreen() {
     workout !== undefined &&
     JSON.stringify(toExercises(edit, false)) !== JSON.stringify(workout.exercises);
 
-  const startEditing = (w: Workout) =>
-    setEdit(w.exercises.map((e) => draftExercise(e.name, e.sets)));
+  const startEditing = (w: Workout) => setEdit(w.exercises.map((e) => draftExercise(e.name, e.sets)));
 
-  const updateExercise = (fn: (list: DraftExercise[]) => DraftExercise[]) =>
-    setEdit((list) => list && fn(list));
+  const updateExercise = (fn: (list: DraftExercise[]) => DraftExercise[]) => setEdit((list) => list && fn(list));
 
   const addExercise = async (name: string) => {
     const sets = await api.latestSets(name).catch(() => []);
@@ -111,9 +109,7 @@ export default function WorkoutDetailScreen() {
               key={exercise.key}
               exercise={exercise}
               trackDone={false}
-              onChange={(updated) =>
-                updateExercise((list) => list.map((e) => (e.key === updated.key ? updated : e)))
-              }
+              onChange={(updated) => updateExercise((list) => list.map((e) => (e.key === updated.key ? updated : e)))}
               onRemove={() => updateExercise((list) => list.filter((e) => e.key !== exercise.key))}
             />
           ))}
@@ -151,26 +147,13 @@ export default function WorkoutDetailScreen() {
             </Card>
           ))}
           <View style={styles.footer}>
-            <Button
-              title="Edit workout"
-              variant="secondary"
-              onPress={() => startEditing(workout)}
-            />
-            <Button
-              title="Delete workout"
-              variant="danger"
-              loading={deleting}
-              onPress={confirmDelete}
-            />
+            <Button title="Edit workout" variant="secondary" onPress={() => startEditing(workout)} />
+            <Button title="Delete workout" variant="danger" loading={deleting} onPress={confirmDelete} />
           </View>
         </>
       )}
 
-      <ExercisePicker
-        visible={pickerOpen}
-        onClose={() => setPickerOpen(false)}
-        onPick={addExercise}
-      />
+      <ExercisePicker visible={pickerOpen} onClose={() => setPickerOpen(false)} onPick={addExercise} />
     </Screen>
   );
 }

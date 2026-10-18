@@ -131,7 +131,7 @@ function InsightsContent({ data, timespan, hasPlan }: { data: Insights; timespan
           <SectionLabel>Cardio</SectionLabel>
           <Card>
             {data.cardio.map((c) => (
-              <CardioRow key={c.activity} summary={c} />
+              <CardioRow key={c.activity} summary={c} timespan={timespan} />
             ))}
           </Card>
         </>
@@ -250,7 +250,10 @@ function ProgressCard({ progress: p, timespan }: { progress: LiftProgress; times
         <View style={styles.row}>
           <View style={[styles.bar, { backgroundColor: theme.backgroundSelected }]}>
             <View
-              style={[styles.fill, { width: `${share * 100}%`, backgroundColor: atRecord ? theme.success : theme.accent }]}
+              style={[
+                styles.fill,
+                { width: `${share * 100}%`, backgroundColor: atRecord ? theme.success : theme.accent },
+              ]}
             />
           </View>
           <ThemedText type="small" themeColor={atRecord ? 'success' : 'textSecondary'} style={styles.num}>
@@ -296,8 +299,8 @@ function GoalSection({ summary: g }: { summary: GoalSummary }) {
           </View>
           {activities.map((a) => (
             <ThemedText key={a} type="small" themeColor="textSecondary">
-              {ACTIVITY_ICONS[a]} {formatDistance(g.done_m[a] ?? 0, a)} of {formatDistance(g.planned_m[a] ?? 0, a)}{' '}
-              this week
+              {ACTIVITY_ICONS[a]} {formatDistance(g.done_m[a] ?? 0, a)} of {formatDistance(g.planned_m[a] ?? 0, a)} this
+              week
             </ThemedText>
           ))}
           {thresholds.length > 0 && (
@@ -311,11 +314,12 @@ function GoalSection({ summary: g }: { summary: GoalSummary }) {
   );
 }
 
-function CardioRow({ summary: c }: { summary: CardioSummary }) {
+function CardioRow({ summary: c, timespan }: { summary: CardioSummary; timespan: Timespan }) {
   return (
     <Pressable
-      onPress={() => router.navigate('/stats')}
+      onPress={() => router.navigate({ pathname: '/stats', params: { activity: c.activity, span: timespan.key } })}
       accessibilityRole="button"
+      accessibilityHint={`Opens the ${ACTIVITY_NAMES[c.activity]} chart`}
       style={({ pressed }) => [{ gap: Spacing.one }, pressed && { opacity: 0.5 }]}>
       <ThemedText type="smallBold">
         {ACTIVITY_ICONS[c.activity]} {ACTIVITY_NAMES[c.activity]} · {plural(c.sessions, 'session')}

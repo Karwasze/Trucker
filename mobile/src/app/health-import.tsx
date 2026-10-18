@@ -62,8 +62,7 @@ export default function HealthImportScreen() {
   const [chosen, setChosen] = useState<Map<string, number | null>>(new Map());
   const defaults = defaultMatches(imports.candidates, sessions.data ?? []);
   const matchOf = (uuid: string) => (chosen.has(uuid) ? chosen.get(uuid)! : (defaults.get(uuid) ?? null));
-  const choose = (uuid: string, sessionId: number | null) =>
-    setChosen((c) => new Map(c).set(uuid, sessionId));
+  const choose = (uuid: string, sessionId: number | null) => setChosen((c) => new Map(c).set(uuid, sessionId));
 
   const uuidOf = (i: number) => imports.candidates[i].source_uuid ?? String(i);
   const toggle = (uuid: string) =>
@@ -123,8 +122,7 @@ export default function HealthImportScreen() {
                   accessibilityState={{ checked }}
                   style={styles.row}>
                   <CardioSummary workout={w} />
-                  <View
-                    style={[styles.check, { backgroundColor: checked ? theme.success : theme.backgroundSelected }]}>
+                  <View style={[styles.check, { backgroundColor: checked ? theme.success : theme.backgroundSelected }]}>
                     <ThemedText style={{ color: checked ? '#fff' : theme.textSecondary, fontWeight: 700 }}>
                       ✓
                     </ThemedText>
@@ -201,7 +199,8 @@ function HealthReport() {
     <Card>
       <ThemedText type="smallBold">What Apple Health returned</ThemedText>
       <ThemedText type="small" themeColor="textSecondary">
-        Connected {connectedAt?.toLocaleString() ?? 'never'}. Workouts from {2 * IMPORT_LOOKBACK_DAYS} days before that on:
+        Connected {connectedAt?.toLocaleString() ?? 'never'}. Workouts from {2 * IMPORT_LOOKBACK_DAYS} days before that
+        on:
       </ThemedText>
       {report.error ? (
         <ThemedText type="small">Error: {report.error}</ThemedText>

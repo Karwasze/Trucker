@@ -88,7 +88,8 @@ export function CardioStats({
       <Card>
         <ThemedText type="smallBold">Weekly distance</ThemedText>
         <TimespanControl value={timespan} onChange={onTimespanChange} />
-        <LineChart points={weeklyPoints} from={from} to={localDate()} unit={swim ? 'm' : 'km'} />
+        {/* Weekly points sit on their Monday, which can precede `from`. */}
+        <LineChart points={weeklyPoints} from={weekOf(from)} to={localDate()} unit={swim ? 'm' : 'km'} />
       </Card>
 
       {speedPoints.length > 0 && (

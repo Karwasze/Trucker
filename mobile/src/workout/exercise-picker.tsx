@@ -35,9 +35,7 @@ export function ExercisePicker({ visible, onClose, onPick }: Props) {
   }, [visible, api]);
 
   const term = search.trim();
-  const filtered = (exercises ?? []).filter((e) =>
-    e.name.toLowerCase().includes(term.toLowerCase())
-  );
+  const filtered = (exercises ?? []).filter((e) => e.name.toLowerCase().includes(term.toLowerCase()));
   const exactMatch = filtered.some((e) => e.name.toLowerCase() === term.toLowerCase());
 
   const close = () => {
@@ -87,15 +85,11 @@ export function ExercisePicker({ visible, onClose, onPick }: Props) {
           ListHeaderComponent={
             term && !exactMatch ? (
               <Pressable onPress={create} style={styles.row}>
-                <ThemedText style={{ color: theme.accent, fontWeight: 600 }}>
-                  + Create “{term}”
-                </ThemedText>
+                <ThemedText style={{ color: theme.accent, fontWeight: 600 }}>+ Create “{term}”</ThemedText>
               </Pressable>
             ) : null
           }
-          ListEmptyComponent={
-            exercises === null || error ? <Message loading={!error} error={error} /> : null
-          }
+          ListEmptyComponent={exercises === null || error ? <Message loading={!error} error={error} /> : null}
           ItemSeparatorComponent={() => (
             <View style={[styles.separator, { backgroundColor: theme.backgroundSelected }]} />
           )}

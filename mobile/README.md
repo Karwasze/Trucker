@@ -5,7 +5,7 @@ Expo (React Native) app for the Trucker API. Targets iOS; Android should work to
 ## Screens
 
 - **Today** – the active plan's exercises for today, pre-filled with target sets.
-  Tick off sets as you do them, then *Finish workout*; only ticked sets are logged.
+  Tick off sets as you do them, then _Finish workout_; only ticked sets are logged.
   The in-progress workout is saved on the device, so closing the app loses nothing.
 - **Training plan** – create, edit and delete plans, and choose the active one.
   Each training day lists exercises with target sets and progression/deload rules.

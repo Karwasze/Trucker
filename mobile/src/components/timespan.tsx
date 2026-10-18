@@ -24,13 +24,7 @@ export function timespanStart(span: Timespan) {
 }
 
 /** Segmented control for picking a timespan, sized to sit inside a Card. */
-export function TimespanControl({
-  value,
-  onChange,
-}: {
-  value: Timespan;
-  onChange: (timespan: Timespan) => void;
-}) {
+export function TimespanControl({ value, onChange }: { value: Timespan; onChange: (timespan: Timespan) => void }) {
   const theme = useTheme();
   return (
     <View style={[styles.track, { backgroundColor: theme.backgroundSelected }]} accessibilityRole="tablist">

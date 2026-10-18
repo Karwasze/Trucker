@@ -49,8 +49,8 @@ export function HealthCard() {
     return (
       <Card>
         <ThemedText type="small" themeColor="textSecondary">
-          Import runs, rides and swims recorded on your Apple Watch. Workouts from the last{' '}
-          {IMPORT_LOOKBACK_DAYS} days on are offered, and you choose which ones to import.
+          Import runs, rides and swims recorded on your Apple Watch. Workouts from the last {IMPORT_LOOKBACK_DAYS} days
+          on are offered, and you choose which ones to import.
         </ThemedText>
         <Button title="Connect Apple Health" loading={connecting} onPress={onConnect} />
       </Card>
@@ -62,8 +62,8 @@ export function HealthCard() {
         Connected since {new Date(state.connectedAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}
       </ThemedText>
       <ThemedText type="small" themeColor="textSecondary">
-        New workouts show up in History for you to review. To change what Trucker can read, use the Health app:
-        Sharing → Apps → Trucker.
+        New workouts show up in History for you to review. To change what Trucker can read, use the Health app: Sharing
+        → Apps → Trucker.
       </ThemedText>
       <Button title="Check for new workouts" variant="secondary" onPress={() => router.navigate('/health-import')} />
       <Button title="Disconnect" variant="secondary" compact onPress={confirmDisconnect} />

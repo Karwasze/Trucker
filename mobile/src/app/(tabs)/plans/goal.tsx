@@ -117,9 +117,9 @@ export default function GoalEditorScreen() {
         goal.id === undefined
           ? await api.createGoal(goal, localDate())
           : await api.updateGoal({ ...goal, id: goal.id }, localDate());
-      const open = () =>
-        router.replace({ pathname: '/plans/goal-calendar', params: { id: saved.goal.id } });
-      if (saved.warnings.length > 0) Alert.alert('Plan created', saved.warnings.join('\n\n'), [{ text: 'OK', onPress: open }]);
+      const open = () => router.replace({ pathname: '/plans/goal-calendar', params: { id: saved.goal.id } });
+      if (saved.warnings.length > 0)
+        Alert.alert('Plan created', saved.warnings.join('\n\n'), [{ text: 'OK', onPress: open }]);
       else open();
     } catch (e) {
       Alert.alert("Couldn't save goal", (e as Error).message);
@@ -151,7 +151,10 @@ export default function GoalEditorScreen() {
 
   const inputStyle = [styles.input, { color: theme.text, backgroundColor: theme.backgroundSelected }];
   const preset = GOAL_PRESETS.find(
-    (p) => km(p.legs.bike_m) === edit.bike && km(p.legs.run_m) === edit.run && (p.legs.swim_m ? String(p.legs.swim_m) : '') === edit.swim
+    (p) =>
+      km(p.legs.bike_m) === edit.bike &&
+      km(p.legs.run_m) === edit.run &&
+      (p.legs.swim_m ? String(p.legs.swim_m) : '') === edit.swim
   );
 
   return (
@@ -268,8 +271,7 @@ export default function GoalEditorScreen() {
           ))}
         </View>
         <ThemedText type="small" themeColor="textSecondary">
-          One session a day; a triathlon adds a short run after the long ride. Your strength plan carries on
-          alongside.
+          One session a day; a triathlon adds a short run after the long ride. Your strength plan carries on alongside.
         </ThemedText>
       </Card>
 

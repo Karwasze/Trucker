@@ -1,14 +1,6 @@
 import type { PlanExercise, Set, TrainingPlan } from '@/api/types';
 
-export const WEEKDAYS = [
-  'monday',
-  'tuesday',
-  'wednesday',
-  'thursday',
-  'friday',
-  'saturday',
-  'sunday',
-] as const;
+export const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const;
 
 export type Weekday = (typeof WEEKDAYS)[number];
 
@@ -24,9 +16,7 @@ export const scheduleOf = (plan: TrainingPlan) =>
     .join(' · ');
 
 export const sortDays = <T extends { weekday: string }>(days: T[]) =>
-  [...days].sort(
-    (a, b) => WEEKDAYS.indexOf(a.weekday as Weekday) - WEEKDAYS.indexOf(b.weekday as Weekday)
-  );
+  [...days].sort((a, b) => WEEKDAYS.indexOf(a.weekday as Weekday) - WEEKDAYS.indexOf(b.weekday as Weekday));
 
 // Inputs are strings while editing so partially typed numbers survive.
 export type EditExercise = {

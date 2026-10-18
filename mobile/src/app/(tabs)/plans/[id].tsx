@@ -49,11 +49,12 @@ export default function PlanEditorScreen() {
   const dirty = edit !== null && JSON.stringify(edit) !== saved;
 
   const updateDay = (weekday: Weekday, fn: (exercises: EditExercise[]) => EditExercise[]) =>
-    setEdit((p) =>
-      p && {
-        ...p,
-        days: p.days.map((d) => (d.weekday === weekday ? { ...d, exercises: fn(d.exercises) } : d)),
-      }
+    setEdit(
+      (p) =>
+        p && {
+          ...p,
+          days: p.days.map((d) => (d.weekday === weekday ? { ...d, exercises: fn(d.exercises) } : d)),
+        }
     );
 
   const toggleDay = (weekday: Weekday) => {
@@ -63,8 +64,7 @@ export default function PlanEditorScreen() {
       setEdit({ ...edit, days: sortDays([...edit.days, { weekday, exercises: [] }]) });
       return;
     }
-    const remove = () =>
-      setEdit((p) => p && { ...p, days: p.days.filter((d) => d.weekday !== weekday) });
+    const remove = () => setEdit((p) => p && { ...p, days: p.days.filter((d) => d.weekday !== weekday) });
     if (existing.exercises.length === 0) return remove();
     Alert.alert(`Remove ${weekdayLabel(weekday)}?`, 'Its exercises will be removed from the plan.', [
       { text: 'Cancel', style: 'cancel' },
@@ -108,26 +108,22 @@ export default function PlanEditorScreen() {
     ]);
 
   const confirmDelete = () =>
-    Alert.alert(
-      `Delete ${edit?.name || 'plan'}?`,
-      'Workouts logged with it are kept.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await api.deletePlan(Number(id));
-              if (planId === Number(id)) update({ planId: null });
-              router.back();
-            } catch (e) {
-              Alert.alert("Couldn't delete plan", (e as Error).message);
-            }
-          },
+    Alert.alert(`Delete ${edit?.name || 'plan'}?`, 'Workouts logged with it are kept.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await api.deletePlan(Number(id));
+            if (planId === Number(id)) update({ planId: null });
+            router.back();
+          } catch (e) {
+            Alert.alert("Couldn't delete plan", (e as Error).message);
+          }
         },
-      ]
-    );
+      },
+    ]);
 
   return (
     <Screen hasHeader>
@@ -137,12 +133,8 @@ export default function PlanEditorScreen() {
           // While there are unsaved changes, leaving goes through Cancel.
           headerBackVisible: !dirty,
           gestureEnabled: !dirty,
-          headerLeft: dirty
-            ? () => <HeaderButton title="Cancel" onPress={confirmDiscard} />
-            : undefined,
-          headerRight: edit
-            ? () => <HeaderButton title="Save" onPress={save} disabled={saving} bold />
-            : undefined,
+          headerLeft: dirty ? () => <HeaderButton title="Cancel" onPress={confirmDiscard} /> : undefined,
+          headerRight: edit ? () => <HeaderButton title="Save" onPress={save} disabled={saving} bold /> : undefined,
         }}
       />
 
@@ -173,8 +165,8 @@ export default function PlanEditorScreen() {
             <Message>Pick the days you train.</Message>
           ) : (
             <ThemedText type="small" themeColor="textSecondary">
-              Weights come from your last logged session: a step heavier when every set hits the
-              reps, one more rep when it doesn&apos;t, and 10% lighter after three misses in a row.
+              Weights come from your last logged session: a step heavier when every set hits the reps, one more rep when
+              it doesn&apos;t, and 10% lighter after three misses in a row.
             </ThemedText>
           )}
 
@@ -186,13 +178,9 @@ export default function PlanEditorScreen() {
                   key={exercise.key}
                   exercise={exercise}
                   onChange={(updated) =>
-                    updateDay(day.weekday, (list) =>
-                      list.map((e) => (e.key === updated.key ? updated : e))
-                    )
+                    updateDay(day.weekday, (list) => list.map((e) => (e.key === updated.key ? updated : e)))
                   }
-                  onRemove={() =>
-                    updateDay(day.weekday, (list) => list.filter((e) => e.key !== exercise.key))
-                  }
+                  onRemove={() => updateDay(day.weekday, (list) => list.filter((e) => e.key !== exercise.key))}
                 />
               ))}
               <Button

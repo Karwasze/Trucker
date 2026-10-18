@@ -13,12 +13,7 @@ export type Reading = { start: number; end: number; value: number };
  * rate measured in the preceding bucket. A distance reading spanning
  * several buckets is spread over them evenly.
  */
-export function bucketSamples(
-  start: number,
-  end: number,
-  distances: Reading[],
-  heartRates: Reading[]
-): CardioSample[] {
+export function bucketSamples(start: number, end: number, distances: Reading[], heartRates: Reading[]): CardioSample[] {
   const bucketMs = BUCKET_SECONDS * 1000;
   const count = Math.max(1, Math.ceil((end - start) / bucketMs));
   const covered = new Array<number>(count).fill(0);

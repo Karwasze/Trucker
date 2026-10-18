@@ -13,9 +13,7 @@ import { useTheme } from '@/hooks/use-theme';
  * 1RM, or one activity's cardio workouts.
  */
 export type Series =
-  | { kind: 'bodyweight' }
-  | { kind: 'exercise'; name: string }
-  | { kind: 'cardio'; activity: CardioActivity };
+  { kind: 'bodyweight' } | { kind: 'exercise'; name: string } | { kind: 'cardio'; activity: CardioActivity };
 
 const CARDIO_NAMES: Record<CardioActivity, string> = {
   running: 'Running',

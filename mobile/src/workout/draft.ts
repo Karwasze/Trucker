@@ -47,17 +47,11 @@ export function describeSets(sets: Set[]) {
   return sets.map((s) => `${s.reps}@${s.weight}`).join(', ');
 }
 
-export function draftExercise(
-  name: string,
-  sets: Set[],
-  target?: string,
-  reason?: string
-): DraftExercise {
+export function draftExercise(name: string, sets: Set[], target?: string, reason?: string): DraftExercise {
   return { key: newKey(), name, target, reason, sets: toDraftSets(sets) };
 }
 
-export const planFingerprint = (exercises: ExerciseTarget[]) =>
-  JSON.stringify(exercises.map((e) => [e.name, e.sets]));
+export const planFingerprint = (exercises: ExerciseTarget[]) => JSON.stringify(exercises.map((e) => [e.name, e.sets]));
 
 export function draftFromPlan(date: string, planId: number | null, exercises: ExerciseTarget[]): Draft {
   return {
@@ -95,8 +89,7 @@ export function toWorkout(draft: Draft): NewWorkout {
   };
 }
 
-export const completedSetCount = (draft: Draft) =>
-  toWorkout(draft).exercises.reduce((n, e) => n + e.sets.length, 0);
+export const completedSetCount = (draft: Draft) => toWorkout(draft).exercises.reduce((n, e) => n + e.sets.length, 0);
 
 /**
  * The in-progress workout, persisted so it survives the app being closed.

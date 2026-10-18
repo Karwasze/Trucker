@@ -64,8 +64,7 @@ export function createApi(baseUrl: string) {
     /** Replaces a workout's date and exercises; its plan and progression are untouched. */
     updateWorkout: ({ plan_id: _planId, ...workout }: Workout) =>
       request<Workout>('/api/workouts', { method: 'PUT', body: JSON.stringify(workout) }),
-    deleteWorkout: (id: number) =>
-      request<{ success: boolean }>(`/api/workouts?id=${id}`, { method: 'DELETE' }),
+    deleteWorkout: (id: number) => request<{ success: boolean }>(`/api/workouts?id=${id}`, { method: 'DELETE' }),
 
     listExercises: async () =>
       ((await request<ExerciseDB[] | null>('/api/exercises')) ?? []).map((e) => ({
@@ -74,11 +73,9 @@ export function createApi(baseUrl: string) {
       })),
     createExercise: (name: string) =>
       request<ExerciseDB>('/api/exercises', { method: 'POST', body: JSON.stringify({ name }) }),
-    deleteExercise: (id: number) =>
-      request<{ success: boolean }>(`/api/exercises?id=${id}`, { method: 'DELETE' }),
+    deleteExercise: (id: number) => request<{ success: boolean }>(`/api/exercises?id=${id}`, { method: 'DELETE' }),
     /** Muscle tags of every tagged exercise, keyed by name. */
-    exerciseMuscles: async () =>
-      (await request<Record<string, MuscleTarget[]> | null>('/api/exercise-muscles')) ?? {},
+    exerciseMuscles: async () => (await request<Record<string, MuscleTarget[]> | null>('/api/exercise-muscles')) ?? {},
     /** Replaces an exercise's muscle tags; works for built-in exercises too. */
     setExerciseMuscles: (name: string, muscles: MuscleTarget[]) =>
       request<{ name: string; muscles: MuscleTarget[] }>('/api/exercise-muscles', {
@@ -95,9 +92,7 @@ export function createApi(baseUrl: string) {
 
     /** Cardio workouts, newest first, without their samples. */
     listCardio: async (activity?: CardioActivity) =>
-      (await request<CardioWorkout[] | null>(
-        activity ? `/api/cardio?activity=${q(activity)}` : '/api/cardio'
-      )) ?? [],
+      (await request<CardioWorkout[] | null>(activity ? `/api/cardio?activity=${q(activity)}` : '/api/cardio')) ?? [],
     /** A cardio workout with its samples and laps. */
     getCardio: (id: number) => request<CardioWorkout>(`/api/cardio?id=${id}`),
     /**
@@ -118,8 +113,7 @@ export function createApi(baseUrl: string) {
         method: 'PATCH',
         body: JSON.stringify({ distance_m: metres }),
       }),
-    deleteCardio: (id: number) =>
-      request<{ success: boolean }>(`/api/cardio?id=${id}`, { method: 'DELETE' }),
+    deleteCardio: (id: number) => request<{ success: boolean }>(`/api/cardio?id=${id}`, { method: 'DELETE' }),
 
     listGoals: async () => (await request<Goal[] | null>('/api/goals')) ?? [],
     /** Creates the active goal and its plan from `date`. */
@@ -183,8 +177,7 @@ export function createApi(baseUrl: string) {
     /** Replaces the plan; the server resets every exercise's miss counter. */
     updatePlan: (plan: TrainingPlan) =>
       request<TrainingPlan>('/api/plans', { method: 'PUT', body: JSON.stringify(plan) }),
-    deletePlan: (id: number) =>
-      request<{ success: boolean }>(`/api/plans?id=${id}`, { method: 'DELETE' }),
+    deletePlan: (id: number) => request<{ success: boolean }>(`/api/plans?id=${id}`, { method: 'DELETE' }),
     planToday: async (planId: number, date: string) => {
       const day = await request<PlanToday>(`/api/plans/today?id=${planId}&date=${q(date)}`);
       return { ...day, exercises: day.exercises ?? [] };

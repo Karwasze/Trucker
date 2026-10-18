@@ -98,9 +98,7 @@ function WeighIn({ latest, onSaved }: { latest: BodyweightEntry | undefined; onS
           value={input}
           onChangeText={setInput}
           onSubmitEditing={save}
-          placeholder={
-            latest?.date === today ? `Today: ${formatNumber(latest.weight)} kg` : "Today's weight (kg)"
-          }
+          placeholder={latest?.date === today ? `Today: ${formatNumber(latest.weight)} kg` : "Today's weight (kg)"}
           placeholderTextColor={theme.textSecondary}
           keyboardType="decimal-pad"
           returnKeyType="done"

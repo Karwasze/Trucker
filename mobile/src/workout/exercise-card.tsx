@@ -60,19 +60,14 @@ export function ExerciseCard({ exercise, onChange, onRemove, trackDone = true, o
     });
   };
 
-  const removeSet = (index: number) =>
-    onChange({ ...exercise, sets: exercise.sets.filter((_, i) => i !== index) });
+  const removeSet = (index: number) => onChange({ ...exercise, sets: exercise.sets.filter((_, i) => i !== index) });
 
   const doneCount = exercise.sets.filter((s) => s.done).length;
 
   // The card needs a longer drag than its set rows, so a swipe on a set row
   // removes the set and a swipe anywhere else removes the exercise.
   return (
-    <SwipeToDelete
-      onDelete={onRemove}
-      label="Remove"
-      accessibilityLabel={`Remove ${exercise.name}`}
-      dragOffset={30}>
+    <SwipeToDelete onDelete={onRemove} label="Remove" accessibilityLabel={`Remove ${exercise.name}`} dragOffset={30}>
       <Card>
         <View style={styles.titleRow}>
           <View style={{ flex: 1 }}>
@@ -114,7 +109,11 @@ export function ExerciseCard({ exercise, onChange, onRemove, trackDone = true, o
               selectTextOnFocus
               autoFocus
               accessibilityLabel="Sets"
-              style={[styles.input, styles.schemeInput, { color: theme.text, backgroundColor: theme.backgroundSelected }]}
+              style={[
+                styles.input,
+                styles.schemeInput,
+                { color: theme.text, backgroundColor: theme.backgroundSelected },
+              ]}
             />
             <ThemedText themeColor="textSecondary">×</ThemedText>
             <TextInput
@@ -123,7 +122,11 @@ export function ExerciseCard({ exercise, onChange, onRemove, trackDone = true, o
               keyboardType="number-pad"
               selectTextOnFocus
               accessibilityLabel="Reps"
-              style={[styles.input, styles.schemeInput, { color: theme.text, backgroundColor: theme.backgroundSelected }]}
+              style={[
+                styles.input,
+                styles.schemeInput,
+                { color: theme.text, backgroundColor: theme.backgroundSelected },
+              ]}
             />
             <Pressable onPress={applyScheme} accessibilityRole="button" style={styles.schemeAction}>
               <ThemedText type="smallBold" style={{ color: theme.accent }}>
@@ -206,9 +209,7 @@ export function ExerciseCard({ exercise, onChange, onRemove, trackDone = true, o
                     styles.doneCol,
                     { backgroundColor: set.done ? theme.success : theme.backgroundSelected },
                   ]}>
-                  <ThemedText style={{ color: set.done ? '#fff' : theme.textSecondary, fontWeight: 700 }}>
-                    ✓
-                  </ThemedText>
+                  <ThemedText style={{ color: set.done ? '#fff' : theme.textSecondary, fontWeight: 700 }}>✓</ThemedText>
                 </Pressable>
               )}
             </View>

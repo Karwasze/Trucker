@@ -87,9 +87,7 @@ export function LineChart({
   return (
     <View>
       <View style={styles.readout}>
-        <ThemedText style={styles.value}>
-          {formatValue(shown.value)}
-        </ThemedText>
+        <ThemedText style={styles.value}>{formatValue(shown.value)}</ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
           {active === null ? 'Latest · ' : ''}
           {formatDate(shown.date)}

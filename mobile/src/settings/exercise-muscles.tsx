@@ -25,11 +25,7 @@ const NEXT_ROLE = {
 export function ExerciseMuscles() {
   const { api, serverUrl } = useSettings();
   const data = useQuery(`exercise-muscles:${serverUrl}`, async () => {
-    const [library, stats, tags] = await Promise.all([
-      api.listExercises(),
-      api.statistics(),
-      api.exerciseMuscles(),
-    ]);
+    const [library, stats, tags] = await Promise.all([api.listExercises(), api.statistics(), api.exerciseMuscles()]);
     const names = [...new Set([...library.map((e) => e.name), ...stats.exercises])];
     return { names: names.sort((a, b) => a.localeCompare(b)), tags };
   });
@@ -71,8 +67,8 @@ export function ExerciseMuscles() {
   return (
     <>
       <ThemedText type="small" themeColor="textSecondary">
-        Tap an exercise, then tap a muscle once for primary and again for secondary, and Save.
-        Secondary muscles count half a set in Insights.
+        Tap an exercise, then tap a muscle once for primary and again for secondary, and Save. Secondary muscles count
+        half a set in Insights.
       </ThemedText>
       <Card style={{ gap: 0, paddingVertical: Spacing.one }}>
         {data.data.names.map((name) => (
@@ -139,9 +135,7 @@ function ExerciseRow({
           {(changed ? 'Unsaved: ' : '') +
             (tags.length === 0
               ? 'Untagged'
-              : [primary.map(capitalize).join(', '), secondary.join(', ')]
-                  .filter(Boolean)
-                  .join(' · '))}
+              : [primary.map(capitalize).join(', '), secondary.join(', ')].filter(Boolean).join(' · '))}
         </ThemedText>
       </Pressable>
       {expanded && (

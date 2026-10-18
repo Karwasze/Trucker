@@ -23,29 +23,19 @@ const RestActivity = (props: RestActivityProps, environment: LiveActivityEnviron
   const target = `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 
   const icon = (size: number) => (
-    <Image
-      systemName={environment.isStale ? 'checkmark.circle.fill' : 'timer'}
-      size={size}
-      color={color}
-    />
+    <Image systemName={environment.isStale ? 'checkmark.circle.fill' : 'timer'} size={size} color={color} />
   );
   const clock = (size: number) => (
     <Text
       timerInterval={interval}
       countsDown={false}
-      modifiers={[
-        font({ size, weight: 'semibold', design: 'rounded' }),
-        monospacedDigit(),
-        foregroundStyle(color),
-      ]}
+      modifiers={[font({ size, weight: 'semibold', design: 'rounded' }), monospacedDigit(), foregroundStyle(color)]}
     />
   );
   const bar = <ProgressView timerInterval={interval} countsDown={false} modifiers={[tint(color)]} />;
   const label = (
     <VStack alignment="leading" spacing={0}>
-      <Text modifiers={[font({ size: 15, weight: 'semibold' })]}>
-        {environment.isStale ? 'Rest over' : 'Rest'}
-      </Text>
+      <Text modifiers={[font({ size: 15, weight: 'semibold' })]}>{environment.isStale ? 'Rest over' : 'Rest'}</Text>
       <Text modifiers={[font({ size: 13 }), foregroundStyle({ type: 'hierarchical', style: 'secondary' })]}>
         {`of ${target}`}
       </Text>

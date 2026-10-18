@@ -15,7 +15,9 @@ import (
 // CardioAPI lists cardio workouts (GET, optionally ?activity=), returns one
 // with its samples (GET ?id=), imports a batch of them (POST, skipping ones
 // already imported, adapting the active goal as of ?date= when they fill
-// planned sessions) and deletes one (DELETE ?id=).
+// planned sessions), sets the distance of one Health had none for (PATCH
+// ?id= with {"distance_m": metres}, adapting the active goal as of ?date=)
+// and deletes one (DELETE ?id=).
 func (h *Handlers) CardioAPI(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -91,6 +93,44 @@ func (h *Handlers) CardioAPI(w http.ResponseWriter, r *http.Request) {
 		}
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(saved)
+
+	case "PATCH":
+		id, err := strconv.Atoi(r.URL.Query().Get("id"))
+		if err != nil {
+			http.Error(w, "Invalid ID", http.StatusBadRequest)
+			return
+		}
+		var body struct {
+			DistanceM *float64 `json:"distance_m"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.DistanceM == nil || *body.DistanceM <= 0 {
+			http.Error(w, "Expected a positive distance_m", http.StatusBadRequest)
+			return
+		}
+		today, ok := requestDate(w, r)
+		if !ok {
+			return
+		}
+		workout, err := h.store.SetCardioDistance(id, *body.DistanceM)
+		if errors.Is(err, store.ErrCardioWorkoutNotFound) {
+			http.Error(w, "Cardio workout not found", http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, store.ErrDistanceMeasured) {
+			http.Error(w, "Apple Health measured this workout's distance", http.StatusConflict)
+			return
+		}
+		if err != nil {
+			http.Error(w, "Database error", http.StatusInternalServerError)
+			log.Printf("Error setting cardio distance: %v", err)
+			return
+		}
+		// The distance changes how the session it fills went and the fitness
+		// the plan is built from.
+		if err := h.store.AdaptActiveGoal(today); err != nil {
+			log.Printf("Error adapting goal: %v", err)
+		}
+		json.NewEncoder(w).Encode(workout)
 
 	case "DELETE":
 		id, err := strconv.Atoi(r.URL.Query().Get("id"))

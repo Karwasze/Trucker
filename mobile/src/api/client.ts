@@ -109,6 +109,15 @@ export function createApi(baseUrl: string) {
         method: 'POST',
         body: JSON.stringify(workouts),
       })) ?? [],
+    /**
+     * Sets the distance of a workout Apple Health had none for (or that was
+     * entered by hand), adapting the goal's plan as of `date`.
+     */
+    setCardioDistance: (id: number, metres: number, date = localDate()) =>
+      request<CardioWorkout>(`/api/cardio?id=${id}&date=${q(date)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ distance_m: metres }),
+      }),
     deleteCardio: (id: number) =>
       request<{ success: boolean }>(`/api/cardio?id=${id}`, { method: 'DELETE' }),
 

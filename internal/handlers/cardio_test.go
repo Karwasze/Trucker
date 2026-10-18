@@ -126,3 +126,37 @@ func TestCardioAPI_RejectsInvalidWorkouts(t *testing.T) {
 		t.Errorf("expected 400 for an invalid ID, got %d", w.Code)
 	}
 }
+
+func TestCardioAPI_PATCHSetsMissingDistance(t *testing.T) {
+	h, _ := newTestHandlers(t)
+
+	ride := `{"date":"2026-10-10","started_at":"2026-10-10T07:00:00+02:00","activity":"cycling",
+		"duration_seconds":3600,"source":"Apple Watch","source_uuid":"ride-1"}`
+	w := cardioRequest(t, h, "POST", "/api/cardio", "["+ride+","+cardioRunJSON+"]")
+	var saved []store.CardioWorkout
+	json.NewDecoder(w.Body).Decode(&saved)
+	if len(saved) != 2 {
+		t.Fatalf("expected two saved workouts, got %d %s", w.Code, w.Body.String())
+	}
+	rideURL := fmt.Sprintf("/api/cardio?id=%d&date=2026-10-10", saved[0].ID)
+
+	w = cardioRequest(t, h, "PATCH", rideURL, `{"distance_m":30000}`)
+	var got store.CardioWorkout
+	json.NewDecoder(w.Body).Decode(&got)
+	if w.Code != http.StatusOK || got.DistanceM == nil || *got.DistanceM != 30000 || !got.ManualDistance {
+		t.Errorf("expected 200 with a manual 30 km, got %d %+v", w.Code, got)
+	}
+
+	runURL := fmt.Sprintf("/api/cardio?id=%d&date=2026-10-10", saved[1].ID)
+	if w := cardioRequest(t, h, "PATCH", runURL, `{"distance_m":6000}`); w.Code != http.StatusConflict {
+		t.Errorf("expected 409 changing a measured distance, got %d", w.Code)
+	}
+	for _, body := range []string{"not json", `{}`, `{"distance_m":0}`, `{"distance_m":-5}`} {
+		if w := cardioRequest(t, h, "PATCH", rideURL, body); w.Code != http.StatusBadRequest {
+			t.Errorf("%s: expected 400, got %d", body, w.Code)
+		}
+	}
+	if w := cardioRequest(t, h, "PATCH", "/api/cardio?id=9999&date=2026-10-10", `{"distance_m":1000}`); w.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for a missing workout, got %d", w.Code)
+	}
+}

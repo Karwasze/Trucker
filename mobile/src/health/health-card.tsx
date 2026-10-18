@@ -4,7 +4,7 @@ import { Alert } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card } from '@/components/ui';
-import { useHealthState } from '@/health/health-state';
+import { IMPORT_LOOKBACK_DAYS, useHealthState } from '@/health/health-state';
 import { connectHealth, isHealthAvailable } from '@/health/healthkit';
 
 /** Settings for importing workouts from Apple Health. */
@@ -37,7 +37,7 @@ export function HealthCard() {
   const confirmDisconnect = () =>
     Alert.alert(
       'Disconnect Apple Health?',
-      'Imported workouts are kept. Reconnecting only offers workouts from then on.',
+      `Imported workouts are kept. Reconnecting offers workouts from ${IMPORT_LOOKBACK_DAYS} days before then on.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Disconnect', style: 'destructive', onPress: disconnect },
@@ -49,8 +49,8 @@ export function HealthCard() {
     return (
       <Card>
         <ThemedText type="small" themeColor="textSecondary">
-          Import runs, rides and swims recorded on your Apple Watch. Only workouts from now on are offered,
-          and you choose which ones to import.
+          Import runs, rides and swims recorded on your Apple Watch. Workouts from the last{' '}
+          {IMPORT_LOOKBACK_DAYS} days on are offered, and you choose which ones to import.
         </ThemedText>
         <Button title="Connect Apple Health" loading={connecting} onPress={onConnect} />
       </Card>

@@ -93,6 +93,86 @@ export async function healthWorkoutsSince(since: Date, skip: ReadonlySet<string>
   return imported;
 }
 
+/** Why a Health workout is or isn't offered for import. */
+export type HealthWorkoutStatus = 'offered' | 'too-old' | 'unsupported' | 'imported' | 'dismissed';
+
+export type HealthWorkoutReport = {
+  uuid: string;
+  start: Date;
+  activityType: number;
+  activity?: CardioActivity;
+  /** The name Apple Health shows, e.g. "Outdoor Run" or "Pool Swim". */
+  name: string;
+  source?: string;
+  status: HealthWorkoutStatus;
+};
+
+// HKWorkoutSwimmingLocationType raw values.
+const SWIM_POOL = 1;
+const SWIM_OPEN_WATER = 2;
+
+/** The workout's name as Apple Health shows it, from its activity and metadata. */
+export function appleWorkoutName(activity: CardioActivity | undefined, metadata?: Record<string, unknown>): string {
+  const indoor = metadata?.HKIndoorWorkout;
+  const place = indoor === true ? 'Indoor' : indoor === false ? 'Outdoor' : undefined;
+  switch (activity) {
+    case 'running':
+      return place ? `${place} Run` : 'Run';
+    case 'cycling':
+      return place ? `${place} Cycle` : 'Cycle';
+    case 'walking':
+      return place ? `${place} Walk` : 'Walk';
+    case 'hiking':
+      return 'Hiking';
+    case 'swimming': {
+      const location = metadata?.HKSwimmingLocationType;
+      return location === SWIM_POOL ? 'Pool Swim' : location === SWIM_OPEN_WATER ? 'Open Water Swim' : 'Swim';
+    }
+    default:
+      return 'Unsupported workout';
+  }
+}
+
+/**
+ * Every Health workout from `lookbackDays` before `since` on, with why each
+ * is or isn't offered, for diagnosing workouts that don't show up.
+ */
+export async function healthWorkoutReport(
+  since: Date,
+  imported: ReadonlySet<string>,
+  dismissed: ReadonlySet<string>,
+  lookbackDays = 7
+): Promise<HealthWorkoutReport[]> {
+  if (!healthkit) return [];
+  const from = new Date(since.getTime() - lookbackDays * 24 * 60 * 60 * 1000);
+  const workouts = await healthkit.queryWorkoutSamples({
+    limit: 0,
+    ascending: false,
+    filter: { date: { startDate: from } },
+  });
+  return workouts.map((w) => {
+    const activity = ACTIVITIES[w.workoutActivityType];
+    const status: HealthWorkoutStatus = !activity
+      ? 'unsupported'
+      : w.startDate.getTime() < since.getTime()
+        ? 'too-old'
+        : imported.has(w.uuid)
+          ? 'imported'
+          : dismissed.has(w.uuid)
+            ? 'dismissed'
+            : 'offered';
+    return {
+      uuid: w.uuid,
+      start: w.startDate,
+      activityType: w.workoutActivityType,
+      activity,
+      name: appleWorkoutName(activity, w.metadata as Record<string, unknown> | undefined),
+      source: w.sourceRevision?.source?.name,
+      status,
+    };
+  });
+}
+
 async function toCardioWorkout(
   hk: HealthKitModule,
   workout: Workout,
@@ -137,7 +217,8 @@ async function toCardioWorkout(
     started_at: isoWithOffset(workout.startDate),
     activity,
     duration_seconds: seconds(workout.duration) ?? (end - start) / 1000,
-    distance_m: metres(workout.totalDistance),
+    // Falls back to the distance samples, so an unknown unit can't drop it.
+    distance_m: metres(workout.totalDistance) ?? sampledDistance(samples),
     energy_kcal: kilocalories(workout.totalEnergyBurned),
     avg_heart_rate: round(heartRate?.averageQuantity?.quantity),
     max_heart_rate: round(heartRate?.maximumQuantity?.quantity),
@@ -150,11 +231,27 @@ async function toCardioWorkout(
   };
 }
 
+/** The distance the samples covered, or undefined when they have none. */
+function sampledDistance(samples: { d: number }[]): number | undefined {
+  const total = samples.at(-1)?.d ?? 0;
+  return total > 0 ? total : undefined;
+}
+
 const round = (n?: number) => (n === undefined ? undefined : Math.round(n));
 
 function metres(q?: Quantity): number | undefined {
   if (!q) return undefined;
-  const factor: Record<string, number> = { m: 1, km: 1000, cm: 0.01, mi: 1609.344, yd: 0.9144, ft: 0.3048 };
+  // The workout's total distance comes as "meters", samples and metadata as "m".
+  const factor: Record<string, number> = {
+    m: 1,
+    meter: 1,
+    meters: 1,
+    km: 1000,
+    cm: 0.01,
+    mi: 1609.344,
+    yd: 0.9144,
+    ft: 0.3048,
+  };
   const f = factor[q.unit];
   return f === undefined ? undefined : Math.round(q.quantity * f * 10) / 10;
 }

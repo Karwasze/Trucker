@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Alert, StyleSheet, View } from 'react-native';
+import { Alert, StyleSheet, TextInput, View } from 'react-native';
 
 import { localDate } from '@/api/client';
 import type { CardioWorkout, PlannedSession } from '@/api/types';
@@ -10,6 +10,7 @@ import { Spacing } from '@/constants/theme';
 import { SessionDetails } from '@/goals/session-card';
 import { useHealthState } from '@/health/health-state';
 import { useQuery } from '@/hooks/use-query';
+import { useTheme } from '@/hooks/use-theme';
 import { useSettings } from '@/settings/settings-context';
 import { confirmDeleteCardio } from '@/workout/confirm-delete';
 import {
@@ -86,6 +87,15 @@ export default function CardioDetailScreen() {
               </View>
             ))}
           </Card>
+          {(!w.distance_m || w.manual_distance) && (
+            <DistanceEntry
+              workout={w}
+              onSaved={() => {
+                workout.refresh();
+                sessions.refresh();
+              }}
+            />
+          )}
           {w.laps && w.laps.length > 0 && (
             <Card>
               <ThemedText type="smallBold">
@@ -119,6 +129,68 @@ export default function CardioDetailScreen() {
         </>
       )}
     </Screen>
+  );
+}
+
+/**
+ * Enters the distance of a workout Apple Health has none for, such as an
+ * indoor ride without a speed sensor, or corrects one entered before. Swims
+ * are in metres, the rest in km.
+ */
+function DistanceEntry({ workout: w, onSaved }: { workout: CardioWorkout; onSaved: () => void }) {
+  const theme = useTheme();
+  const { api } = useSettings();
+  const metres = w.activity === 'swimming';
+  const shown = (m?: number) => (m ? String(metres ? Math.round(m) : Math.round(m) / 1000) : '');
+  const [input, setInput] = useState(shown(w.distance_m));
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    const value = parseFloat(input.replace(',', '.'));
+    if (!(value > 0)) {
+      Alert.alert("Can't save distance", 'Enter a distance above 0.');
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.setCardioDistance(w.id, metres ? value : value * 1000, localDate());
+      onSaved();
+    } catch (e) {
+      Alert.alert("Couldn't save distance", (e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card>
+      <ThemedText type="smallBold">{w.manual_distance ? 'Distance entered by hand' : 'No distance recorded'}</ThemedText>
+      {!w.manual_distance && (
+        <ThemedText type="small" themeColor="textSecondary">
+          Apple Health has no distance for this workout. Enter it, e.g. from your bike computer or the machine, so
+          it counts toward your plan.
+        </ThemedText>
+      )}
+      <View style={styles.row}>
+        <TextInput
+          value={input}
+          onChangeText={setInput}
+          keyboardType="decimal-pad"
+          placeholder={metres ? 'Metres' : 'Kilometres'}
+          placeholderTextColor={theme.textSecondary}
+          accessibilityLabel={metres ? 'Distance in metres' : 'Distance in kilometres'}
+          style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundSelected }]}
+        />
+        <ThemedText themeColor="textSecondary">{metres ? 'm' : 'km'}</ThemedText>
+        <Button
+          title={w.manual_distance ? 'Update' : 'Save'}
+          compact
+          loading={saving}
+          disabled={input === shown(w.distance_m)}
+          onPress={save}
+        />
+      </View>
+    </Card>
   );
 }
 
@@ -179,6 +251,13 @@ function stats(w: CardioWorkout): [string, string][] {
 }
 
 const styles = StyleSheet.create({
+  input: {
+    flex: 1,
+    height: 40,
+    borderRadius: 10,
+    paddingHorizontal: Spacing.three,
+    fontSize: 16,
+  },
   chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',

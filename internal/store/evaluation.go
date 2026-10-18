@@ -138,7 +138,9 @@ func tempoCheck(s PlannedSession, w *CardioWorkout) (check Check, slow, ok bool)
 	}
 	speed := averageSpeed(w)
 	name := speedName(s.Activity)
-	if len(w.Samples) > 1 && w.DurationSeconds > 3*tempoWarmUpS {
+	// Samples without distance (an indoor ride with its distance entered by
+	// hand) leave only the average speed.
+	if len(w.Samples) > 1 && w.Samples[len(w.Samples)-1].D > 0 && w.DurationSeconds > 3*tempoWarmUpS {
 		from, to := float64(tempoWarmUpS), w.Samples[len(w.Samples)-1].T-tempoWarmUpS
 		speed = (sampleDistanceAt(w.Samples, to) - sampleDistanceAt(w.Samples, from)) / (to - from)
 		name = "Tempo " + lowerFirst(name)
@@ -274,12 +276,12 @@ func lapReps(s PlannedSession, w *CardioWorkout) []rep {
 
 // sampleReps finds reps as stretches where the speed, smoothed over
 // repSmoothingS, stays above the fast threshold for at least repMinShare of
-// a rep. It returns nil when the workout has no samples or the session no
-// speed range.
+// a rep. It returns nil when the workout has no samples, samples without
+// distance or the session no speed range.
 func sampleReps(s PlannedSession, w *CardioWorkout) []rep {
 	threshold := fastThreshold(s, w)
 	expected := repDuration(s)
-	if len(w.Samples) < 3 || threshold == 0 || expected == 0 {
+	if len(w.Samples) < 3 || w.Samples[len(w.Samples)-1].D <= 0 || threshold == 0 || expected == 0 {
 		return nil
 	}
 

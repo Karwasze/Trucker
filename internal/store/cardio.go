@@ -7,7 +7,12 @@ import (
 	"slices"
 )
 
-var ErrCardioWorkoutNotFound = errors.New("cardio workout not found")
+var (
+	ErrCardioWorkoutNotFound = errors.New("cardio workout not found")
+	// ErrDistanceMeasured is returned for setting the distance of a workout
+	// whose distance Health measured.
+	ErrDistanceMeasured = errors.New("distance was measured")
+)
 
 // ValidCardioActivity reports whether activity is one of CardioActivities.
 func ValidCardioActivity(activity string) bool {
@@ -75,7 +80,7 @@ func (s *Store) SaveCardioWorkouts(workouts []CardioWorkout) ([]CardioWorkout, e
 
 const cardioColumns = `id, date, started_at, activity, duration_seconds, distance_m,
 	energy_kcal, avg_heart_rate, max_heart_rate, swim_strokes, lap_length_m,
-	COALESCE(source, ''), source_uuid`
+	COALESCE(source, ''), source_uuid, manual_distance`
 
 // ListCardioWorkouts returns the cardio workouts of an activity, or of every
 // activity for "", newest first, without their samples and laps.
@@ -126,6 +131,30 @@ func getCardioWorkout(q querier, id int) (CardioWorkout, error) {
 		}
 	}
 	return w, nil
+}
+
+// SetCardioDistance sets the distance (metres) of a cardio workout Health
+// had none for, or whose distance was entered by hand before, returning the
+// updated workout. It returns ErrDistanceMeasured for a distance Health
+// measured and ErrCardioWorkoutNotFound for an unknown id.
+func (s *Store) SetCardioDistance(id int, metres float64) (CardioWorkout, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return CardioWorkout{}, err
+	}
+	defer tx.Rollback()
+	w, err := getCardioWorkout(tx, id)
+	if err != nil {
+		return CardioWorkout{}, err
+	}
+	if w.DistanceM != nil && !w.ManualDistance {
+		return CardioWorkout{}, ErrDistanceMeasured
+	}
+	if _, err := tx.Exec("UPDATE cardio_workouts SET distance_m = ?, manual_distance = 1 WHERE id = ?", metres, id); err != nil {
+		return CardioWorkout{}, err
+	}
+	w.DistanceM, w.ManualDistance = &metres, true
+	return w, tx.Commit()
 }
 
 // DeleteCardioWorkout deletes a cardio workout, reporting whether it
@@ -180,7 +209,7 @@ func scanCardioWorkout(row interface{ Scan(...any) error }, extra ...any) (Cardi
 	var w CardioWorkout
 	dest := append([]any{&w.ID, &w.Date, &w.StartedAt, &w.Activity, &w.DurationSeconds,
 		&w.DistanceM, &w.EnergyKcal, &w.AvgHeartRate, &w.MaxHeartRate, &w.SwimStrokes,
-		&w.LapLengthM, &w.Source, &w.SourceUUID}, extra...)
+		&w.LapLengthM, &w.Source, &w.SourceUUID, &w.ManualDistance}, extra...)
 	err := row.Scan(dest...)
 	return w, err
 }

@@ -239,7 +239,7 @@ export default function TodayScreen() {
   if (draft?.logged) {
     return (
       <Screen title="Today" subtitle={subtitle} action={<SettingsButton />}>
-        <HealthImportBanner count={imports.candidates.length} />
+        <HealthImportBanner count={imports.candidates.length} error={imports.error} />
         <LoggedSummary
           progression={draft.logged.progression ?? []}
           exercises={draft.logged.exercises}
@@ -274,7 +274,7 @@ export default function TodayScreen() {
       refreshing={planDay.refreshing}
       onRefresh={refresh}
     >
-      <HealthImportBanner count={imports.candidates.length} />
+      <HealthImportBanner count={imports.candidates.length} error={imports.error} />
       {draft && draft.date !== today && (
         <Card>
           <ThemedText type="smallBold">

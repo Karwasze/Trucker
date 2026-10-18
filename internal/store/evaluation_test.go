@@ -201,3 +201,46 @@ func TestEvaluateSession_RaceOnlyChecksDistance(t *testing.T) {
 		t.Errorf("expected met on distance alone, got %+v", v)
 	}
 }
+
+func TestEvaluateSession_TempoWithManualDistance(t *testing.T) {
+	// 40 km at 30–33 km/h.
+	s := PlannedSession{
+		Activity: ActivityCycling, Kind: KindTempo, TargetDistanceM: fp(40000),
+		SpeedMin: fp(30 / 3.6), SpeedMax: fp(33 / 3.6),
+	}
+	// An indoor ride's samples carry heart rate but no distance, so the
+	// distance entered by hand gives the speed: 40 km in 75 minutes is 32 km/h.
+	samples := []CardioSample{{T: 0, D: 0}}
+	for t := 10.0; t <= 4500; t += 10 {
+		samples = append(samples, CardioSample{T: t, D: 0, HR: fp(150)})
+	}
+	w := &CardioWorkout{
+		Activity: ActivityCycling, DurationSeconds: 4500, DistanceM: fp(40000), ManualDistance: true, Samples: samples,
+	}
+	v := evaluateSession(s, w, "2026-10-14")
+	if c := check(t, v, "Speed"); !c.OK || c.Actual != "32.0 km/h" {
+		t.Errorf("expected the average speed of 32 km/h, got %+v", c)
+	}
+	if v.Status != VerdictMet {
+		t.Errorf("expected met, got %+v", v)
+	}
+}
+
+func TestEvaluateSession_IntervalsWithoutSampleDistance(t *testing.T) {
+	// A treadmill session with its distance entered by hand: the samples have
+	// no distance to find reps in, so reps aren't checked rather than missed.
+	w := intervalRun(6, 275)
+	for i := range w.Samples {
+		w.Samples[i].D = 0
+	}
+	w.ManualDistance = true
+	v := evaluateSession(intervals(), w, "2026-10-14")
+	for _, c := range v.Checks {
+		if c.Name == "Reps" {
+			t.Fatalf("expected no reps check, got %+v", c)
+		}
+	}
+	if c := check(t, v, "Distance"); !c.OK {
+		t.Errorf("expected the distance met, got %+v", c)
+	}
+}

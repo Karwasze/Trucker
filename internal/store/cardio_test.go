@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 )
@@ -137,5 +138,48 @@ func TestDeleteCardioWorkout(t *testing.T) {
 	found, err = s.DeleteCardioWorkout(saved[0].ID)
 	if err != nil || found {
 		t.Errorf("expected nothing left to delete, got %v, %v", found, err)
+	}
+}
+
+func TestSetCardioDistance(t *testing.T) {
+	s := newTestStore(t)
+
+	// An indoor ride without a speed sensor comes from Health without a distance.
+	ride := cardioRun("ride", "2026-10-10", 0)
+	ride.Activity = ActivityCycling
+	ride.DurationSeconds = 3600
+	ride.DistanceM = nil
+	saved, err := s.SaveCardioWorkouts([]CardioWorkout{ride, cardioRun("run", "2026-10-11", 5)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rideID, runID := saved[0].ID, saved[1].ID
+
+	got, err := s.SetCardioDistance(rideID, 30000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.DistanceM == nil || *got.DistanceM != 30000 || !got.ManualDistance {
+		t.Errorf("expected a manual 30 km, got %v manual=%v", got.DistanceM, got.ManualDistance)
+	}
+
+	// A distance entered by hand can be corrected.
+	if got, err = s.SetCardioDistance(rideID, 32000); err != nil || *got.DistanceM != 32000 {
+		t.Errorf("expected the distance corrected to 32 km, got %v %v", got.DistanceM, err)
+	}
+	if list, _ := s.ListCardioWorkouts(ActivityCycling); len(list) != 1 || !list[0].ManualDistance {
+		t.Errorf("expected the listed ride marked manual, got %+v", list)
+	}
+
+	// One Health measured is kept.
+	if _, err := s.SetCardioDistance(runID, 6000); !errors.Is(err, ErrDistanceMeasured) {
+		t.Errorf("expected ErrDistanceMeasured for a measured run, got %v", err)
+	}
+	if run, _ := s.GetCardioWorkout(runID); *run.DistanceM != 5000 || run.ManualDistance {
+		t.Errorf("expected the run's 5 km kept, got %v manual=%v", *run.DistanceM, run.ManualDistance)
+	}
+
+	if _, err := s.SetCardioDistance(9999, 1000); !errors.Is(err, ErrCardioWorkoutNotFound) {
+		t.Errorf("expected ErrCardioWorkoutNotFound, got %v", err)
 	}
 }

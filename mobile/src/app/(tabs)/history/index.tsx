@@ -87,7 +87,7 @@ export default function HistoryScreen() {
         plans.refresh();
         imports.refresh();
       }}>
-      <HealthImportBanner count={imports.candidates.length} />
+      <HealthImportBanner count={imports.candidates.length} error={imports.error} />
       {!loaded ? (
         <Message loading={!workouts.error && !cardio.error} error={workouts.error ?? cardio.error} />
       ) : entries.length === 0 ? (

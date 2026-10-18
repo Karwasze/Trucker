@@ -2,18 +2,30 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useState } from 'react';
 
 import { useQuery } from '@/hooks/use-query';
-import { healthWorkoutsSince, isHealthAvailable } from '@/health/healthkit';
+import { healthWorkoutReport, healthWorkoutsSince, isHealthAvailable } from '@/health/healthkit';
 import { useSettings } from '@/settings/settings-context';
 
 /**
  * Apple Health import state, per server since each has its own workouts:
- * when Health was connected (only workouts from then on are offered) and
- * the Health workouts the lifter chose not to import.
+ * when Health was connected (workouts from IMPORT_LOOKBACK_DAYS before then
+ * on are offered) and the Health workouts the lifter chose not to import.
  */
 export type HealthState = {
   connectedAt: string | null;
   dismissed: string[];
 };
+
+/**
+ * Days before connecting whose workouts are offered too, so connecting (or
+ * reconnecting) after a workout still offers it. UUIDs keep them from being
+ * imported twice.
+ */
+export const IMPORT_LOOKBACK_DAYS = 7;
+
+/** The earliest start of a workout offered for import. */
+export function importSince(connectedAt: string): Date {
+  return new Date(new Date(connectedAt).getTime() - IMPORT_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+}
 
 const EMPTY: HealthState = { connectedAt: null, dismissed: [] };
 const storageKey = (serverUrl: string) => `trucker.health:${serverUrl}`;
@@ -72,8 +84,8 @@ export function useHealthState() {
 }
 
 /**
- * Health workouts since Health was connected that aren't imported or
- * dismissed yet, oldest first. Refreshes when the screen gains focus.
+ * Health workouts since importSince that aren't imported or dismissed yet,
+ * oldest first. Refreshes when the screen gains focus.
  */
 export function useHealthImports() {
   const { api, serverUrl } = useSettings();
@@ -86,10 +98,29 @@ export function useHealthImports() {
       const known = new Set(imported.flatMap((w) => (w.source_uuid ? [w.source_uuid] : [])));
       // Dismissals read fresh, so a dismissal made since the last load counts.
       (await load(serverUrl)).dismissed.forEach((uuid) => known.add(uuid));
-      return healthWorkoutsSince(new Date(connectedAt!), known);
+      return healthWorkoutsSince(importSince(connectedAt!), known);
     }
   );
   const dismissed = new Set(state.dismissed);
   const candidates = (query.data ?? []).filter((w) => !w.source_uuid || !dismissed.has(w.source_uuid));
   return { ...query, candidates };
+}
+
+/**
+ * Every Health workout around and since the connection, with why each is or
+ * isn't offered. Only loads when `enabled`, as it's just for diagnosing.
+ */
+export function useHealthReport(enabled: boolean) {
+  const { api, serverUrl } = useSettings();
+  const { state } = useHealthState();
+  const connectedAt = state.connectedAt;
+  return useQuery(
+    enabled && connectedAt && isHealthAvailable() ? `health-report:${serverUrl}:${connectedAt}` : null,
+    async () => {
+      const imported = await api.listCardio();
+      const importedUuids = new Set(imported.flatMap((w) => (w.source_uuid ? [w.source_uuid] : [])));
+      const dismissed = new Set((await load(serverUrl)).dismissed);
+      return healthWorkoutReport(importSince(connectedAt!), importedUuids, dismissed);
+    }
+  );
 }

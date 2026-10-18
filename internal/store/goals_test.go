@@ -269,3 +269,35 @@ func TestValidateGoal(t *testing.T) {
 		}
 	}
 }
+
+func TestSetCardioDistance_JudgesSessionByIt(t *testing.T) {
+	s := newTestStore(t)
+	g := mustCreateGoal(t, s, newGoal(), "2026-10-19")
+	monday := sessionsOn(t, s, g.ID, "2026-10-19", "2026-10-19", "2026-10-19")[0]
+
+	// A treadmill run Health has no distance for, whose samples only carry
+	// heart rate.
+	run := cardioRun("a", "2026-10-19", deref(monday.TargetDistanceM)/1000)
+	run.DistanceM = nil
+	run.Samples = []CardioSample{{T: 0, D: 0}, {T: 10, D: 0, HR: float(120)}}
+	run.PlannedSessionID = &monday.ID
+	saved, err := s.SaveCardioWorkouts([]CardioWorkout{run})
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := sessionsOn(t, s, g.ID, "2026-10-19", "2026-10-19", "2026-10-20")[0]
+	for _, c := range before.Verdict.Checks {
+		if c.Name == "Distance" {
+			t.Fatalf("expected no distance check without a distance, got %+v", c)
+		}
+	}
+
+	// Half the target entered by hand misses the session.
+	if _, err := s.SetCardioDistance(saved[0].ID, deref(monday.TargetDistanceM)/2); err != nil {
+		t.Fatal(err)
+	}
+	after := sessionsOn(t, s, g.ID, "2026-10-19", "2026-10-19", "2026-10-20")[0]
+	if after.Verdict.Status != VerdictMissed || len(after.Verdict.Checks) == 0 || after.Verdict.Checks[0].Name != "Distance" {
+		t.Errorf("expected missed on distance, got %+v", after.Verdict)
+	}
+}

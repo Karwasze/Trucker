@@ -46,8 +46,8 @@ func TestMigrate_IsIdempotent(t *testing.T) {
 	if err := s.db.QueryRow("SELECT COUNT(*) FROM schema_migrations").Scan(&count); err != nil {
 		t.Fatalf("failed to count schema_migrations: %v", err)
 	}
-	if count != 9 {
-		t.Errorf("expected 9 applied migrations, got %d", count)
+	if count != 11 {
+		t.Errorf("expected 11 applied migrations, got %d", count)
 	}
 }
 
@@ -437,5 +437,132 @@ func TestMigrate_UpgradeFromV7AddsCardioKeepingWorkouts(t *testing.T) {
 		Date: "2026-10-02", StartedAt: "2026-10-02T07:00:00Z", Activity: ActivityRunning, DurationSeconds: 1800,
 	}}); err != nil {
 		t.Errorf("expected cardio workouts to be storable, got %v", err)
+	}
+}
+
+func TestMigrate_UpgradeFromV9KeepsCardioAsMeasured(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "v9.db")
+
+	db, err := sql.Open("sqlite3", path)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	stmts := []string{"CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)"}
+	for i := 1; i <= 9; i++ {
+		matches, err := fs.Glob(migrationsFS, fmt.Sprintf("migrations/%04d_*.sql", i))
+		if err != nil || len(matches) != 1 {
+			t.Fatalf("failed to find migration %d: %v", i, err)
+		}
+		contents, err := migrationsFS.ReadFile(matches[0])
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", matches[0], err)
+		}
+		stmts = append(stmts, string(contents),
+			fmt.Sprintf("INSERT INTO schema_migrations (version, applied_at) VALUES (%d, '2026-01-01T00:00:00Z')", i))
+	}
+	stmts = append(stmts,
+		`INSERT INTO cardio_workouts (id, date, started_at, activity, duration_seconds, distance_m, source_uuid)
+			VALUES (1, '2026-10-17', '2026-10-17T07:00:00+02:00', 'running', 1800, 5000, 'run')`,
+		`INSERT INTO cardio_workouts (id, date, started_at, activity, duration_seconds, source_uuid)
+			VALUES (2, '2026-10-18', '2026-10-18T07:00:00+02:00', 'cycling', 3600, 'ride')`,
+	)
+	for _, stmt := range stmts {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatalf("failed to build v9 database: %v", err)
+		}
+	}
+	db.Close()
+
+	s, err := Open(path)
+	if err != nil {
+		t.Fatalf("failed to open and migrate v9 database: %v", err)
+	}
+	defer s.Close()
+
+	run, err := s.GetCardioWorkout(1)
+	if err != nil || run.DistanceM == nil || *run.DistanceM != 5000 || run.ManualDistance {
+		t.Errorf("expected the run's measured 5 km kept, got %+v (%v)", run, err)
+	}
+	if _, err := s.SetCardioDistance(1, 6000); err != ErrDistanceMeasured {
+		t.Errorf("expected the existing run's distance kept as measured, got %v", err)
+	}
+	// An existing ride without a distance can have one entered.
+	if ride, err := s.SetCardioDistance(2, 30000); err != nil || !ride.ManualDistance {
+		t.Errorf("expected a distance entered for the existing ride, got %+v (%v)", ride, err)
+	}
+}
+
+func TestMigrate_UpgradeFromV10BackfillsDistanceFromSamples(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "v10.db")
+
+	db, err := sql.Open("sqlite3", path)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	stmts := []string{"CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)"}
+	for i := 1; i <= 10; i++ {
+		matches, err := fs.Glob(migrationsFS, fmt.Sprintf("migrations/%04d_*.sql", i))
+		if err != nil || len(matches) != 1 {
+			t.Fatalf("failed to find migration %d: %v", i, err)
+		}
+		contents, err := migrationsFS.ReadFile(matches[0])
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", matches[0], err)
+		}
+		stmts = append(stmts, string(contents),
+			fmt.Sprintf("INSERT INTO schema_migrations (version, applied_at) VALUES (%d, '2026-01-01T00:00:00Z')", i))
+	}
+	stmts = append(stmts,
+		// Imported without a distance, though its samples covered 12.3 km.
+		`INSERT INTO cardio_workouts (id, date, started_at, activity, duration_seconds, samples, source_uuid)
+			VALUES (1, '2026-10-18', '2026-10-18T11:15:00+02:00', 'running', 5376,
+				'[{"t":0,"d":0},{"t":10,"d":25.5},{"t":20,"d":12345.6,"hr":150}]', 'run')`,
+		// An indoor ride whose samples only carry heart rate.
+		`INSERT INTO cardio_workouts (id, date, started_at, activity, duration_seconds, samples, source_uuid)
+			VALUES (2, '2026-10-18', '2026-10-18T08:28:00+02:00', 'cycling', 3600,
+				'[{"t":0,"d":0},{"t":10,"d":0,"hr":120}]', 'ride')`,
+		// Without samples.
+		`INSERT INTO cardio_workouts (id, date, started_at, activity, duration_seconds, source_uuid)
+			VALUES (3, '2026-10-17', '2026-10-17T08:00:00+02:00', 'walking', 1200, 'walk')`,
+		// A distance Health reported is kept.
+		`INSERT INTO cardio_workouts (id, date, started_at, activity, duration_seconds, distance_m, samples, source_uuid)
+			VALUES (4, '2026-10-16', '2026-10-16T08:00:00+02:00', 'running', 1800, 5000,
+				'[{"t":0,"d":0},{"t":10,"d":4990}]', 'run-2')`,
+	)
+	for _, stmt := range stmts {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatalf("failed to build v10 database: %v", err)
+		}
+	}
+	db.Close()
+
+	s, err := Open(path)
+	if err != nil {
+		t.Fatalf("failed to open and migrate v10 database: %v", err)
+	}
+	defer s.Close()
+
+	distance := func(id int) *float64 {
+		t.Helper()
+		w, err := s.GetCardioWorkout(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if w.ManualDistance {
+			t.Errorf("workout %d: expected the distance kept as measured", id)
+		}
+		return w.DistanceM
+	}
+	if d := distance(1); d == nil || *d != 12345.6 {
+		t.Errorf("expected the run's distance from its samples, got %v", d)
+	}
+	if d := distance(2); d != nil {
+		t.Errorf("expected the indoor ride left without a distance, got %v", *d)
+	}
+	if d := distance(3); d != nil {
+		t.Errorf("expected the walk without samples left without a distance, got %v", *d)
+	}
+	if d := distance(4); d == nil || *d != 5000 {
+		t.Errorf("expected the reported 5 km kept, got %v", d)
 	}
 }

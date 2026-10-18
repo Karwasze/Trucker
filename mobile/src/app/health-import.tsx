@@ -9,7 +9,8 @@ import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Chip, Message, Screen } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { CardioSummary } from '@/health/cardio-summary';
-import { useHealthImports, useHealthState } from '@/health/health-state';
+import { IMPORT_LOOKBACK_DAYS, useHealthImports, useHealthReport, useHealthState } from '@/health/health-state';
+import type { HealthWorkoutStatus } from '@/health/healthkit';
 import { useQuery } from '@/hooks/use-query';
 import { useTheme } from '@/hooks/use-theme';
 import { useSettings } from '@/settings/settings-context';
@@ -100,7 +101,10 @@ export default function HealthImportScreen() {
       {!imports.data ? (
         <Message loading={!imports.error} error={imports.error} />
       ) : imports.candidates.length === 0 ? (
-        <Message>No new workouts in Apple Health.</Message>
+        <>
+          <Message>No new workouts in Apple Health.</Message>
+          <HealthReport />
+        </>
       ) : (
         <>
           <ThemedText type="small" themeColor="textSecondary">
@@ -126,6 +130,11 @@ export default function HealthImportScreen() {
                     </ThemedText>
                   </View>
                 </Pressable>
+                {checked && !w.distance_m && (
+                  <ThemedText type="small" themeColor="textSecondary">
+                    No distance from Apple Health. Add it after importing, from the workout in History.
+                  </ThemedText>
+                )}
                 {checked && options.length > 0 && (
                   <>
                     <ThemedText type="small" themeColor="textSecondary">
@@ -172,6 +181,45 @@ export default function HealthImportScreen() {
         </>
       )}
     </Screen>
+  );
+}
+
+const STATUS: Record<HealthWorkoutStatus, string> = {
+  offered: 'offered',
+  'too-old': `over ${IMPORT_LOOKBACK_DAYS} days before you connected`,
+  unsupported: 'activity not supported',
+  imported: 'already imported',
+  dismissed: 'dismissed',
+};
+
+/** What Apple Health returns around the connection, for finding missing workouts. */
+function HealthReport() {
+  const { state } = useHealthState();
+  const report = useHealthReport(true);
+  const connectedAt = state.connectedAt ? new Date(state.connectedAt) : null;
+  return (
+    <Card>
+      <ThemedText type="smallBold">What Apple Health returned</ThemedText>
+      <ThemedText type="small" themeColor="textSecondary">
+        Connected {connectedAt?.toLocaleString() ?? 'never'}. Workouts from {2 * IMPORT_LOOKBACK_DAYS} days before that on:
+      </ThemedText>
+      {report.error ? (
+        <ThemedText type="small">Error: {report.error}</ThemedText>
+      ) : !report.data ? (
+        <ThemedText type="small" themeColor="textSecondary">
+          Loading…
+        </ThemedText>
+      ) : report.data.length === 0 ? (
+        <ThemedText type="small">None. Apple Health returned no workouts at all.</ThemedText>
+      ) : (
+        report.data.map((w) => (
+          <ThemedText key={w.uuid} type="small">
+            {w.start.toLocaleString()} · {w.activity ? w.name : `${w.name} (type ${w.activityType})`}
+            {w.source ? ` · ${w.source}` : ''} · {STATUS[w.status]}
+          </ThemedText>
+        ))
+      )}
+    </Card>
   );
 }
 

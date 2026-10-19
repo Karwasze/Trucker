@@ -38,7 +38,13 @@ import {
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const formatNumber = (n: number) => String(Math.round(n * 10) / 10);
-const shortDate = (date: string) => formatDate(date, { month: 'short', day: 'numeric' });
+/** Day and month, with the year for dates from another year. */
+const shortDate = (date: string) =>
+  formatDate(date, {
+    month: 'short',
+    day: 'numeric',
+    year: date.slice(0, 4) === localDate().slice(0, 4) ? undefined : 'numeric',
+  });
 const plural = (n: number, word: string, words = `${word}s`) => `${n} ${n === 1 ? word : words}`;
 /** Missed days listed before collapsing the rest into a count. */
 const MISSED_SHOWN = 5;
@@ -78,7 +84,7 @@ function InsightsContent({ data, timespan, hasPlan }: { data: Insights; timespan
     <>
       {data.goal && <GoalSection summary={data.goal} />}
 
-      <SectionLabel>Plan</SectionLabel>
+      <SectionLabel>Strength Plan</SectionLabel>
       {!hasPlan || !data.adherence ? (
         <Card>
           <ThemedText type="small" themeColor="textSecondary">
@@ -107,11 +113,17 @@ function InsightsContent({ data, timespan, hasPlan }: { data: Insights; timespan
         </>
       )}
 
-      <SectionLabel>Progression</SectionLabel>
-      {data.progression.length === 0 ? (
+      <SectionLabel>Progression · {allTime ? 'from beginning' : `last ${timespan.label}`}</SectionLabel>
+      {!hasPlan ? (
         <Card>
           <ThemedText type="small" themeColor="textSecondary">
-            {allTime ? 'No workouts.' : `No weighted ${hasPlan ? 'plan ' : ''}lifts in ${span}.`}
+            Pick a plan on the Plans tab to follow the progression of its lifts.
+          </ThemedText>
+        </Card>
+      ) : data.progression.length === 0 ? (
+        <Card>
+          <ThemedText type="small" themeColor="textSecondary">
+            {allTime ? 'No workouts.' : `No weighted plan lifts in ${span}.`}
           </ThemedText>
         </Card>
       ) : (
@@ -228,8 +240,6 @@ function ProgressCard({ progress: p, timespan }: { progress: LiftProgress; times
   const percent = Math.round((Math.abs(change) / p.first_1rm) * 1000) / 10;
   const atRecord = p.latest_1rm >= p.record_1rm;
   const share = Math.min(p.latest_1rm / p.record_1rm, 1);
-  const rate =
-    p.per_month === undefined ? '–' : `${p.per_month >= 0 ? '+' : '−'}${formatNumber(Math.abs(p.per_month))} kg`;
   return (
     <Pressable
       onPress={() => router.navigate({ pathname: '/stats', params: { exercise: p.exercise, span: timespan.key } })}
@@ -248,9 +258,6 @@ function ProgressCard({ progress: p, timespan }: { progress: LiftProgress; times
           <ThemedText type="small" themeColor="textSecondary" style={{ flex: 1 }}>
             est. 1RM
           </ThemedText>
-          <ThemedText type="smallBold" themeColor={trend} style={styles.num}>
-            {single ? '–' : `${arrow} ${formatNumber(Math.abs(change))} kg (${percent}%)`}
-          </ThemedText>
         </View>
         <View style={styles.row}>
           <View style={[styles.bar, { backgroundColor: theme.backgroundSelected }]}>
@@ -267,8 +274,19 @@ function ProgressCard({ progress: p, timespan }: { progress: LiftProgress; times
         </View>
         <View style={styles.row}>
           <Stat label={`Record · ${shortDate(p.record_date)}`} value={`${formatNumber(p.record_1rm)} kg`} />
-          <Stat label="Per month" value={rate} />
-          <Stat label="PRs" value={String(p.prs)} />
+          <View style={{ flex: 1 }}>
+            <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+              {single ? 'First session' : `Since ${shortDate(p.first_date)}`}
+            </ThemedText>
+            <ThemedText type="smallBold" themeColor={trend} style={{ fontVariant: ['tabular-nums'] }}>
+              {single ? '–' : `${arrow} ${formatNumber(Math.abs(change))} kg (${percent}%)`}
+            </ThemedText>
+            {p.per_month !== undefined && (
+              <ThemedText type="small" themeColor="textSecondary" style={{ fontVariant: ['tabular-nums'] }}>
+                {`${p.per_month >= 0 ? '+' : '−'}${formatNumber(Math.abs(p.per_month))} kg / month`}
+              </ThemedText>
+            )}
+          </View>
         </View>
       </Card>
     </Pressable>

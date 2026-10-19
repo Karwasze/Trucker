@@ -52,7 +52,6 @@ const full: Insights = {
       per_month: 5,
       record_1rm: 120,
       record_date: '2026-10-16',
-      prs: 2,
     },
   ],
   tonnage: {
@@ -96,8 +95,9 @@ test('with nothing logged each section says what to do', async () => {
   expect(
     await screen.findByText('Pick a plan on the Plans tab to track adherence and stalled lifts.')
   ).toBeOnTheScreen();
+  expect(screen.getByText('Pick a plan on the Plans tab to follow the progression of its lifts.')).toBeOnTheScreen();
   // Over all time there's no "last" period to name.
-  expect(screen.getAllByText('No workouts.')).toHaveLength(2);
+  expect(screen.getAllByText('No workouts.')).toHaveLength(1);
   expect(screen.queryByText(/From beginning/)).not.toBeOnTheScreen();
   expect(screen.getByText(/import your bodyweight and see how strong/)).toBeOnTheScreen();
 });
@@ -107,7 +107,8 @@ test('adherence, stalls, progression, tonnage, cardio and strength are summarise
   await selectPlan(1);
   await renderInApp(<InsightsScreen />);
 
-  expect(await screen.findByText('15 / 20')).toBeOnTheScreen();
+  expect(await screen.findByText('Strength Plan')).toBeOnTheScreen();
+  expect(screen.getByText('15 / 20')).toBeOnTheScreen();
   expect(screen.getByText('75%')).toBeOnTheScreen();
   expect(screen.getByText('Strength since 1 Sept · 1 extra session')).toBeOnTheScreen();
   expect(screen.getByText('Missed 16 Oct, 14 Oct, 9 Oct, 7 Oct, 2 Oct and 1 more')).toBeOnTheScreen();
@@ -116,9 +117,13 @@ test('adherence, stalls, progression, tonnage, cardio and strength are summarise
   expect(screen.getByText('Last on 16 Oct · deloads next session')).toBeOnTheScreen();
   expect(screen.getByText('After 3 misses at bodyweight on 2 Oct')).toBeOnTheScreen();
 
+  // The change names when it is measured from, with its monthly rate.
+  expect(screen.getByText('Progression · from beginning')).toBeOnTheScreen();
+  expect(screen.getByText('Since 1 Sept')).toBeOnTheScreen();
   expect(screen.getByText('▲ 10 kg (10%)')).toBeOnTheScreen();
+  expect(screen.getByText('+5 kg / month')).toBeOnTheScreen();
   expect(screen.getByText('92% of record')).toBeOnTheScreen();
-  expect(screen.getByText('+5 kg')).toBeOnTheScreen();
+  expect(screen.queryByText('PRs')).not.toBeOnTheScreen();
 
   expect(screen.getByText('Latest · Week of 12 Oct – 18 Oct')).toBeOnTheScreen();
   expect(screen.getByText('🚴 Ride · 1 session')).toBeOnTheScreen();
@@ -142,6 +147,7 @@ test('changing the timespan asks for insights from its start', async () => {
 
   await user.press(screen.getByRole('tab', { name: '3 months' }));
   await screen.findByText('No weighted plan lifts in the last 3 months.');
+  expect(screen.getByText('Progression · last 3 months')).toBeOnTheScreen();
   expect(screen.getByText('Nothing lifted in the last 3 months.')).toBeOnTheScreen();
   expect((requests.at(-1) as Request).query.get('from')).toBe('2026-07-18');
 });

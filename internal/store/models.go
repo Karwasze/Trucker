@@ -189,10 +189,10 @@ type CardioSummary struct {
 	WeeklyDistanceM float64 `json:"weekly_distance_m"`
 }
 
-// Adherence is how many of a plan's scheduled days had a workout, from Since
-// (the later of the timespan's start and the plan's first logged workout;
-// empty when nothing was logged from the plan yet). Any workout on a
-// scheduled day counts; workouts on other days are Extra. Today only counts
+// Adherence is how many of a plan's scheduled days had a workout from the
+// plan, from Since (the later of the timespan's start and the plan's first
+// logged workout; empty when nothing was logged from the plan yet). A plan
+// workout on a scheduled day counts; plan workouts on other days are Extra. Today only counts
 // once something is logged. Missed lists the scheduled days without a
 // workout, newest first. Streak is the number of scheduled days in a row
 // completed up to now, regardless of the timespan.
@@ -226,11 +226,10 @@ type PlanStall struct {
 }
 
 // LiftProgress is how a weighted lift's best estimated 1RM per session
-// developed over the timespan. PRs counts sessions that beat every earlier
-// session of the lift, including the lift's first session ever. PerMonth
-// is the change from the first session to the latest, per month; it is
-// left out when those are less than two weeks apart. Record1RM is the best
-// estimated 1RM of all time, up to the end of the timespan.
+// developed over the timespan. PerMonth is the change from the first
+// session to the latest, per month; it is left out when those are less than
+// two weeks apart. Record1RM is the best estimated 1RM of all time, up to
+// the end of the timespan.
 type LiftProgress struct {
 	Exercise   string   `json:"exercise"`
 	Sessions   int      `json:"sessions"`
@@ -242,8 +241,6 @@ type LiftProgress struct {
 	PerMonth   *float64 `json:"per_month,omitempty"`
 	Record1RM  float64  `json:"record_1rm"`
 	RecordDate string   `json:"record_date"`
-	PRs        int      `json:"prs"`
-	LastPR     string   `json:"last_pr,omitempty"`
 }
 
 // Tonnage is the weight lifted (weight × reps) over the timespan, in total,

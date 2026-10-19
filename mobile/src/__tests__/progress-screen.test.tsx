@@ -61,9 +61,61 @@ afterEach(() => jest.useRealTimers());
 test('opens on the first exercise’s estimated 1RM, oldest to newest', async () => {
   server();
   await renderInApp(<StatsScreen />);
-  expect(await screen.findByText('+3.4 kg')).toBeOnTheScreen();
-  expect(screen.getByText('Since 9 Oct')).toBeOnTheScreen();
+  expect(await screen.findByText('Since 9 Oct')).toBeOnTheScreen();
+  // The tile, and the PR the latest session set.
+  expect(screen.getAllByText('+3.4 kg')).toHaveLength(2);
   expect(screen.getByText('Latest · Fri, 16 Oct 2026')).toBeOnTheScreen();
+});
+
+test('personal records list the sessions that beat every earlier one, within the timespan', async () => {
+  mockServer({
+    'GET /api/statistics': ({ query }: Request) =>
+      query.get('exercise') === 'Squat'
+        ? {
+            exercises: ['Squat'],
+            data: [
+              { date: '2020-03-05', estimated_1rm: 100, total_volume: 1000 },
+              { date: '2020-04-02', estimated_1rm: 120, total_volume: 1000 },
+              { date: '2026-09-10', estimated_1rm: 110, total_volume: 1000 },
+              { date: '2026-10-16', estimated_1rm: 122.5, total_volume: 1000 },
+            ],
+          }
+        : { exercises: ['Squat'], data: [] },
+    'GET /api/cardio': [],
+  });
+  const user = userEvent.setup();
+  await renderInApp(<StatsScreen />);
+
+  expect(await screen.findByText('Personal records')).toBeOnTheScreen();
+  expect(screen.getByLabelText('PR on Fri, 16 Oct 2026: 122.5 kg, up 2.5 kg')).toBeOnTheScreen();
+  expect(screen.getByLabelText('PR on Thu, 2 Apr 2020: 120.0 kg, up 20.0 kg')).toBeOnTheScreen();
+
+  // The 2020 PR is outside the last month; the record it set still shows.
+  await user.press(screen.getByRole('tab', { name: '1 month' }));
+  expect(screen.getByLabelText('PR on Fri, 16 Oct 2026: 122.5 kg, up 2.5 kg')).toBeOnTheScreen();
+  expect(screen.queryByLabelText(/PR on Thu, 2 Apr 2020/)).not.toBeOnTheScreen();
+});
+
+test('with no PR in the timespan it names the standing record', async () => {
+  mockServer({
+    'GET /api/statistics': ({ query }: Request) =>
+      query.get('exercise') === 'Squat'
+        ? {
+            exercises: ['Squat'],
+            data: [
+              { date: '2020-03-05', estimated_1rm: 100, total_volume: 1000 },
+              { date: '2020-04-02', estimated_1rm: 120, total_volume: 1000 },
+              { date: '2026-10-16', estimated_1rm: 110, total_volume: 1000 },
+            ],
+          }
+        : { exercises: ['Squat'], data: [] },
+    'GET /api/cardio': [],
+  });
+  const user = userEvent.setup();
+  await renderInApp(<StatsScreen />);
+  await screen.findByText('Personal records');
+  await user.press(screen.getByRole('tab', { name: '1 month' }));
+  expect(screen.getByText('No PRs in the last 1 month. The record is 120.0 kg from 2 Apr 2020.')).toBeOnTheScreen();
 });
 
 test('with nothing lifted it falls back to bodyweight, which can’t be entered by hand', async () => {

@@ -15,6 +15,7 @@ import { isHealthAvailable } from '@/health/healthkit';
 import { useQuery } from '@/hooks/use-query';
 import { BodyweightStats } from '@/progress/bodyweight-stats';
 import { CardioStats } from '@/progress/cardio-stats';
+import { personalRecords } from '@/progress/records';
 import { SeriesPicker, type Series } from '@/progress/series-picker';
 import { Tile, TileRow } from '@/progress/tile';
 import { TriathlonStats } from '@/progress/triathlon-stats';
@@ -193,6 +194,9 @@ function ExerciseStats({
   const best = Math.max(...data.map((d) => d.estimated_1rm));
   const first = data[0].estimated_1rm;
   const change = latest.estimated_1rm - first;
+  // Judged against all history, so a PR has to beat records from before the timespan too.
+  const records = personalRecords(all).filter((r) => !start || r.date >= start);
+  const record = all.reduce((a, b) => (b.estimated_1rm > a.estimated_1rm ? b : a));
 
   return (
     <>
@@ -206,6 +210,31 @@ function ExerciseStats({
       </TileRow>
 
       {chartCard}
+
+      <SectionLabel>Personal records</SectionLabel>
+      <Card>
+        {records.length === 0 ? (
+          <ThemedText type="small" themeColor="textSecondary">
+            {start
+              ? `No PRs in the last ${timespan.label}. The record is ${record.estimated_1rm.toFixed(1)} kg from ${formatDate(record.date, { day: 'numeric', month: 'short', year: 'numeric' })}.`
+              : 'No PRs yet. Beat your first session to set one.'}
+          </ThemedText>
+        ) : (
+          records.map((r) => (
+            <View
+              key={r.date}
+              style={styles.sessionRow}
+              accessible
+              accessibilityLabel={`PR on ${formatDate(r.date)}: ${r.estimated_1rm.toFixed(1)} kg, up ${r.gain.toFixed(1)} kg`}>
+              <ThemedText style={{ flex: 1 }}>{formatDate(r.date)}</ThemedText>
+              <ThemedText style={styles.num}>{r.estimated_1rm.toFixed(1)} kg</ThemedText>
+              <ThemedText themeColor="success" style={[styles.num, { width: 90 }]}>
+                +{r.gain.toFixed(1)} kg
+              </ThemedText>
+            </View>
+          ))
+        )}
+      </Card>
 
       <SectionLabel>Sessions</SectionLabel>
       <Card>

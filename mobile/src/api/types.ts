@@ -169,8 +169,6 @@ export type LiftProgress = {
   /** Best est. 1RM of all time, up to the end of the timespan. */
   record_1rm: number;
   record_date: string;
-  prs: number;
-  last_pr?: string;
 };
 
 export type Tonnage = {

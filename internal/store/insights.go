@@ -75,8 +75,8 @@ type exerciseHistory struct {
 // Adherence, deloads, progression, tonnage and strength levels cover the
 // timespan starting on from (YYYY-MM-DD, or "" for all time); muscle volume
 // always covers the last four weeks. Adherence and stalls are judged against
-// the plan planID, and left out for 0 or an unknown plan; with a plan,
-// progression only covers the plan's exercises.
+// the plan planID, and left out for 0 or an unknown plan; so is
+// progression, which only covers the plan's exercises.
 func (s *Store) GetInsights(today, from string, planID int) (Insights, error) {
 	now, err := time.Parse(dateLayout, today)
 	if err != nil {
@@ -116,7 +116,7 @@ func (s *Store) GetInsights(today, from string, planID int) (Insights, error) {
 		From:        from,
 		Bodyweight:  bodyweightTrend(bodyweight),
 		Stalls:      []PlanStall{},
-		Progression: liftProgress(all, from),
+		Progression: []LiftProgress{},
 		Tonnage:     tonnage(window, now),
 		Untagged:    []string{},
 		Cardio:      cardioSummaries(cardio, from, now),
@@ -130,11 +130,11 @@ func (s *Store) GetInsights(today, from string, planID int) (Insights, error) {
 		case err != nil:
 			return Insights{}, err
 		default:
-			if insights.Adherence, err = s.adherence(plan, all, cardio, from, now); err != nil {
+			if insights.Adherence, err = s.adherence(plan, from, now); err != nil {
 				return Insights{}, err
 			}
 			insights.Stalls = planStalls(plan, all, from, today)
-			insights.Progression = planProgress(plan, insights.Progression)
+			insights.Progression = planProgress(plan, liftProgress(all, from))
 		}
 	}
 
@@ -384,9 +384,10 @@ func strengthLevels(sets []insightSet, bodyweight float64) []StrengthLevel {
 	return levels
 }
 
-// adherence compares the days the plan schedules with the days anything was
-// logged, lifting or cardio, from the plan's first logged workout up to now.
-func (s *Store) adherence(plan TrainingPlan, sets []insightSet, cardio []CardioWorkout, from string, now time.Time) (*Adherence, error) {
+// adherence compares the days the plan schedules with the days a workout was
+// logged from the plan, from its first logged workout up to now. Cardio and
+// workouts without the plan or from another plan don't count.
+func (s *Store) adherence(plan TrainingPlan, from string, now time.Time) (*Adherence, error) {
 	today := now.Format(dateLayout)
 	a := &Adherence{Plan: plan.Name, Missed: []string{}}
 
@@ -408,12 +409,9 @@ func (s *Store) adherence(plan TrainingPlan, sets []insightSet, cardio []CardioW
 	for _, day := range plan.Days {
 		scheduled[day.Weekday] = len(day.Exercises) > 0
 	}
-	trained := make(map[string]bool)
-	for _, set := range sets {
-		trained[set.date] = true
-	}
-	for _, w := range cardio {
-		trained[w.Date] = true
+	trained, err := s.planWorkoutDates(plan.ID, today)
+	if err != nil {
+		return nil, err
 	}
 
 	// Newest first, so the streak ends at the first miss.
@@ -444,6 +442,32 @@ func (s *Store) adherence(plan TrainingPlan, sets []insightSet, cardio []CardioW
 	}
 	a.Scheduled = a.Completed + len(a.Missed)
 	return a, nil
+}
+
+// planWorkoutDates is the set of dates up to today with a workout logged from
+// the plan.
+func (s *Store) planWorkoutDates(planID int, today string) (map[string]bool, error) {
+	rows, err := s.db.Query(`
+		SELECT DISTINCT w.date
+		FROM workouts w
+		JOIN exercises e ON e.workout_id = w.id
+		JOIN sets s ON s.exercise_id = e.id
+		WHERE w.plan_id = ? AND w.date <= ?
+	`, planID, today)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	dates := make(map[string]bool)
+	for rows.Next() {
+		var date string
+		if err := rows.Scan(&date); err != nil {
+			return nil, err
+		}
+		dates[date] = true
+	}
+	return dates, rows.Err()
 }
 
 // planStalls replays the plan's progression over each of its exercises'
@@ -493,7 +517,7 @@ func planStalls(plan TrainingPlan, sets []insightSet, from, today string) []Plan
 }
 
 // liftProgress follows the best estimated 1RM per session of every weighted
-// lift trained since from, using earlier history to tell PRs. Lifts are
+// lift trained since from, using earlier history for the record. Lifts are
 // sorted by their change from the first session to the latest, relative to
 // the first, most improved first.
 func liftProgress(sets []insightSet, from string) []LiftProgress {
@@ -516,10 +540,6 @@ func liftProgress(sets []insightSet, from string) []LiftProgress {
 				p.Sessions++
 				if best > p.Best1RM {
 					p.Best1RM, p.BestDate = round(best, 1), date
-				}
-				if best > record {
-					p.PRs++
-					p.LastPR = date
 				}
 				p.Latest1RM, lastDate = round(best, 1), date
 			}

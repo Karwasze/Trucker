@@ -626,21 +626,15 @@ func round(v float64, decimals int) float64 {
 
 // cardioSummaries totals the cardio workouts (oldest first) from from
 // (YYYY-MM-DD, or "" for all time) up to now per activity, in the order of
-// CardioActivities. All time starts at the first cardio workout.
+// CardioActivities. Weekly distances count weeks from the later of from and
+// the first cardio workout ever, so untracked weeks before it don't dilute
+// them.
 func cardioSummaries(cardio []CardioWorkout, from string, now time.Time) []CardioSummary {
 	summaries := []CardioSummary{}
-	start := from
-	for _, w := range cardio {
-		if w.Date >= from {
-			if start == "" {
-				start = w.Date
-			}
-			break
-		}
-	}
-	if start == "" {
+	if len(cardio) == 0 {
 		return summaries
 	}
+	start := max(from, cardio[0].Date)
 	first, err := time.Parse(dateLayout, start)
 	if err != nil {
 		return summaries

@@ -3,7 +3,9 @@ import { screen, userEvent } from '@testing-library/react-native';
 import { router } from 'expo-router';
 
 import type { Goal, Insights } from '@/api/types';
-import InsightsScreen from '@/app/(tabs)/insights';
+import CardioInsightsScreen from '@/app/(tabs)/(insights)/cardio';
+import StrengthInsightsScreen from '@/app/(tabs)/(insights)/index';
+import { InsightsProvider } from '@/insights/insights-view';
 import { mockServer, renderInApp, selectPlan, setNow, type Request } from '@/test-utils';
 
 const TODAY = '2026-10-18';
@@ -88,10 +90,24 @@ beforeEach(async () => {
 });
 afterEach(() => jest.useRealTimers());
 
+// The Insights layout provides the timespan and data both pages share.
+const renderStrength = () =>
+  renderInApp(
+    <InsightsProvider>
+      <StrengthInsightsScreen />
+    </InsightsProvider>
+  );
+const renderCardio = () =>
+  renderInApp(
+    <InsightsProvider>
+      <CardioInsightsScreen />
+    </InsightsProvider>
+  );
+
 test('with nothing logged each section says what to do', async () => {
   mockServer({ 'GET /api/insights': empty });
   await selectPlan(null);
-  await renderInApp(<InsightsScreen />);
+  await renderStrength();
   expect(
     await screen.findByText('Pick a plan on the Plans tab to track adherence and stalled lifts.')
   ).toBeOnTheScreen();
@@ -102,10 +118,16 @@ test('with nothing logged each section says what to do', async () => {
   expect(screen.getByText(/import your bodyweight and see how strong/)).toBeOnTheScreen();
 });
 
-test('adherence, stalls, progression, tonnage, cardio and strength are summarised', async () => {
+test('with no cardio the Cardio page says so', async () => {
+  mockServer({ 'GET /api/insights': empty });
+  await renderCardio();
+  expect(await screen.findByText('No cardio workouts.')).toBeOnTheScreen();
+});
+
+test('adherence, stalls, progression, tonnage and strength levels are summarised on Strength', async () => {
   mockServer({ 'GET /api/insights': full });
   await selectPlan(1);
-  await renderInApp(<InsightsScreen />);
+  await renderStrength();
 
   expect(await screen.findByText('Strength Plan')).toBeOnTheScreen();
   expect(screen.getByText('15 / 20')).toBeOnTheScreen();
@@ -126,11 +148,23 @@ test('adherence, stalls, progression, tonnage, cardio and strength are summarise
   expect(screen.queryByText('PRs')).not.toBeOnTheScreen();
 
   expect(screen.getByText('Latest · Week of 12 Oct – 18 Oct')).toBeOnTheScreen();
-  expect(screen.getByText('🚴 Ride · 1 session')).toBeOnTheScreen();
+  expect(screen.getByText('Strength levels')).toBeOnTheScreen();
   expect(screen.getByText('Intermediate')).toBeOnTheScreen();
   expect(screen.getByText('120 kg est. 1RM · 1.46× BW · +25 kg to advanced')).toBeOnTheScreen();
   expect(screen.getByText('Farmer Carry')).toBeOnTheScreen();
 
+  // Cardio and the race goal live on the Cardio page.
+  expect(screen.queryByText('🚴 Ride · 1 session')).not.toBeOnTheScreen();
+  expect(screen.queryByText('Marathon')).not.toBeOnTheScreen();
+});
+
+test('the race goal and cardio are summarised on Cardio', async () => {
+  mockServer({ 'GET /api/insights': full });
+  await selectPlan(1);
+  await renderCardio();
+
+  expect(await screen.findByText('🚴 Ride · 1 session')).toBeOnTheScreen();
+  expect(screen.getByText('Marathon')).toBeOnTheScreen();
   expect(screen.getByText('Base · 25 weeks to race day')).toBeOnTheScreen();
   expect(screen.getByText('🏃 12.5 km of 30.0 km this week')).toBeOnTheScreen();
   expect(screen.getByText('Threshold: 🏃 4:30/km')).toBeOnTheScreen();
@@ -140,7 +174,7 @@ test('changing the timespan asks for insights from its start', async () => {
   const requests = mockServer({ 'GET /api/insights': empty });
   await selectPlan(2);
   const user = userEvent.setup();
-  await renderInApp(<InsightsScreen />);
+  await renderStrength();
   await screen.findAllByText('No workouts.');
   expect(requests.at(-1)?.query.get('from')).toBeNull();
   expect(requests.at(-1)?.query.get('plan_id')).toBe('2');
@@ -152,14 +186,34 @@ test('changing the timespan asks for insights from its start', async () => {
   expect((requests.at(-1) as Request).query.get('from')).toBe('2026-07-18');
 });
 
+test('both pages share the timespan and one request', async () => {
+  const requests = mockServer({ 'GET /api/insights': empty });
+  const user = userEvent.setup();
+  await renderInApp(
+    <InsightsProvider>
+      <StrengthInsightsScreen />
+      <CardioInsightsScreen />
+    </InsightsProvider>
+  );
+  await screen.findByText('No cardio workouts.');
+  expect(requests).toHaveLength(1);
+
+  await user.press(screen.getAllByRole('tab', { name: '1 month' })[0]);
+  expect(await screen.findByText('No cardio in the last 1 month.')).toBeOnTheScreen();
+  expect(screen.getByText('Nothing lifted in the last 1 month.')).toBeOnTheScreen();
+  expect(requests).toHaveLength(2);
+});
+
 test('tapping a lift or an activity opens its chart on Progress with the same timespan', async () => {
   mockServer({ 'GET /api/insights': full });
   await selectPlan(1);
   const user = userEvent.setup();
-  await renderInApp(<InsightsScreen />);
+  await renderStrength();
   await user.press(await screen.findByRole('button', { name: /Squat/ }));
   expect(router.navigate).toHaveBeenLastCalledWith({ pathname: '/stats', params: { exercise: 'Squat', span: 'all' } });
-  await user.press(screen.getByText('🚴 Ride · 1 session'));
+  await screen.unmount();
+  await renderCardio();
+  await user.press(await screen.findByText('🚴 Ride · 1 session'));
   expect(router.navigate).toHaveBeenLastCalledWith({
     pathname: '/stats',
     params: { activity: 'cycling', span: 'all' },

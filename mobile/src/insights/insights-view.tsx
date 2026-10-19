@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { createContext, useContext, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { localDate } from '@/api/client';
@@ -49,8 +49,17 @@ const plural = (n: number, word: string, words = `${word}s`) => `${n} ${n === 1 
 /** Missed days listed before collapsing the rest into a count. */
 const MISSED_SHOWN = 5;
 
-/** Training analysis, shown on the Insights tab. Charts per lift live on the Progress tab, a tap away. */
-export function InsightsView() {
+type InsightsState = {
+  timespan: Timespan;
+  setTimespan: (timespan: Timespan) => void;
+  insights: ReturnType<typeof useQuery<Insights>>;
+  hasPlan: boolean;
+};
+
+const InsightsContext = createContext<InsightsState | null>(null);
+
+/** Loads insights once for both Insights pages, which share the timespan. */
+export function InsightsProvider({ children }: { children: ReactNode }) {
   const { api, planId, serverUrl } = useSettings();
   const [timespan, setTimespan] = useState<Timespan>(TIMESPANS[0]);
   const today = localDate();
@@ -58,32 +67,72 @@ export function InsightsView() {
   const insights = useQuery(`insights:${serverUrl}:${today}:${from}:${planId}`, () =>
     api.insights(today, from, planId)
   );
+  return (
+    <InsightsContext.Provider value={{ timespan, setTimespan, insights, hasPlan: planId !== null }}>
+      {children}
+    </InsightsContext.Provider>
+  );
+}
 
+function useInsights() {
+  const state = useContext(InsightsContext);
+  if (!state) throw new Error('useInsights must be used within an InsightsProvider');
+  return state;
+}
+
+/** One Insights page: the shared timespan control above its content once loaded. */
+function InsightsPage({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  children: (data: Insights, timespan: Timespan, hasPlan: boolean) => ReactNode;
+}) {
+  const { timespan, setTimespan, insights, hasPlan } = useInsights();
   return (
     <Screen
-      title="Insights"
-      subtitle="Plan adherence, progression and strength"
+      title={title}
+      subtitle={subtitle}
       action={<SettingsButton />}
+      hasHeader
       refreshing={insights.refreshing}
       onRefresh={insights.refresh}>
       <TimespanControl value={timespan} onChange={setTimespan} />
       {!insights.data ? (
         <Message loading={!insights.error} error={insights.error} />
       ) : (
-        <InsightsContent data={insights.data} timespan={timespan} hasPlan={planId !== null} />
+        children(insights.data, timespan, hasPlan)
       )}
     </Screen>
   );
 }
 
-function InsightsContent({ data, timespan, hasPlan }: { data: Insights; timespan: Timespan; hasPlan: boolean }) {
+/** Lifting analysis, the first Insights page. Charts per lift live on the Progress tab, a tap away. */
+export function StrengthInsights() {
+  return (
+    <InsightsPage title="Strength" subtitle="Plan adherence, progression and strength levels">
+      {(data, timespan, hasPlan) => <StrengthContent data={data} timespan={timespan} hasPlan={hasPlan} />}
+    </InsightsPage>
+  );
+}
+
+/** Endurance analysis, the second Insights page. */
+export function CardioInsights() {
+  return (
+    <InsightsPage title="Cardio" subtitle="Race goal, distances and triathlons">
+      {(data, timespan) => <CardioContent data={data} timespan={timespan} />}
+    </InsightsPage>
+  );
+}
+
+function StrengthContent({ data, timespan, hasPlan }: { data: Insights; timespan: Timespan; hasPlan: boolean }) {
   const span = `the last ${timespan.label}`;
   // "In the last From beginning" doesn't read; over all time there were simply none.
   const allTime = timespan.months === null;
   return (
     <>
-      {data.goal && <GoalSection summary={data.goal} />}
-
       <SectionLabel>Strength Plan</SectionLabel>
       {!hasPlan || !data.adherence ? (
         <Card>
@@ -141,20 +190,7 @@ function InsightsContent({ data, timespan, hasPlan }: { data: Insights; timespan
         <TonnageSection tonnage={data.tonnage} today={data.date} />
       )}
 
-      {data.cardio.length > 0 && (
-        <>
-          <SectionLabel>Cardio</SectionLabel>
-          <Card>
-            {data.cardio.map((c) => (
-              <CardioRow key={c.activity} summary={c} timespan={timespan} />
-            ))}
-          </Card>
-        </>
-      )}
-
-      {data.triathlon && <TriathlonInsights summary={data.triathlon} timespan={timespan} />}
-
-      <SectionLabel>Strength</SectionLabel>
+      <SectionLabel>Strength levels</SectionLabel>
       <Card>
         {!data.bodyweight ? (
           <ThemedText type="small" themeColor="textSecondary">
@@ -180,6 +216,28 @@ function InsightsContent({ data, timespan, hasPlan }: { data: Insights; timespan
           </Card>
         </>
       )}
+    </>
+  );
+}
+
+function CardioContent({ data, timespan }: { data: Insights; timespan: Timespan }) {
+  const allTime = timespan.months === null;
+  return (
+    <>
+      {data.goal && <GoalSection summary={data.goal} />}
+
+      <SectionLabel>Activities</SectionLabel>
+      <Card>
+        {data.cardio.length === 0 ? (
+          <ThemedText type="small" themeColor="textSecondary">
+            {allTime ? 'No cardio workouts.' : `No cardio in the last ${timespan.label}.`}
+          </ThemedText>
+        ) : (
+          data.cardio.map((c) => <CardioRow key={c.activity} summary={c} timespan={timespan} />)
+        )}
+      </Card>
+
+      {data.triathlon && <TriathlonInsights summary={data.triathlon} timespan={timespan} />}
     </>
   );
 }

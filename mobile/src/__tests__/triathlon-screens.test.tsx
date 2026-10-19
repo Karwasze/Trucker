@@ -6,7 +6,7 @@ import type { CardioWorkout, Insights, Triathlon } from '@/api/types';
 import HistoryScreen from '@/app/(tabs)/history/index';
 import TriathlonDetailScreen from '@/app/(tabs)/history/triathlon/[date]';
 import StatsScreen from '@/app/(tabs)/stats';
-import { InsightsView } from '@/insights/insights-view';
+import { CardioInsights, InsightsProvider } from '@/insights/insights-view';
 import { mockServer, renderInApp, selectPlan, setNow } from '@/test-utils';
 
 const leg = (id: number, activity: CardioWorkout['activity'], distance_m: number, duration_seconds: number) => ({
@@ -118,7 +118,7 @@ test('Progress lists triathlons, one class at a time, opening on the latest’s'
   expect(screen.getAllByText('1:20:00').length).toBeGreaterThan(0);
 });
 
-test('Insights shows the latest triathlon, the leg costing the most, pace trends and records', async () => {
+test('the Insights Cardio page shows the latest triathlon, the leg costing the most, pace trends and records', async () => {
   server([latest, sprint, best], {
     triathlon: {
       count: 3,
@@ -131,7 +131,11 @@ test('Insights shows the latest triathlon, the leg costing the most, pace trends
     },
   });
   const user = userEvent.setup();
-  await renderInApp(<InsightsView />);
+  await renderInApp(
+    <InsightsProvider>
+      <CardioInsights />
+    </InsightsProvider>
+  );
   expect(await screen.findByText('Latest · Quarter triathlon · 17 Oct')).toBeOnTheScreen();
   expect(screen.getByText('+18:20 off your best')).toBeOnTheScreen();
   expect(screen.getByText('3 triathlons in total')).toBeOnTheScreen();

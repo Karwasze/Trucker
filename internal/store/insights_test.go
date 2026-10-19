@@ -678,6 +678,13 @@ func TestGetInsights_CardioSummaries(t *testing.T) {
 		t.Errorf("unexpected all-time summaries %+v", got)
 	}
 
+	// A timespan starting before the first cardio workout ever counts weeks
+	// from that workout: Mar 1 to Mar 14 is two weeks, not four.
+	got = getInsightsFor(t, s, "2026-03-14", "2026-02-15", 0).Cardio
+	if len(got) != 1 || got[0].DistanceM != 20000 || got[0].WeeklyDistanceM != 10000 {
+		t.Errorf("unexpected summaries before the first workout %+v", got)
+	}
+
 	if empty := getInsightsFor(t, newTestStore(t), "2026-03-30", "", 0).Cardio; empty == nil || len(empty) != 0 {
 		t.Errorf("expected empty, non-nil summaries, got %#v", empty)
 	}

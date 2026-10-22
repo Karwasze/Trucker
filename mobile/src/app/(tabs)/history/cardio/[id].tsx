@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Alert, StyleSheet, TextInput, View } from 'react-native';
 
+import { useAchievements } from '@/achievements/achievements-context';
 import { localDate } from '@/api/client';
 import type { CardioWorkout, PlannedSession } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
@@ -135,6 +136,7 @@ export default function CardioDetailScreen() {
 function DistanceEntry({ workout: w, onSaved }: { workout: CardioWorkout; onSaved: () => void }) {
   const theme = useTheme();
   const { api } = useSettings();
+  const achievements = useAchievements();
   const metres = w.activity === 'swimming';
   const shown = (m?: number) => (m ? String(metres ? Math.round(m) : Math.round(m) / 1000) : '');
   const [input, setInput] = useState(shown(w.distance_m));
@@ -149,6 +151,7 @@ function DistanceEntry({ workout: w, onSaved }: { workout: CardioWorkout; onSave
     setSaving(true);
     try {
       await api.setCardioDistance(w.id, metres ? value : value * 1000, localDate());
+      achievements.check();
       onSaved();
     } catch (e) {
       Alert.alert("Couldn't save distance", (e as Error).message);

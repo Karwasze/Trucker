@@ -292,6 +292,42 @@ type StrengthLevel struct {
 	NextLevelKg float64 `json:"next_level_kg"`
 }
 
+// Categories of an Achievement.
+const (
+	AchievementPace      = "pace"
+	AchievementDistance  = "distance"
+	AchievementTriathlon = "triathlon"
+	AchievementStrength  = "strength"
+)
+
+// Achievement is a badge earned in tiers, hardest last. Best is the best
+// result so far in the tiers' unit, or nil before any: the time (s) over
+// Distance for pace, metres for distance, and the estimated 1RM to
+// bodyweight ratio for strength. Triathlons have no best.
+type Achievement struct {
+	ID       string `json:"id"`
+	Category string `json:"category"`
+	Title    string `json:"title"`
+	// Activity is the cardio activity, or the lift for strength.
+	Activity string            `json:"activity,omitempty"`
+	Distance float64           `json:"distance_m,omitempty"`
+	Best     *float64          `json:"best,omitempty"`
+	Tiers    []AchievementTier `json:"tiers"`
+}
+
+// AchievementTier is one level of an Achievement: a time (s) to beat for
+// pace, metres to cover for distance and triathlons (all legs together), a
+// 1RM to bodyweight ratio to reach for strength. Name is set for tiers with
+// one, such as race distances and strength levels.
+type AchievementTier struct {
+	Name     string  `json:"name,omitempty"`
+	Target   float64 `json:"target"`
+	EarnedOn string  `json:"earned_on,omitempty"`
+	// WorkoutID is the workout that earned it: a cardio workout for pace and
+	// distance, a lifting workout for strength. Triathlons are by date.
+	WorkoutID int `json:"workout_id,omitempty"`
+}
+
 // Goal is an endurance race to train for: the legs to cover (in metres; a
 // single-sport goal has one) on RaceDate, training on Weekdays with the
 // long session on LongDay. Only one goal is Active at a time.

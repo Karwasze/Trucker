@@ -361,3 +361,33 @@ export type TriathlonSummary = {
   /** The leg taking clearly more of the time than typical. */
   weakest?: TriathlonLegKey;
 };
+
+export type AchievementCategory = 'pace' | 'distance' | 'triathlon' | 'strength';
+
+/**
+ * One level of an achievement: a time (s) to beat for pace, metres to cover
+ * for distance and triathlons (all legs together), a 1RM to bodyweight ratio
+ * for strength.
+ */
+export type AchievementTier = {
+  /** Set for tiers with a name, such as race distances and strength levels. */
+  name?: string;
+  target: number;
+  earned_on?: string;
+  /** The cardio workout (pace, distance) or lifting workout (strength) that earned it. */
+  workout_id?: number;
+};
+
+/** A badge earned in tiers, hardest last. */
+export type Achievement = {
+  id: string;
+  category: AchievementCategory;
+  title: string;
+  /** The cardio activity, or the lift for strength. */
+  activity?: string;
+  /** The timed distance of a pace achievement. */
+  distance_m?: number;
+  /** The best result so far in the tiers' unit; unset before any, and for triathlons. */
+  best?: number;
+  tiers: AchievementTier[];
+};

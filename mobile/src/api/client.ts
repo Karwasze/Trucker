@@ -1,4 +1,5 @@
 import type {
+  Achievement,
   BodyweightEntry,
   CardioActivity,
   CardioWorkout,
@@ -91,6 +92,9 @@ export function createApi(baseUrl: string) {
       [],
     deleteBodyweight: (date: string) =>
       request<{ success: boolean }>(`/api/bodyweight?date=${q(date)}`, { method: 'DELETE' }),
+
+    /** Every achievement with the tiers earned so far. */
+    listAchievements: async () => (await request<Achievement[] | null>('/api/achievements')) ?? [],
 
     /** Days with a swim, ride and run, newest first. */
     listTriathlons: async () => (await request<Triathlon[] | null>('/api/triathlons')) ?? [],

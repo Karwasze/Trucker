@@ -2,6 +2,7 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
 
+import { useAchievements } from '@/achievements/achievements-context';
 import type { Workout } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, HeaderButton, Message, Screen } from '@/components/ui';
@@ -17,6 +18,7 @@ import { formatDate, formatKg, volumeOf } from '@/workout/format';
 export default function WorkoutDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { api, serverUrl } = useSettings();
+  const achievements = useAchievements();
   const [deleting, setDeleting] = useState(false);
   // There is no single-workout endpoint, so read it from the list.
   const workouts = useQuery(`workouts:${serverUrl}`, api.listWorkouts);
@@ -52,6 +54,7 @@ export default function WorkoutDetailScreen() {
     try {
       await api.updateWorkout({ ...workout, exercises });
       workouts.refresh();
+      achievements.check();
       setEdit(null);
     } catch (e) {
       Alert.alert("Couldn't save workout", (e as Error).message);

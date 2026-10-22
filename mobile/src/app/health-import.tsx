@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 
+import { useAchievements } from '@/achievements/achievements-context';
 import { localDate } from '@/api/client';
 import type { NewCardioWorkout, PlannedSession } from '@/api/types';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
@@ -43,6 +44,7 @@ function defaultMatches(workouts: NewCardioWorkout[], sessions: PlannedSession[]
 export default function HealthImportScreen() {
   const theme = useTheme();
   const { api, serverUrl } = useSettings();
+  const achievements = useAchievements();
   const { dismiss } = useHealthState();
   const imports = useHealthImports();
   // Ticked by default, so only unticked UUIDs are tracked.
@@ -89,6 +91,7 @@ export default function HealthImportScreen() {
         );
       }
       await dismiss(skipping.flatMap((w) => (w.source_uuid ? [w.source_uuid] : [])));
+      if (importing.length > 0) achievements.check();
       router.back();
     } catch (e) {
       Alert.alert("Couldn't import workouts", (e as Error).message);

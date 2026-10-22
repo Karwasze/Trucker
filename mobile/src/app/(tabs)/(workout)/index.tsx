@@ -5,6 +5,7 @@ import { Alert, StyleSheet, View } from 'react-native';
 import type { Exercise, ProgressionResult } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Message, Screen } from '@/components/ui';
+import { useAchievements } from '@/achievements/achievements-context';
 import { SettingsButton } from '@/settings/settings-button';
 import { Spacing } from '@/constants/theme';
 import { EnduranceToday } from '@/goals/endurance-today';
@@ -35,6 +36,7 @@ const formatDay = (date: string) => formatDate(date, { weekday: 'long', month: '
 
 export default function TodayScreen() {
   const { api, planId, serverUrl } = useSettings();
+  const achievements = useAchievements();
   const { today, recheck: recheckToday } = useToday();
   const { draft, setDraft } = useDraft();
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -178,6 +180,7 @@ export default function TodayScreen() {
     try {
       const logged = await api.createWorkout(toWorkout(draft));
       setDraft({ ...draft, logged });
+      achievements.check();
     } catch (e) {
       Alert.alert("Couldn't save workout", (e as Error).message);
     } finally {

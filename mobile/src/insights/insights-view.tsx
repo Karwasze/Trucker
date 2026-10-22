@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { AchievementsButton } from '@/achievements/achievements-button';
 import { localDate } from '@/api/client';
 import type {
   Adherence,
@@ -95,7 +96,12 @@ function InsightsPage({
     <Screen
       title={title}
       subtitle={subtitle}
-      action={<SettingsButton />}
+      action={
+        <View style={styles.headerActions}>
+          <AchievementsButton />
+          <SettingsButton />
+        </View>
+      }
       hasHeader
       refreshing={insights.refreshing}
       onRefresh={insights.refresh}>
@@ -481,6 +487,11 @@ function StrengthRow({ level }: { level: StrengthLevel }) {
 }
 
 const styles = StyleSheet.create({
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -72,7 +72,27 @@ if [ "$prebuild" = true ]; then
   touch ios
 fi
 
-step "Building and installing (Release)"
-npx expo run:ios --device "$device" --configuration Release
+step "Building (Release)"
+# Built with xcodebuild rather than `expo run:ios`: Expo only passes
+# -allowProvisioningUpdates when no team is set, and appleTeamId in app.json
+# always sets one. Without it Xcode can't renew the personal team's
+# provisioning profiles (they expire after 7 days) for the app and its widget
+# extension.
+xcodebuild \
+  -workspace ios/Trucker.xcworkspace \
+  -scheme Trucker \
+  -configuration Release \
+  -destination "id=$device" \
+  -derivedDataPath ios/build \
+  -allowProvisioningUpdates \
+  -allowProvisioningDeviceRegistration \
+  -quiet \
+  build 2>&1 |
+  # Xcode notes every script phase that runs on each build by design (bundling,
+  # Expo's configure step...); there's no setting to turn the note off.
+  sed '/^note: Run script build phase .* will be run during every build/d'
+
+step "Installing"
+npx expo run:ios --device "$device" --binary ios/build/Build/Products/Release-iphoneos/Trucker.app
 
 step "Done: open Trucker on the phone"

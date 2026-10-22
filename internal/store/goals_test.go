@@ -304,9 +304,7 @@ func TestSetCardioDistance_JudgesSessionByIt(t *testing.T) {
 
 func TestCreateGoal_KeepsTempoBlocks(t *testing.T) {
 	s := newTestStore(t)
-	run := cardioRun("a", "2026-10-18", 10)
-	run.MaxHeartRate = float(168)
-	seedCardio(t, s, run)
+	seedCardio(t, s, cardioRun("a", "2026-10-18", 10))
 	// One run a week carries a tempo block in build.
 	g := newGoal()
 	g.Weekdays = []string{"sunday"}
@@ -322,8 +320,7 @@ func TestCreateGoal_KeepsTempoBlocks(t *testing.T) {
 	if block == nil {
 		t.Fatal("expected a session with a tempo block")
 	}
-	if block.DistanceM <= 0 || block.SpeedMin == nil || block.SpeedMax == nil ||
-		block.HRMin == nil || *block.HRMin != 134 || block.HRMax == nil || *block.HRMax != 148 {
-		t.Errorf("expected the block's distance, speed and 134–148 bpm kept, got %+v", block)
+	if block.DistanceM <= 0 || block.SpeedMin == nil || block.SpeedMax == nil {
+		t.Errorf("expected the block's distance and speed kept, got %+v", block)
 	}
 }

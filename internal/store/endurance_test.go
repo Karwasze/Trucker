@@ -134,10 +134,18 @@ func TestGeneratePlan_TenK(t *testing.T) {
 		t.Errorf("expected the long run to peak around the race distance, got %v", longest)
 	}
 
-	// Without history, intensity is by feel.
+	// Without history, intensity is a heart rate zone alone.
 	for _, s := range sessions {
 		if s.SpeedMin != nil || s.HRMin != nil {
 			t.Errorf("expected no targets without history, got %+v", s)
+			break
+		}
+	}
+	for _, s := range sessions {
+		if s.Kind == KindLong {
+			if !strings.HasSuffix(s.Description, " · zone 2") || s.Intensity != "Z2" {
+				t.Errorf("expected a long run in zone 2, got %q (%s)", s.Description, s.Intensity)
+			}
 			break
 		}
 	}
@@ -170,23 +178,20 @@ func TestGeneratePlan_QualitySessionsByPhase(t *testing.T) {
 func TestGeneratePlan_Targets(t *testing.T) {
 	g := tenK()
 	// A 25:00 5k: threshold ≈ 3.197 m/s, or 5:13/km.
-	f := Fitness{Threshold: map[string]float64{ActivityRunning: 10000 / 3127.6}, MaxHR: 190}
+	f := Fitness{Threshold: map[string]float64{ActivityRunning: 10000 / 3127.6}}
 	sessions := generate(t, generatorInput{Goal: g, From: day(g.StartDate), Fitness: f})
 
 	easy := sessions[0]
 	if easy.Kind != KindEasy {
 		t.Fatalf("expected an easy run first, got %+v", easy)
 	}
-	// Easy is 60–90 s/km slower than threshold pace: 6:13–6:43/km.
-	if got := formatSpeedRange(ActivityRunning, *easy.SpeedMin, *easy.SpeedMax); got != "6:13–6:43/km" {
-		t.Errorf("expected an easy pace of 6:13–6:43/km, got %s", got)
-	}
-	if *easy.HRMin != 114 || *easy.HRMax != 143 {
-		t.Errorf("expected 114–143 bpm, got %v–%v", *easy.HRMin, *easy.HRMax)
+	// Easy goes by a zone of the Fitness app, without a pace or bpm range.
+	if easy.SpeedMin != nil || easy.HRMin != nil || easy.Intensity != "Z2" || !strings.HasSuffix(easy.Description, " · zone 2") {
+		t.Errorf("expected zone 2 without a pace or bpm range, got %+v", easy)
 	}
 	for _, s := range sessions {
 		if s.Kind == KindIntervals {
-			if want := "Intervals 4×800 m @ 4:53–5:03/km, 2 min jog · 6.5 km in all"; s.Description != want {
+			if want := "Intervals 4×800 m @ 4:53–5:03/km (zone 4), 2 min jog · 6.5 km in all"; s.Description != want {
 				t.Errorf("expected %q, got %q", want, s.Description)
 			}
 			if got := formatSpeedRange(ActivityRunning, *s.SpeedMin, *s.SpeedMax); got != "4:53–5:03/km" {
@@ -438,5 +443,139 @@ func TestGeneratePlan_EaseQuality(t *testing.T) {
 	}
 	if quality(eased, "2026-11-30") != 1 {
 		t.Errorf("expected quality back the week after")
+	}
+}
+
+func TestNewSession_HeartRateZones(t *testing.T) {
+	// Zones are numbered as in the Fitness app.
+	cases := []struct {
+		activity, kind, zone, description string
+	}{
+		{ActivityRunning, KindRecovery, "Z1", "Recovery run 4 km · zone 1"},
+		{ActivityRunning, KindLong, "Z2", "Long run 6 km · zone 2"},
+		{ActivityCycling, KindEasy, "Z2", "Easy ride 30 km · zone 2"},
+		{ActivityRunning, KindTempo, "Z3", "Tempo run 8 km: the middle half @ zone 3"},
+		{ActivityRunning, KindBrick, "Z3", "Brick run 3 km straight off the bike · zone 3"},
+	}
+	for _, c := range cases {
+		distance := map[string]float64{KindRecovery: 4000, KindLong: 6000, KindEasy: 30000, KindTempo: 8000, KindBrick: 3000}[c.kind]
+		s := newSession(c.activity, c.kind, PhaseBuild, distance, Fitness{})
+		if s.Intensity != c.zone || s.Description != c.description {
+			t.Errorf("%s %s: expected %s %q, got %s %q", c.activity, c.kind, c.zone, c.description, s.Intensity, s.Description)
+		}
+	}
+	intervals := newSession(ActivityRunning, KindIntervals, PhasePeak, 8000, Fitness{})
+	if intervals.Intensity != "Z4" || !strings.Contains(intervals.Description, "@ zone 4,") {
+		t.Errorf("expected intervals in zone 4, got %s %q", intervals.Intensity, intervals.Description)
+	}
+}
+
+// halfTri is a half triathlon on three days a week, as first planned on
+// Friday Oct 16 2026 for Sunday Apr 4 2027, from a brick of a 975 m swim,
+// a 45 km ride and a 10.6 km run.
+func halfTri() (Goal, Fitness) {
+	g := Goal{
+		Name: "Half triathlon", StartDate: "2026-10-16", RaceDate: "2027-04-04",
+		SwimM: fp(1900), BikeM: fp(90000), RunM: fp(21097),
+		Weekdays: []string{"tuesday", "thursday", "sunday"}, LongDay: "sunday",
+	}
+	f := Fitness{
+		Weekly:    map[string]float64{ActivitySwimming: 244, ActivityCycling: 11292, ActivityRunning: 2648},
+		Longest:   map[string]float64{ActivitySwimming: 975, ActivityCycling: 45168, ActivityRunning: 10591},
+		Threshold: map[string]float64{ActivitySwimming: 700 / 1308.7, ActivityCycling: 45168 / 8186.0, ActivityRunning: 10000 / 5059.0},
+	}
+	return g, f
+}
+
+func TestGeneratePlan_TriathlonEasyByZone(t *testing.T) {
+	g, f := halfTri()
+	for _, s := range generate(t, generatorInput{Goal: g, From: day(g.StartDate), Fitness: f}) {
+		if s.Kind != KindLong && s.Kind != KindEasy && s.Kind != KindRecovery {
+			continue
+		}
+		// Easy efforts go by heart rate zone alone; blocks keep their pace.
+		if s.SpeedMin != nil || s.SpeedMax != nil {
+			t.Errorf("expected no speed range on %s %s %s, got %q", s.Date, s.Activity, s.Kind, s.Description)
+		}
+		if !strings.Contains(s.Description, " · zone 2") && !strings.Contains(s.Description, " · zone 1") {
+			t.Errorf("expected a zone on %s, got %q", s.Date, s.Description)
+		}
+		if s.TempoBlock != nil && s.TempoBlock.SpeedMin == nil {
+			t.Errorf("expected the tempo block on %s paced, got %+v", s.Date, s.TempoBlock)
+		}
+	}
+}
+
+func TestGeneratePlan_TriathlonLongRunCap(t *testing.T) {
+	g, f := halfTri()
+	longest := 0.0
+	for _, s := range generate(t, generatorInput{Goal: g, From: day(g.StartDate), Fitness: f}) {
+		if s.Activity == ActivityRunning && s.Kind == KindLong {
+			longest = max(longest, *s.TargetDistanceM)
+		}
+	}
+	// 85% of the 21.1 km run leg, as the race run comes off the bike.
+	if longest != 18000 {
+		t.Errorf("expected the long run to peak at 18 km, got %v", longest)
+	}
+}
+
+func TestGeneratePlan_TriathlonPeakAlternates(t *testing.T) {
+	g, f := halfTri()
+	sessions := generate(t, generatorInput{Goal: g, From: day(g.StartDate), Fitness: f})
+
+	for _, activity := range []string{ActivityCycling, ActivityRunning} {
+		longest := 0.0
+		for _, s := range sessions {
+			if s.Activity == activity && s.Kind == KindLong {
+				longest = max(longest, *s.TargetDistanceM)
+			}
+		}
+		// Peak weeks (Feb 15, Feb 22 recovery, Mar 1, Mar 8) don't go the
+		// longest twice in a row, ending on the longest.
+		var full []string
+		for _, s := range sessions {
+			if s.Activity == activity && s.Kind == KindLong && *s.TargetDistanceM == longest {
+				full = append(full, s.Date)
+			}
+		}
+		if len(full) != 2 || full[len(full)-1] < "2027-03-08" {
+			t.Errorf("expected the longest %s twice, last in the last peak week, got %v", activity, full)
+		}
+	}
+}
+
+func TestGeneratePlan_TriathlonBricksGrow(t *testing.T) {
+	g, f := halfTri()
+	var bricks []float64
+	for _, s := range generate(t, generatorInput{Goal: g, From: day(g.StartDate), Fitness: f}) {
+		if s.Kind == KindBrick {
+			bricks = append(bricks, *s.TargetDistanceM)
+		}
+	}
+	if len(bricks) < 2 || bricks[0] > 4500 || slices.Max(bricks) < 6000 {
+		t.Errorf("expected bricks growing from about 4 km to 6 km or more, got %v", bricks)
+	}
+}
+
+func TestRaceWeek_TriathlonRunsBeforeRace(t *testing.T) {
+	g, f := halfTri()
+	sessions := generate(t, generatorInput{Goal: g, From: day("2027-03-29"), Fitness: f})
+
+	byActivity := make(map[string][]PlannedSession)
+	for _, s := range sessions {
+		if s.Kind != KindRace {
+			byActivity[s.Activity] = append(byActivity[s.Activity], s)
+		}
+	}
+	// Two days for three legs: the run goes straight off the ride.
+	for _, activity := range legOrder {
+		if len(byActivity[activity]) != 1 {
+			t.Fatalf("expected one %s before the race, got %+v", activity, sessions)
+		}
+	}
+	run, ride := byActivity[ActivityRunning][0], byActivity[ActivityCycling][0]
+	if run.Date != ride.Date || run.Kind != KindBrick || *run.TargetDistanceM != 3000 {
+		t.Errorf("expected a 3 km run off the ride on %s, got %+v", ride.Date, run)
 	}
 }

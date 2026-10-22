@@ -53,15 +53,3 @@ func TestEstimateFitness_VolumeAndLongest(t *testing.T) {
 		t.Error("expected no swimming threshold without swims")
 	}
 }
-
-func TestEstimateFitness_MaxHeartRate(t *testing.T) {
-	today := time.Date(2026, 10, 16, 0, 0, 0, 0, time.UTC)
-	hard := cardio(ActivityRunning, "2026-10-01", 5000, 1500)
-	hard.MaxHeartRate = float(188)
-	easy := cardio(ActivityCycling, "2026-10-05", 30000, 3600)
-	easy.MaxHeartRate = float(160)
-
-	if got := estimateFitness([]CardioWorkout{hard, easy}, today).MaxHR; got != 188 {
-		t.Errorf("expected a max heart rate of 188, got %v", got)
-	}
-}

@@ -49,14 +49,26 @@ const (
 	minPlanWeeks = 6
 	// longRace is the estimated race time beyond which the taper is two weeks.
 	longRace = 2 * time.Hour
+	// triathlonLongRun is the longest run of a triathlon plan, as a share of
+	// the run leg: the race run comes off the bike, so it's never run whole.
+	triathlonLongRun = 0.85
+	// stepBackLong is the long session of a triathlon's step-back peak week,
+	// as a share of the planned one.
+	stepBackLong = 0.8
+	// brickShare is a triathlon's brick run as a share of the week's long
+	// run.
+	brickShare = 0.35
 )
 
 // peakLong is the longest session a plan builds up to for a race leg.
-func peakLong(activity string, race float64) float64 {
+func peakLong(activity string, race float64, triathlon bool) float64 {
 	switch activity {
 	case ActivityRunning:
 		factor := 1.2
-		if race > 10550 {
+		switch {
+		case triathlon && race > 10550:
+			factor = triathlonLongRun
+		case race > 10550:
 			factor = 1.0
 		}
 		return math.Min(math.Max(race*factor, 8000), 32000)
@@ -131,6 +143,9 @@ type planWeek struct {
 	monday   time.Time
 	phase    string
 	recovery bool
+	// stepBack marks a triathlon's peak week between two that go the
+	// longest, whose long sessions are shorter (see goalWeeks).
+	stepBack bool
 }
 
 // mondayOf returns the Monday of the week of t, at midnight.
@@ -172,6 +187,27 @@ func planWeeks(start, race time.Time, taperWeeks int) []planWeek {
 	return weeks
 }
 
+// goalWeeks is planWeeks for a goal. A triathlon's peak weeks take turns
+// going the longest, counting back from the last, so the longest sessions,
+// hours long, don't come week after week.
+func goalWeeks(g Goal, f Fitness) []planWeek {
+	start, _ := time.Parse(dateLayout, g.StartDate)
+	race, _ := time.Parse(dateLayout, g.RaceDate)
+	weeks := planWeeks(start, race, taperWeeks(g, f))
+	if len(g.legs()) < 2 {
+		return weeks
+	}
+	stepBack := false
+	for i := len(weeks) - 1; i >= 0; i-- {
+		if weeks[i].phase != PhasePeak || weeks[i].recovery {
+			continue
+		}
+		weeks[i].stepBack = stepBack
+		stepBack = !stepBack
+	}
+	return weeks
+}
+
 // taperWeeks is two for a race estimated to take over two hours, else one.
 func taperWeeks(g Goal, f Fitness) int {
 	var seconds float64
@@ -209,11 +245,10 @@ func taperWeeks(g Goal, f Fitness) int {
 // the long day; triathlons put the long ride there.
 func generatePlan(in generatorInput) ([]PlannedSession, []string) {
 	g := in.Goal
-	start, _ := time.Parse(dateLayout, g.StartDate)
 	race, _ := time.Parse(dateLayout, g.RaceDate)
 	from := time.Date(in.From.Year(), in.From.Month(), in.From.Day(), 0, 0, 0, 0, time.UTC)
 	legs := g.legs()
-	weeks := planWeeks(start, race, taperWeeks(g, in.Fitness))
+	weeks := goalWeeks(g, in.Fitness)
 
 	var warnings []string
 	if remaining := len(weeks) - weekIndex(weeks, from); remaining < minPlanWeeks {
@@ -236,7 +271,7 @@ func generatePlan(in generatorInput) ([]PlannedSession, []string) {
 	growth := make(map[string]float64)
 	floorShare := math.Min(floorFraction, math.Pow(weeklyGrowth, -float64(steps)))
 	for _, activity := range legs {
-		peak[activity] = peakLong(activity, g.leg(activity)) / longShare(full[activity])
+		peak[activity] = peakLong(activity, g.leg(activity), len(legs) > 1) / longShare(full[activity])
 		floor := peak[activity] * floorShare
 		prev, continuing := in.PrevLevel[activity]
 		continuing = continuing && prev > 0
@@ -367,6 +402,9 @@ func trainingWeek(g Goal, f Fitness, week planWeek, level map[string]float64, da
 		}
 		long := volume * longShare(full[activity])
 		other := long * otherSession
+		if week.stepBack {
+			long *= stepBackLong
+		}
 
 		quality := ""
 		if !week.recovery && !ease && n >= 2 {
@@ -420,10 +458,17 @@ func trainingWeek(g Goal, f Fitness, week planWeek, level map[string]float64, da
 	// A triathlon's brick: a short run straight off the long ride.
 	if triathlon && slices.Contains(legs, ActivityRunning) && slices.Contains(legs, ActivityCycling) &&
 		!week.recovery && (week.phase == PhaseBuild || week.phase == PhasePeak) {
+		// It grows with the long run, to get used to running off the bike.
+		longRun := 0.0
+		for _, s := range sessions {
+			if s.Activity == ActivityRunning && s.Kind == KindLong {
+				longRun = *s.TargetDistanceM
+			}
+		}
 		for _, s := range sessions {
 			if s.Activity == ActivityCycling && s.Kind == KindLong {
 				brick := newSession(ActivityRunning, KindBrick, week.phase,
-					roundDistance(ActivityRunning, math.Max(level[ActivityRunning]*0.15, 2000)), f)
+					roundDistance(ActivityRunning, longRun*brickShare), f)
 				brick.Date = s.Date
 				sessions = append(sessions, brick)
 				break
@@ -470,11 +515,16 @@ func raceWeekGap(g Goal, week planWeek) int {
 
 // raceWeek plans race week: the race on race day, and before it a short easy
 // session per discipline (two for a single sport), not the day before the
-// race when there's a choice.
+// race when there's a choice. A triathlon short of days runs a short brick
+// off the ride instead of on a day of its own.
 func raceWeek(g Goal, f Fitness, days []time.Time, race time.Time) []PlannedSession {
 	legs := g.legs()
+	brick := len(days) < len(legs) && slices.Contains(legs, ActivityCycling) && slices.Contains(legs, ActivityRunning)
 	var easy []PlannedSession
 	for _, activity := range legs {
+		if brick && activity == ActivityRunning {
+			continue
+		}
 		count := 1
 		if len(legs) == 1 {
 			count = 2
@@ -496,6 +546,11 @@ func raceWeek(g Goal, f Fitness, days []time.Time, race time.Time) []PlannedSess
 		}
 		s.Date = order[i].Format(dateLayout)
 		sessions = append(sessions, s)
+		if brick && s.Activity == ActivityCycling {
+			run := newSession(ActivityRunning, KindBrick, PhaseRace, sports[ActivityRunning].minSession, f)
+			run.Date = s.Date
+			sessions = append(sessions, run)
+		}
 	}
 	for _, activity := range legs {
 		s := newSession(activity, KindRace, PhaseRace, g.leg(activity), f)
@@ -607,11 +662,7 @@ func newSession(activity, kind, phase string, distance float64, f Fitness) Plann
 	if speedMin > 0 {
 		s.SpeedMin, s.SpeedMax = fp(roundSpeed(speedMin)), fp(roundSpeed(speedMax))
 	}
-	if f.MaxHR > 0 {
-		low, high := heartRateRange(effort)
-		s.HRMin, s.HRMax = fp(math.Round(f.MaxHR*low)), fp(math.Round(f.MaxHR*high))
-	}
-	s.Intensity = intensityLabel(activity, effort)
+	s.Intensity = fmt.Sprintf("Z%d", heartRateZone(effort))
 
 	if kind == KindIntervals {
 		reps, repDistance, repDuration, recovery := intervalStructure(activity, phase, distance)
@@ -626,76 +677,52 @@ func newSession(activity, kind, phase string, distance float64, f Fitness) Plann
 	return s
 }
 
-// speedRange is the target speed (m/s) for an effort, from the threshold
-// speed, or zeros without one. Runs and swims are paced in time per
-// distance around threshold pace; rides as a share of threshold speed.
+// speedRange is the target speed (m/s) of a tempo or interval effort, from
+// the threshold speed, or zeros for an easy effort or without a threshold.
+// Easy efforts go by heart rate zone, which the watch shows, as a pace from
+// the threshold says little of how easy a day feels. Runs and swims are
+// paced in time per distance around threshold pace; rides as a share of
+// threshold speed.
 func speedRange(activity, effort string, threshold float64) (float64, float64) {
-	if threshold <= 0 {
+	if threshold <= 0 || (effort != KindTempo && effort != KindIntervals) {
 		return 0, 0
 	}
+	intervals := effort == KindIntervals
 	switch activity {
 	case ActivityCycling:
-		low, high := 0.75, 0.85
-		switch effort {
-		case KindTempo:
-			low, high = 0.9, 0.97
-		case KindIntervals:
-			low, high = 1.0, 1.08
+		if intervals {
+			return threshold * 1.0, threshold * 1.08
 		}
-		return threshold * low, threshold * high
+		return threshold * 0.9, threshold * 0.97
 	case ActivitySwimming:
 		css := 100 / threshold
-		slow, fast := css+15, css+8
-		switch effort {
-		case KindTempo:
-			slow, fast = css+5, css
-		case KindIntervals:
+		slow, fast := css+5, css
+		if intervals {
 			slow, fast = css+2, css-3
 		}
 		return 100 / slow, 100 / fast
 	default:
 		pace := 1000 / threshold
-		slow, fast := pace+90, pace+60
-		switch effort {
-		case KindRecovery:
-			slow, fast = pace+105, pace+75
-		case KindTempo:
-			slow, fast = pace+5, pace-5
-		case KindIntervals:
+		slow, fast := pace+5, pace-5
+		if intervals {
 			slow, fast = pace-10, pace-20
 		}
 		return 1000 / slow, 1000 / fast
 	}
 }
 
-// heartRateRange is the target share of the max heart rate for an effort.
-func heartRateRange(effort string) (float64, float64) {
+// heartRateZone is the heart rate zone an effort is done in, numbered as in
+// the Fitness app, whose zones the watch shows during the workout.
+func heartRateZone(effort string) int {
 	switch effort {
-	case KindTempo:
-		return 0.8, 0.88
+	case KindRecovery:
+		return 1
+	case KindTempo, KindBrick:
+		return 3
 	case KindIntervals:
-		return 0.88, 0.95
+		return 4
 	}
-	return 0.6, 0.75
-}
-
-func intensityLabel(activity, effort string) string {
-	switch effort {
-	case KindTempo:
-		if activity == ActivityCycling {
-			return "Z3"
-		}
-		return "tempo"
-	case KindIntervals:
-		if activity == ActivityCycling {
-			return "Z4"
-		}
-		return "hard"
-	}
-	if activity == ActivityCycling {
-		return "Z2"
-	}
-	return "easy"
+	return 2
 }
 
 // intervalStructure is the reps of an interval session: distance reps for
@@ -725,8 +752,8 @@ func intervalStructure(activity, phase string, distance float64) (reps int, repD
 
 func clampInt(n, low, high int) int { return min(max(n, low), high) }
 
-// describeSession writes what to do, e.g. "Intervals 6×800 m @ 4:30–4:40/km,
-// 2 min jog · 8 km in all".
+// describeSession writes what to do, e.g. "Intervals 6×800 m @ 4:30–4:40/km
+// (zone 4), 2 min jog · 8 km in all".
 func describeSession(s PlannedSession) string {
 	noun := sports[s.Activity].noun
 	distance := formatMetres(s.Activity, *s.TargetDistanceM)
@@ -758,22 +785,14 @@ func describeSession(s PlannedSession) string {
 	return fmt.Sprintf("%s %s %s · %s", names[s.Kind], noun, distance, target)
 }
 
-// describeTarget writes a session's intensity target: a pace or speed
-// range, else a heart rate range, else how it should feel.
+// describeTarget writes a session's intensity target: its heart rate zone,
+// after a pace or speed range when it has one.
 func describeTarget(s PlannedSession) string {
+	zone := fmt.Sprintf("zone %d", heartRateZone(s.Kind))
 	if s.SpeedMin != nil && s.SpeedMax != nil {
-		return formatSpeedRange(s.Activity, *s.SpeedMin, *s.SpeedMax)
+		return fmt.Sprintf("%s (%s)", formatSpeedRange(s.Activity, *s.SpeedMin, *s.SpeedMax), zone)
 	}
-	if s.HRMin != nil && s.HRMax != nil {
-		return fmt.Sprintf("%.0f–%.0f bpm", *s.HRMin, *s.HRMax)
-	}
-	switch s.Kind {
-	case KindTempo, KindBrick:
-		return "comfortably hard"
-	case KindIntervals:
-		return "hard"
-	}
-	return "conversational"
+	return zone
 }
 
 // formatSpeedRange writes a speed range as each sport is paced: km/h for

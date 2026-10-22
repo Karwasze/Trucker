@@ -9,7 +9,6 @@ const (
 	fitnessVolumeDays    = 28
 	fitnessLongestDays   = 42
 	fitnessThresholdDays = 56
-	fitnessMaxHRDays     = 180
 	// Riegel's exponent: how much slower a longer race is run.
 	riegelExponent = 1.06
 	// Runs shorter than this say little about longer races.
@@ -22,13 +21,11 @@ const (
 // Fitness is where the lifter stands per discipline (running, cycling,
 // swimming), worked out from cardio history: average weekly distance over
 // the last 4 weeks and longest session over the last 6 (in metres),
-// threshold speed (m/s, missing without suitable sessions) and the highest
-// heart rate seen (0 when never measured).
+// and threshold speed (m/s, missing without suitable sessions).
 type Fitness struct {
 	Weekly    map[string]float64
 	Longest   map[string]float64
 	Threshold map[string]float64
-	MaxHR     float64
 }
 
 // estimateFitness works out Fitness from cardio workouts up to today.
@@ -51,9 +48,6 @@ func estimateFitness(workouts []CardioWorkout, today time.Time) Fitness {
 	for _, w := range workouts {
 		if w.Date > end {
 			continue
-		}
-		if w.MaxHeartRate != nil && w.Date > since(fitnessMaxHRDays) {
-			f.MaxHR = math.Max(f.MaxHR, *w.MaxHeartRate)
 		}
 		if w.DistanceM == nil || *w.DistanceM <= 0 || w.DurationSeconds <= 0 {
 			continue

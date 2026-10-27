@@ -115,10 +115,8 @@ test('with nothing logged each section says what to do', async () => {
   mockServer({ 'GET /api/insights': empty });
   await selectPlan(null);
   await renderStrength();
-  expect(
-    await screen.findByText('Pick a plan on the Plans tab to track adherence and stalled lifts.')
-  ).toBeOnTheScreen();
-  expect(screen.getByText('Pick a plan on the Plans tab to follow the progression of its lifts.')).toBeOnTheScreen();
+  expect(await screen.findByText('Pick a plan under Training to track adherence and stalled lifts.')).toBeOnTheScreen();
+  expect(screen.getByText('Pick a plan under Training to follow the progression of its lifts.')).toBeOnTheScreen();
   // Over all time there's no "last" period to name.
   expect(screen.getAllByText('No workouts.')).toHaveLength(1);
   expect(screen.queryByText(/From beginning/)).not.toBeOnTheScreen();

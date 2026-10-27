@@ -18,7 +18,12 @@ if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 	exit 1
 fi
 
-git fetch --quiet --tags "$remote" "$branch"
+if ! fetch_output="$(git fetch --tags "$remote" "$branch" 2>&1)"; then
+	echo "$fetch_output" >&2
+	echo "Fetching from $remote failed. If a local tag differs from $remote's" \
+		"(would clobber existing tag), delete it with 'git tag -d <tag>' and retry." >&2
+	exit 1
+fi
 
 if git rev-parse --quiet --verify "refs/tags/$tag" >/dev/null; then
 	echo "Tag '$tag' already exists" >&2

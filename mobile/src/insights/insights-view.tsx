@@ -138,7 +138,7 @@ function StrengthContent({ data, timespan, hasPlan }: { data: Insights; timespan
       {!hasPlan || !data.adherence ? (
         <Card>
           <ThemedText type="small" themeColor="textSecondary">
-            Pick a plan on the Plans tab to track adherence and stalled lifts.
+            Pick a plan under Training to track adherence and stalled lifts.
           </ThemedText>
         </Card>
       ) : !data.adherence.since ? (
@@ -167,7 +167,7 @@ function StrengthContent({ data, timespan, hasPlan }: { data: Insights; timespan
       {!hasPlan ? (
         <Card>
           <ThemedText type="small" themeColor="textSecondary">
-            Pick a plan on the Plans tab to follow the progression of its lifts.
+            Pick a plan under Training to follow the progression of its lifts.
           </ThemedText>
         </Card>
       ) : data.progression.length === 0 ? (

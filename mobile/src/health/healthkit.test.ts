@@ -213,3 +213,15 @@ test('without recent resting heart rate the profile falls back to the latest rea
   );
   expect(await healthHeartRateProfile()).toEqual({ dateOfBirth: undefined, restingHeartRate: 61 });
 });
+
+// Resetting privacy on the phone undoes access while the app still counts
+// Health as connected, and reading before asking again fails.
+test('reading workouts asks for access first, so access undone in Settings is asked for again', async () => {
+  hk.queryWorkoutSamples.mockResolvedValue([]);
+  await healthWorkoutsSince(at('2026-10-10T00:00:00Z'), new Set());
+  await healthWorkoutReport(at('2026-10-10T00:00:00Z'), new Set(), new Set());
+  expect(hk.requestAuthorization).toHaveBeenCalledTimes(2);
+  expect(hk.requestAuthorization.mock.invocationCallOrder[0]).toBeLessThan(
+    hk.queryWorkoutSamples.mock.invocationCallOrder[0]
+  );
+});

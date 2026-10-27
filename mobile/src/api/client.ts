@@ -7,6 +7,7 @@ import type {
   Goal,
   GoalToday,
   ExerciseDB,
+  HeartRateZones,
   Insights,
   MuscleTarget,
   NewCardioWorkout,
@@ -92,6 +93,14 @@ export function createApi(baseUrl: string) {
       [],
     deleteBodyweight: (date: string) =>
       request<{ success: boolean }>(`/api/bodyweight?date=${q(date)}`, { method: 'DELETE' }),
+    /** The heart rate zones in effect on `date`, or null before any were set. */
+    heartRateZones: (date: string) => request<HeartRateZones | null>(`/api/heart-rate-zones?date=${q(date)}`),
+    /** Records the max and resting heart rate as of `date`; returns the zones then. */
+    setHeartRateProfile: (date: string, max_hr: number, resting_hr: number) =>
+      request<HeartRateZones>('/api/heart-rate-zones', {
+        method: 'PUT',
+        body: JSON.stringify({ date, max_hr, resting_hr }),
+      }),
 
     /** Every achievement with the tiers earned so far. */
     listAchievements: async () => (await request<Achievement[] | null>('/api/achievements')) ?? [],

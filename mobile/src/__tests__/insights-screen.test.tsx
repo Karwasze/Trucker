@@ -7,7 +7,7 @@ import CardioInsightsScreen from '@/app/(tabs)/(insights)/cardio';
 import StrengthInsightsScreen from '@/app/(tabs)/(insights)/index';
 import { connectHealth, healthHeartRateProfile } from '@/health/healthkit';
 import { InsightsProvider } from '@/insights/insights-view';
-import { mockServer, renderInApp, selectPlan, setNow, type Request } from '@/test-utils';
+import { mockServer, renderInApp, selectPlan, setNow, TEST_ZONES, type Request } from '@/test-utils';
 
 jest.mock('@/health/healthkit', () => ({
   isHealthAvailable: jest.fn(() => true),
@@ -202,13 +202,15 @@ test('both pages share the timespan and one request', async () => {
       <CardioInsightsScreen />
     </InsightsProvider>
   );
+  // The Cardio page reads the heart rate zones too.
+  const insightsRequests = () => requests.filter((r) => r.path === '/api/insights');
   await screen.findByText('No cardio workouts.');
-  expect(requests).toHaveLength(1);
+  expect(insightsRequests()).toHaveLength(1);
 
   await user.press(screen.getAllByRole('tab', { name: '1 month' })[0]);
   expect(await screen.findByText('No cardio in the last 1 month.')).toBeOnTheScreen();
   expect(screen.getByText('Nothing lifted in the last 1 month.')).toBeOnTheScreen();
-  expect(requests).toHaveLength(2);
+  expect(insightsRequests()).toHaveLength(2);
 });
 
 test('tapping a lift or an activity opens its chart on Progress with the same timespan', async () => {
@@ -222,7 +224,7 @@ test('tapping a lift or an activity opens its chart on Progress with the same ti
   await renderCardio();
   await user.press(await screen.findByText('🚴 Ride · 1 session'));
   expect(router.navigate).toHaveBeenLastCalledWith({
-    pathname: '/stats',
+    pathname: '/stats/cardio',
     params: { activity: 'cycling', span: 'all' },
   });
 });
@@ -236,29 +238,39 @@ describe('heart rate zones', () => {
     await AsyncStorage.setItem(`trucker.health:${url}`, JSON.stringify({ connectedAt: '2026-10-01T08:00:00.000Z' }));
   }
 
-  test('are worked out from the birth date and resting heart rate in Health', async () => {
+  // The server's zones: none until the app sends Health's heart rates.
+  function server(stored: typeof TEST_ZONES | null = null) {
+    return mockServer({
+      'GET /api/insights': empty,
+      'GET /api/heart-rate-zones': stored,
+      'PUT /api/heart-rate-zones': ({ body }: Request) => ({ ...TEST_ZONES, ...(body as object) }),
+    });
+  }
+
+  test('are worked out on the server from the birth date and resting heart rate in Health', async () => {
     jest.mocked(healthHeartRateProfile).mockResolvedValue({
       dateOfBirth: new Date('1991-03-02T00:00:00'),
       restingHeartRate: 55,
     });
-    mockServer({ 'GET /api/insights': empty });
+    const requests = server();
     await connect();
     await renderCardio();
 
-    // Age 35: max 185, so a reserve of 130 bpm over 55.
     expect(await screen.findByText('< 133 bpm')).toBeOnTheScreen();
     expect(screen.getByText('133–145 bpm')).toBeOnTheScreen();
     expect(screen.getByText('146–158 bpm')).toBeOnTheScreen();
     expect(screen.getByText('159–171 bpm')).toBeOnTheScreen();
     expect(screen.getByText('172+ bpm')).toBeOnTheScreen();
     expect(screen.getByText(/max heart rate of 185 bpm \(by age\) and resting heart rate of 55 bpm/)).toBeOnTheScreen();
+    // Age 35: a max of 185, sent for sessions to be judged by.
+    expect(requests.find((r) => r.method === 'PUT')?.body).toEqual({ date: TODAY, max_hr: 185, resting_hr: 55 });
     // Asks for access to the birth date and resting heart rate when connected before they were read.
     expect(connectHealth).toHaveBeenCalled();
   });
 
   test('say what Health is missing for them', async () => {
     jest.mocked(healthHeartRateProfile).mockResolvedValue({ restingHeartRate: 55 });
-    mockServer({ 'GET /api/insights': empty });
+    server();
     await connect();
     await renderCardio();
     expect(
@@ -266,11 +278,17 @@ describe('heart rate zones', () => {
     ).toBeOnTheScreen();
   });
 
-  test('are left out without Health connected', async () => {
-    mockServer({ 'GET /api/insights': empty });
+  test('show the server’s without Health connected', async () => {
+    server(TEST_ZONES);
+    await renderCardio();
+    expect(await screen.findByText('146–158 bpm')).toBeOnTheScreen();
+    expect(healthHeartRateProfile).not.toHaveBeenCalled();
+  });
+
+  test('are left out without Health connected or any on the server', async () => {
+    server();
     await renderCardio();
     expect(await screen.findByText('No cardio workouts.')).toBeOnTheScreen();
     expect(screen.queryByText('Heart rate zones')).not.toBeOnTheScreen();
-    expect(healthHeartRateProfile).not.toHaveBeenCalled();
   });
 });

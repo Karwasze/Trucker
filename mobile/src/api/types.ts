@@ -289,6 +289,12 @@ export type Verdict = {
   checks: { name: string; actual: string; target: string; ok: boolean; warning?: string }[];
 };
 
+/** A heart rate zone, 1 to 5 as the watch numbers them, in whole bpm. Zone 1 has no min, zone 5 no max. */
+export type HeartRateZone = { zone: number; min?: number; max?: number };
+
+/** The zones worked out from the max and resting heart rate in effect from `date`. */
+export type HeartRateZones = { date: string; max_hr: number; resting_hr: number; zones: HeartRateZone[] };
+
 /** A session of a goal's plan; speeds are m/s. */
 export type PlannedSession = {
   id: number;

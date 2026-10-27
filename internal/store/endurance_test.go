@@ -189,13 +189,14 @@ func TestGeneratePlan_Targets(t *testing.T) {
 	if easy.SpeedMin != nil || easy.HRMin != nil || easy.Intensity != "Z2" || !strings.HasSuffix(easy.Description, " · zone 2") {
 		t.Errorf("expected zone 2 without a pace or bpm range, got %+v", easy)
 	}
+	// Quality sessions go by zone too, even with a threshold pace known.
 	for _, s := range sessions {
 		if s.Kind == KindIntervals {
-			if want := "Intervals 4×800 m @ 4:53–5:03/km (zone 4), 2 min jog · 6.5 km in all"; s.Description != want {
+			if want := "Intervals 4×800 m in zone 4, 2 min jog · 6.5 km in all"; s.Description != want {
 				t.Errorf("expected %q, got %q", want, s.Description)
 			}
-			if got := formatSpeedRange(ActivityRunning, *s.SpeedMin, *s.SpeedMax); got != "4:53–5:03/km" {
-				t.Errorf("expected intervals at 4:53–5:03/km, got %s", got)
+			if s.SpeedMin != nil || s.SpeedMax != nil {
+				t.Errorf("expected intervals without a pace range, got %+v", s)
 			}
 			break
 		}
@@ -454,18 +455,18 @@ func TestNewSession_HeartRateZones(t *testing.T) {
 		{ActivityRunning, KindRecovery, "Z1", "Recovery run 4 km · zone 1"},
 		{ActivityRunning, KindLong, "Z2", "Long run 6 km · zone 2"},
 		{ActivityCycling, KindEasy, "Z2", "Easy ride 30 km · zone 2"},
-		{ActivityRunning, KindTempo, "Z3", "Tempo run 8 km: the middle half @ zone 3"},
+		{ActivityRunning, KindTempo, "Z3", "Tempo run 8 km: the middle half in zone 3"},
 		{ActivityRunning, KindBrick, "Z3", "Brick run 3 km straight off the bike · zone 3"},
 	}
 	for _, c := range cases {
 		distance := map[string]float64{KindRecovery: 4000, KindLong: 6000, KindEasy: 30000, KindTempo: 8000, KindBrick: 3000}[c.kind]
-		s := newSession(c.activity, c.kind, PhaseBuild, distance, Fitness{})
+		s := newSession(c.activity, c.kind, PhaseBuild, distance)
 		if s.Intensity != c.zone || s.Description != c.description {
 			t.Errorf("%s %s: expected %s %q, got %s %q", c.activity, c.kind, c.zone, c.description, s.Intensity, s.Description)
 		}
 	}
-	intervals := newSession(ActivityRunning, KindIntervals, PhasePeak, 8000, Fitness{})
-	if intervals.Intensity != "Z4" || !strings.Contains(intervals.Description, "@ zone 4,") {
+	intervals := newSession(ActivityRunning, KindIntervals, PhasePeak, 8000)
+	if intervals.Intensity != "Z4" || !strings.Contains(intervals.Description, " in zone 4,") {
 		t.Errorf("expected intervals in zone 4, got %s %q", intervals.Intensity, intervals.Description)
 	}
 }
@@ -493,15 +494,15 @@ func TestGeneratePlan_TriathlonEasyByZone(t *testing.T) {
 		if s.Kind != KindLong && s.Kind != KindEasy && s.Kind != KindRecovery {
 			continue
 		}
-		// Easy efforts go by heart rate zone alone; blocks keep their pace.
+		// Every effort goes by heart rate zone alone, blocks too.
 		if s.SpeedMin != nil || s.SpeedMax != nil {
 			t.Errorf("expected no speed range on %s %s %s, got %q", s.Date, s.Activity, s.Kind, s.Description)
 		}
 		if !strings.Contains(s.Description, " · zone 2") && !strings.Contains(s.Description, " · zone 1") {
 			t.Errorf("expected a zone on %s, got %q", s.Date, s.Description)
 		}
-		if s.TempoBlock != nil && s.TempoBlock.SpeedMin == nil {
-			t.Errorf("expected the tempo block on %s paced, got %+v", s.Date, s.TempoBlock)
+		if s.TempoBlock != nil && (s.TempoBlock.SpeedMin != nil || !strings.Contains(s.Description, "in zone 3")) {
+			t.Errorf("expected the tempo block on %s in zone 3 without a pace, got %q %+v", s.Date, s.Description, s.TempoBlock)
 		}
 	}
 }

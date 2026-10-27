@@ -320,7 +320,56 @@ func TestCreateGoal_KeepsTempoBlocks(t *testing.T) {
 	if block == nil {
 		t.Fatal("expected a session with a tempo block")
 	}
-	if block.DistanceM <= 0 || block.SpeedMin == nil || block.SpeedMax == nil {
-		t.Errorf("expected the block's distance and speed kept, got %+v", block)
+	if block.DistanceM <= 0 {
+		t.Errorf("expected the block's distance kept, got %+v", block)
+	}
+}
+
+func TestAdapt_EasesQualityAfterTwoBelowTheirZone(t *testing.T) {
+	// The quality sessions in the next week, after filling the first two
+	// tempo runs with workouts at hr through the middle.
+	nextQuality := func(hr float64) int {
+		s := newTestStore(t)
+		if _, err := s.SetHeartRateProfile("2026-10-01", 185, 55); err != nil {
+			t.Fatal(err)
+		}
+		g := mustCreateGoal(t, s, newGoal(), "2026-10-19")
+		var tempos []PlannedSession
+		for _, session := range sessionsOn(t, s, g.ID, "", "", "2026-10-19") {
+			if session.Kind == KindTempo && len(tempos) < 2 {
+				tempos = append(tempos, session)
+			}
+		}
+		if len(tempos) < 2 {
+			t.Fatalf("expected two tempo runs, got %d", len(tempos))
+		}
+		for i, session := range tempos {
+			w := tempoWorkout(hr)
+			w.Date, w.StartedAt, w.SourceUUID = session.Date, session.Date+"T07:00:00Z", text(fmt.Sprint("tempo", i))
+			w.DistanceM = session.TargetDistanceM
+			w.PlannedSessionID = &session.ID
+			if _, err := s.SaveCardioWorkouts([]CardioWorkout{*w}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		today := day(tempos[1].Date).AddDate(0, 0, 1)
+		if err := s.AdaptActiveGoal(today.Format(dateLayout)); err != nil {
+			t.Fatal(err)
+		}
+		monday := mondayOf(today).AddDate(0, 0, 7)
+		n := 0
+		for _, session := range sessionsOn(t, s, g.ID, monday.Format(dateLayout), monday.AddDate(0, 0, 6).Format(dateLayout), today.Format(dateLayout)) {
+			if session.Kind == KindTempo || session.Kind == KindIntervals {
+				n++
+			}
+		}
+		return n
+	}
+
+	if n := nextQuality(152); n == 0 {
+		t.Fatal("expected a quality session next week after tempo runs in zone 3")
+	}
+	if n := nextQuality(135); n != 0 {
+		t.Errorf("expected next week's quality eased after two tempo runs below zone 3, got %d", n)
 	}
 }

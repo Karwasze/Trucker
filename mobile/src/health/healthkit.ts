@@ -124,6 +124,8 @@ export async function healthHeartRateProfile(): Promise<{ dateOfBirth?: Date; re
  */
 export async function healthWorkoutsSince(since: Date, skip: ReadonlySet<string>): Promise<NewCardioWorkout[]> {
   if (!healthkit) return [];
+  // Reading without access fails, e.g. after privacy is reset; asking prompts only then.
+  await connectHealth();
   const workouts = await healthkit.queryWorkoutSamples({
     limit: 0,
     ascending: true,
@@ -190,6 +192,7 @@ export async function healthWorkoutReport(
   lookbackDays = 7
 ): Promise<HealthWorkoutReport[]> {
   if (!healthkit) return [];
+  await connectHealth();
   const from = new Date(since.getTime() - lookbackDays * 24 * 60 * 60 * 1000);
   const workouts = await healthkit.queryWorkoutSamples({
     limit: 0,

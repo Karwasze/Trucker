@@ -5,7 +5,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import type { CardioWorkout, PlannedSession } from '@/api/types';
 import CardioDetailScreen from '@/app/(tabs)/history/cardio/[id]';
 import { healthHeartRateProfile, isHealthAvailable } from '@/health/healthkit';
-import { mockAlerts, mockServer, renderInApp, selectPlan, setNow, type Request } from '@/test-utils';
+import { mockAlerts, mockServer, renderInApp, selectPlan, setNow, TEST_ZONES, type Request } from '@/test-utils';
 
 jest.mock('@/health/healthkit', () => ({
   isHealthAvailable: jest.fn(() => false),
@@ -64,6 +64,7 @@ function server(workout: CardioWorkout, sessions: PlannedSession[] = []) {
     },
     'PATCH /api/cardio': ({ body }: Request) => ({ ...workout, ...(body as object), manual_distance: true }),
     'DELETE /api/cardio': { success: true },
+    'GET /api/heart-rate-zones': TEST_ZONES,
   });
 }
 
@@ -138,7 +139,7 @@ test('deleting dismisses it from Apple Health imports and goes back', async () =
 });
 
 describe('heart rate zones', () => {
-  // Age 35 and resting 55: zone 2 is 133–145 bpm, zone 3 146–158.
+  // The server's zones: zone 2 is 133–145 bpm, zone 3 146–158.
   const run: CardioWorkout = {
     ...ride,
     activity: 'running',

@@ -49,14 +49,17 @@ export function SeriesPicker({
   exercises,
   activities = [],
   triathlon = false,
+  bodyweight = true,
   onChange,
 }: {
   value: Series;
   exercises: string[];
-  /** Cardio activities with workouts, listed after bodyweight. */
+  /** Cardio activities with workouts, listed after bodyweight and triathlons. */
   activities?: CardioActivity[];
   /** Whether there are triathlons, listed before the cardio activities. */
   triathlon?: boolean;
+  /** Whether bodyweight is listed, first. */
+  bodyweight?: boolean;
   onChange: (series: Series) => void;
 }) {
   const theme = useTheme();
@@ -65,7 +68,7 @@ export function SeriesPicker({
   const [search, setSearch] = useState('');
 
   const options: Series[] = [
-    { kind: 'bodyweight' },
+    ...(bodyweight ? [{ kind: 'bodyweight' as const }] : []),
     ...(triathlon ? [{ kind: 'triathlon' as const }] : []),
     ...activities.map((activity) => ({ kind: 'cardio' as const, activity })),
     ...exercises.map((name) => ({ kind: 'exercise' as const, name })),

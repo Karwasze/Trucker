@@ -1,10 +1,4 @@
-import type { CardioSample } from '@/api/types';
-
-/** A heart rate zone, 1 to 5 as the watch numbers them, in whole bpm. Zone 1 has no min, zone 5 no max. */
-export type HeartRateZone = { zone: number; min?: number; max?: number };
-
-/** Where zones 2 to 5 start, as shares of the heart rate reserve above resting. */
-const ZONE_STARTS = [0.6, 0.7, 0.8, 0.9];
+import type { CardioSample, HeartRateZone } from '@/api/types';
 
 /** The age-predicted max heart rate, 220 less the age on `today`. */
 export function maxHeartRate(dateOfBirth: Date, today: Date): number {
@@ -12,19 +6,6 @@ export function maxHeartRate(dateOfBirth: Date, today: Date): number {
   const birthday = new Date(today.getFullYear(), dateOfBirth.getMonth(), dateOfBirth.getDate());
   if (today < birthday) age--;
   return 220 - age;
-}
-
-/**
- * Five zones from the heart rate reserve (max less resting), as Apple Watch
- * works out its zones from age and resting heart rate.
- */
-export function heartRateZones(max: number, resting: number): HeartRateZone[] {
-  const starts = ZONE_STARTS.map((share) => Math.round(resting + share * (max - resting)));
-  return [undefined, ...starts].map((min, i) => ({
-    zone: i + 1,
-    min,
-    max: i < starts.length ? starts[i] - 1 : undefined,
-  }));
 }
 
 /** A zone's range, e.g. "133–145 bpm", "< 133 bpm" or "172+ bpm". */

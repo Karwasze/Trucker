@@ -4,8 +4,9 @@ import type { CardioSample } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
 import { Card, SectionLabel } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
-import { useHeartRateZones, type HeartRateZones } from '@/health/health-state';
+import { useHeartRateZones } from '@/health/health-state';
 import { formatZoneRange, timeInZones } from '@/health/zones';
+import type { MissingForZones, ZonesState } from '@/health/zones-sync';
 import { useTheme } from '@/hooks/use-theme';
 import { formatDuration } from '@/workout/format';
 
@@ -15,30 +16,32 @@ function useZoneColors(): string[] {
   return [theme.textSecondary, theme.accent, theme.success, theme.warning, theme.danger];
 }
 
-const missingText = (z: HeartRateZones) =>
-  'missing' in z ? `Add your ${z.missing.join(' and ')} to Apple Health to see your heart rate zones.` : '';
+const missingText = (missing: MissingForZones) =>
+  `Add your ${missing.join(' and ')} to Apple Health to see your heart rate zones.`;
 
-/** The time a workout spent in each heart rate zone, when Health has the zones and the workout heart rate. */
+/** The time a workout spent in each heart rate zone, when there are zones and the workout has heart rate. */
 export function WorkoutZones({ samples }: { samples?: CardioSample[] }) {
   const { data } = useHeartRateZones();
   const colors = useZoneColors();
   if (!data || !samples?.some((s) => s.hr !== undefined)) return null;
-  if (!('zones' in data)) {
+  if (!data.zones) {
+    if (data.missing.length === 0) return null;
     return (
       <Card>
         <ThemedText type="smallBold">Heart rate zones</ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
-          {missingText(data)}
+          {missingText(data.missing)}
         </ThemedText>
       </Card>
     );
   }
-  const seconds = timeInZones(samples, data.zones);
+  const zones = data.zones.zones;
+  const seconds = timeInZones(samples, zones);
   const total = seconds.reduce((a, b) => a + b, 0);
   return (
     <Card>
       <ThemedText type="smallBold">Heart rate zones</ThemedText>
-      {data.zones.map((z, i) => (
+      {zones.map((z, i) => (
         <View key={z.zone} style={styles.row} accessibilityLabel={`Zone ${z.zone}, ${formatDuration(seconds[i])}`}>
           <ThemedText type="small" style={styles.zone}>
             Zone {z.zone}
@@ -59,10 +62,10 @@ export function WorkoutZones({ samples }: { samples?: CardioSample[] }) {
   );
 }
 
-/** The lifter's heart rate zones and what they're worked out from, while Health is connected. */
+/** The lifter's heart rate zones and what they're worked out from, once there are any or Health lacks what they need. */
 export function ZoneRanges() {
   const { data, error } = useHeartRateZones();
-  if (!data && !error) return null;
+  if (data ? !data.zones && data.missing.length === 0 : !error) return null;
   return (
     <>
       <SectionLabel>Heart rate zones</SectionLabel>
@@ -71,7 +74,7 @@ export function ZoneRanges() {
   );
 }
 
-function ZoneRangesCard({ data, error }: { data?: HeartRateZones; error: string | null }) {
+function ZoneRangesCard({ data, error }: { data?: ZonesState; error: string | null }) {
   const colors = useZoneColors();
   if (!data) {
     return (
@@ -82,18 +85,19 @@ function ZoneRangesCard({ data, error }: { data?: HeartRateZones; error: string 
       </Card>
     );
   }
-  if (!('zones' in data)) {
+  if (!data.zones) {
     return (
       <Card>
         <ThemedText type="small" themeColor="textSecondary">
-          {missingText(data)}
+          {missingText(data.missing)}
         </ThemedText>
       </Card>
     );
   }
+  const { zones, max_hr, resting_hr } = data.zones;
   return (
     <Card>
-      {data.zones.map((z, i) => (
+      {zones.map((z, i) => (
         <View key={z.zone} style={styles.row}>
           <View style={[styles.dot, { backgroundColor: colors[i] }]} />
           <ThemedText style={{ flex: 1 }}>Zone {z.zone}</ThemedText>
@@ -101,8 +105,9 @@ function ZoneRangesCard({ data, error }: { data?: HeartRateZones; error: string 
         </View>
       ))}
       <ThemedText type="small" themeColor="textSecondary">
-        From your max heart rate of {data.max} bpm (by age) and resting heart rate of {data.resting} bpm in Apple
-        Health, as Apple Watch works out its zones. If you set zones on the watch by hand, they may differ.
+        From your max heart rate of {max_hr} bpm (by age) and resting heart rate of {resting_hr} bpm in Apple Health, as
+        Apple Watch works out its zones. Tempo and interval sessions are judged by them. If you set zones on the watch
+        by hand, they may differ.
       </ThemedText>
     </Card>
   );

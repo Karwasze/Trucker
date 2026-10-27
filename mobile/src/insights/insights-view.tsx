@@ -407,7 +407,9 @@ function GoalSection({ summary: g }: { summary: GoalSummary }) {
 function CardioRow({ summary: c, timespan }: { summary: CardioSummary; timespan: Timespan }) {
   return (
     <Pressable
-      onPress={() => router.navigate({ pathname: '/stats', params: { activity: c.activity, span: timespan.key } })}
+      onPress={() =>
+        router.navigate({ pathname: '/stats/cardio', params: { activity: c.activity, span: timespan.key } })
+      }
       accessibilityRole="button"
       accessibilityHint={`Opens the ${ACTIVITY_NAMES[c.activity]} chart`}
       style={({ pressed }) => [{ gap: Spacing.one }, pressed && { opacity: 0.5 }]}>

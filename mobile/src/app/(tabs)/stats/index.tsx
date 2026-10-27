@@ -1,12 +1,11 @@
-import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { localDate } from '@/api/client';
-import type { CardioActivity, StatisticsData } from '@/api/types';
+import type { StatisticsData } from '@/api/types';
 import { LineChart } from '@/components/line-chart';
 import { ThemedText } from '@/components/themed-text';
-import { TIMESPANS, TimespanControl, timespanStart, type Timespan } from '@/components/timespan';
+import { TimespanControl, timespanStart, type Timespan } from '@/components/timespan';
 import { Card, Message, Screen, SectionLabel } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { syncBodyweight } from '@/health/bodyweight';
@@ -14,53 +13,22 @@ import { useHealthState } from '@/health/health-state';
 import { isHealthAvailable } from '@/health/healthkit';
 import { useQuery } from '@/hooks/use-query';
 import { BodyweightStats } from '@/progress/bodyweight-stats';
-import { CardioStats } from '@/progress/cardio-stats';
+import { useOpenedWith, useProgressTimespan } from '@/progress/progress-context';
 import { personalRecords } from '@/progress/records';
 import { SeriesPicker, type Series } from '@/progress/series-picker';
 import { Tile, TileRow } from '@/progress/tile';
-import { TriathlonStats } from '@/progress/triathlon-stats';
 import { SettingsButton } from '@/settings/settings-button';
 import { useSettings } from '@/settings/settings-context';
 import { formatDate, formatKg } from '@/workout/format';
 
-export default function StatsScreen() {
+/** The first Progress page: each lift's estimated 1RM, and bodyweight. */
+export default function StrengthProgressScreen() {
   const { api, serverUrl } = useSettings();
   const [selected, setSelected] = useState<Series | null>(null);
-  const [timespan, setTimespan] = useState<Timespan>(TIMESPANS[0]);
+  const { timespan, setTimespan } = useProgressTimespan();
   const names = useQuery(`stats:${serverUrl}`, async () => (await api.statistics()).exercises);
-  // Oldest first, for the charts.
-  const cardio = useQuery(`cardio:${serverUrl}`, async () => (await api.listCardio()).reverse());
-  const activities = [...new Set((cardio.data ?? []).map((w) => w.activity))] as CardioActivity[];
-  // Oldest first, for the chart.
-  const triathlons = useQuery(`triathlons:${serverUrl}`, async () => (await api.listTriathlons()).reverse());
-  const hasTriathlons = (triathlons.data ?? []).length > 0;
-
-  // Opened on a lift, cardio activity or triathlons from elsewhere, e.g.
-  // Insights. The params are applied while rendering whenever they change,
-  // then cleared, so opening the same series again applies them again.
-  const params = useLocalSearchParams<{ exercise?: string; activity?: string; series?: string; span?: string }>();
-  const request =
-    params.exercise || params.activity || params.series === 'triathlon'
-      ? JSON.stringify([params.exercise, params.activity, params.series, params.span])
-      : undefined;
-  const [appliedRequest, setAppliedRequest] = useState<string>();
-  if (request !== appliedRequest) {
-    setAppliedRequest(request);
-    if (request) {
-      setSelected(
-        params.exercise
-          ? { kind: 'exercise', name: params.exercise }
-          : params.activity
-            ? { kind: 'cardio', activity: params.activity as CardioActivity }
-            : { kind: 'triathlon' }
-      );
-      const span = TIMESPANS.find((t) => t.key === params.span);
-      if (span) setTimespan(span);
-    }
-  }
-  useEffect(() => {
-    if (request) router.setParams({ exercise: undefined, activity: undefined, series: undefined, span: undefined });
-  }, [request]);
+  // Opened on a lift from elsewhere, e.g. Insights.
+  useOpenedWith((params) => params.exercise && setSelected({ kind: 'exercise', name: params.exercise }));
 
   const exercises = names.data ?? [];
   // Default to the first exercise; bodyweight is the fallback before anything is logged.
@@ -70,10 +38,7 @@ export default function StatsScreen() {
       ? { kind: 'exercise', name: exercises[0] }
       : { kind: 'bodyweight' };
   const series =
-    selected?.kind === 'bodyweight' ||
-    (selected?.kind === 'triathlon' && hasTriathlons) ||
-    (selected?.kind === 'cardio' && activities.includes(selected.activity)) ||
-    (selected?.kind === 'exercise' && exercises.includes(selected.name))
+    selected?.kind === 'bodyweight' || (selected?.kind === 'exercise' && exercises.includes(selected.name))
       ? selected
       : fallback;
   const exercise = series?.kind === 'exercise' ? series.name : null;
@@ -106,37 +71,21 @@ export default function StatsScreen() {
 
   return (
     <Screen
-      title="Progress"
-      subtitle="Your lifts, cardio and bodyweight over time"
+      title="Strength"
+      subtitle="Your lifts and bodyweight over time"
       action={<SettingsButton />}
+      hasHeader
       refreshing={names.refreshing}
       onRefresh={() => {
         names.refresh();
-        cardio.refresh();
-        triathlons.refresh();
         data.refresh();
       }}>
       {!names.data || !series ? (
         <Message loading={!names.error} error={names.error} />
       ) : (
         <>
-          <SeriesPicker
-            value={series}
-            exercises={exercises}
-            activities={activities}
-            triathlon={hasTriathlons}
-            onChange={setSelected}
-          />
-          {series.kind === 'triathlon' ? (
-            <TriathlonStats triathlons={triathlons.data ?? []} timespan={timespan} onTimespanChange={setTimespan} />
-          ) : series.kind === 'cardio' ? (
-            <CardioStats
-              activity={series.activity}
-              workouts={(cardio.data ?? []).filter((w) => w.activity === series.activity)}
-              timespan={timespan}
-              onTimespanChange={setTimespan}
-            />
-          ) : series.kind === 'bodyweight' ? (
+          <SeriesPicker value={series} exercises={exercises} onChange={setSelected} />
+          {series.kind === 'bodyweight' ? (
             !bodyweight ? (
               <Message loading={!storedBodyweight.error} error={storedBodyweight.error} />
             ) : (

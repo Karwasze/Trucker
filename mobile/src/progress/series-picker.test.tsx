@@ -3,14 +3,20 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { SeriesPicker, type Series } from '@/progress/series-picker';
 
-async function renderPicker(value: Series, onChange = jest.fn()) {
+async function renderPicker(value: Series, onChange = jest.fn(), bodyweight = true) {
   await render(
     <SafeAreaProvider
       initialMetrics={{
         frame: { x: 0, y: 0, width: 390, height: 844 },
         insets: { top: 0, left: 0, right: 0, bottom: 0 },
       }}>
-      <SeriesPicker value={value} exercises={['Bench Press', 'Squat']} activities={['cycling']} onChange={onChange} />
+      <SeriesPicker
+        value={value}
+        exercises={['Bench Press', 'Squat']}
+        activities={['cycling']}
+        bodyweight={bodyweight}
+        onChange={onChange}
+      />
     </SafeAreaProvider>
   );
   return onChange;
@@ -34,4 +40,11 @@ test('searching narrows the list, and picking reports the series', async () => {
   expect(screen.queryByText('Bench Press')).not.toBeOnTheScreen();
   await user.press(screen.getByText('Squat'));
   expect(onChange).toHaveBeenCalledWith({ kind: 'exercise', name: 'Squat' });
+});
+
+test('bodyweight can be left out', async () => {
+  const user = userEvent.setup();
+  await renderPicker({ kind: 'cardio', activity: 'cycling' }, jest.fn(), false);
+  await user.press(screen.getByRole('button', { name: 'Cycling, change exercise' }));
+  expect(screen.queryByText('Bodyweight')).not.toBeOnTheScreen();
 });

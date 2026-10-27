@@ -34,6 +34,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/goals/sessions", h.GoalSessionsAPI)
 	mux.HandleFunc("/api/goals/today", h.GoalTodayAPI)
 	mux.HandleFunc("/api/goals/match", h.GoalMatchAPI)
+	mux.HandleFunc("/api/heart-rate-zones", h.HeartRateZonesAPI)
 	mux.HandleFunc("/healthz", h.Health)
 	// Exact "/" only, for probes configured before /healthz existed.
 	mux.HandleFunc("/{$}", h.Health)

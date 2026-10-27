@@ -15,10 +15,11 @@ var (
 const (
 	// A finished week below this share of its planned distance, or with
 	// this many missed sessions, holds the next week's volume.
-	holdBelowShare   = 0.7
-	holdAfterMissed  = 2
-	easedThreshold   = 0.98
-	qualitySlowInRow = 2
+	holdBelowShare  = 0.7
+	holdAfterMissed = 2
+	// This many quality sessions in a row below their zone ease the next
+	// week's.
+	qualityEasyInRow = 2
 )
 
 // CreateGoal saves a goal starting today (YYYY-MM-DD) as the active goal,
@@ -180,7 +181,11 @@ func judge(q querier, session *PlannedSession, today string) error {
 			workout = &w
 		}
 	}
-	verdict := evaluateSession(*session, workout, today)
+	zones, err := heartRateZones(q, session.Date)
+	if err != nil {
+		return err
+	}
+	verdict := evaluateSession(*session, workout, today, zones)
 	session.Verdict = &verdict
 	if workout != nil {
 		summary := *workout
@@ -329,21 +334,12 @@ func (s *Store) regenerate(tx *sql.Tx, g Goal, from, today string) ([]string, er
 	}
 	in.Hold = in.PrevLevel != nil && planned > 0 && (done < planned*holdBelowShare || missed >= holdAfterMissed)
 
-	if len(quality) >= qualitySlowInRow {
-		recent := quality[len(quality)-qualitySlowInRow:]
-		slow := true
-		for _, q := range recent {
-			slow = slow && q.Verdict.TooSlow
+	if len(quality) >= qualityEasyInRow {
+		easy := true
+		for _, q := range quality[len(quality)-qualityEasyInRow:] {
+			easy = easy && q.Verdict.TooEasy
 		}
-		if slow {
-			in.EaseQuality = true
-			for _, q := range recent {
-				if threshold, ok := fitness.Threshold[q.Activity]; ok {
-					fitness.Threshold[q.Activity] = threshold * easedThreshold
-				}
-			}
-			in.Fitness = fitness
-		}
+		in.EaseQuality = easy
 	}
 
 	sessions, warnings := generatePlan(in)

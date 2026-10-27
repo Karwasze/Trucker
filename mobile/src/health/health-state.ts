@@ -2,14 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useState } from 'react';
 
 import { useQuery } from '@/hooks/use-query';
-import {
-  connectHealth,
-  healthHeartRateProfile,
-  healthWorkoutReport,
-  healthWorkoutsSince,
-  isHealthAvailable,
-} from '@/health/healthkit';
-import { heartRateZones, maxHeartRate, type HeartRateZone } from '@/health/zones';
+import { healthWorkoutReport, healthWorkoutsSince, isHealthAvailable } from '@/health/healthkit';
+import { syncHeartRateZones } from '@/health/zones-sync';
 import { useSettings } from '@/settings/settings-context';
 
 /**
@@ -104,6 +98,8 @@ export function useHealthImports() {
       const known = new Set(imported.flatMap((w) => (w.source_uuid ? [w.source_uuid] : [])));
       // Dismissals read fresh, so a dismissal made since the last load counts.
       (await load(serverUrl)).dismissed.forEach((uuid) => known.add(uuid));
+      // Keeps the zones sessions are judged by current, alongside.
+      syncHeartRateZones(api, true).catch(() => {});
       return healthWorkoutsSince(importSince(connectedAt!), known);
     }
   );
@@ -132,28 +128,14 @@ export function useHealthReport(enabled: boolean) {
 }
 
 /**
- * Heart rate zones worked out from the birth date and resting heart rate in
- * Health, or what's missing for them. Undefined until loaded, and while
- * Health isn't connected.
+ * The heart rate zones sessions are judged by, kept up to date from Apple
+ * Health while it's connected (see syncHeartRateZones).
  */
-export type HeartRateZones =
-  { zones: HeartRateZone[]; max: number; resting: number } | { missing: ('birth date' | 'resting heart rate')[] };
-
 export function useHeartRateZones() {
-  const { state } = useHealthState();
-  return useQuery<HeartRateZones>(state.connectedAt && isHealthAvailable() ? 'heart-rate-zones' : null, async () => {
-    // Asks for the birth date and resting heart rate when connected before they were read.
-    await connectHealth();
-    const { dateOfBirth, restingHeartRate } = await healthHeartRateProfile();
-    if (!dateOfBirth || !restingHeartRate) {
-      return {
-        missing: [
-          ...(dateOfBirth ? [] : ['birth date' as const]),
-          ...(restingHeartRate ? [] : ['resting heart rate' as const]),
-        ],
-      };
-    }
-    const max = maxHeartRate(dateOfBirth, new Date());
-    return { zones: heartRateZones(max, restingHeartRate), max, resting: restingHeartRate };
-  });
+  const { api, serverUrl } = useSettings();
+  const { state, loaded } = useHealthState();
+  const fromHealth = !!state.connectedAt && isHealthAvailable();
+  return useQuery(loaded ? `heart-rate-zones:${serverUrl}:${fromHealth}` : null, () =>
+    syncHeartRateZones(api, fromHealth)
+  );
 }

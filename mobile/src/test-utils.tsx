@@ -5,6 +5,7 @@ import { Alert, type AlertButton } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import type { TestInstance } from 'test-renderer';
 
+import type { HeartRateZones } from '@/api/types';
 import { SettingsProvider } from '@/settings/settings-context';
 import { TimerProvider } from '@/timer/timer-context';
 
@@ -12,6 +13,23 @@ import { TimerProvider } from '@/timer/timer-context';
 export const SERVER = 'http://localhost:8081';
 
 /** A request the fake server received. */
+/**
+ * Heart rate zones as the server works them out from a max heart rate of
+ * 185 and a resting 55.
+ */
+export const TEST_ZONES: HeartRateZones = {
+  date: '2026-10-01',
+  max_hr: 185,
+  resting_hr: 55,
+  zones: [
+    { zone: 1, max: 132 },
+    { zone: 2, min: 133, max: 145 },
+    { zone: 3, min: 146, max: 158 },
+    { zone: 4, min: 159, max: 171 },
+    { zone: 5, min: 172 },
+  ],
+};
+
 export type Request = { method: string; path: string; query: URLSearchParams; body: unknown };
 
 /**

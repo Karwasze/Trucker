@@ -419,8 +419,9 @@ const (
 type Verdict struct {
 	Status string  `json:"status"`
 	Checks []Check `json:"checks"`
-	// TooSlow is set when an intensity check failed by going too slow.
-	TooSlow bool `json:"-"`
+	// TooEasy is set when a heart rate check failed by staying below its
+	// zone.
+	TooEasy bool `json:"-"`
 }
 
 // Check compares what was done with the target on one aspect of a session,

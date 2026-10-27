@@ -1,25 +1,18 @@
-import { formatZoneRange, heartRateZones, maxHeartRate, timeInZones } from '@/health/zones';
+import { formatZoneRange, maxHeartRate, timeInZones } from '@/health/zones';
+import { TEST_ZONES } from '@/test-utils';
+
+const zones = TEST_ZONES.zones;
 
 test('max heart rate is 220 less the age on the day', () => {
   expect(maxHeartRate(new Date('1990-10-28T00:00:00'), new Date('2026-10-27T12:00:00'))).toBe(185);
   expect(maxHeartRate(new Date('1990-10-27T00:00:00'), new Date('2026-10-27T12:00:00'))).toBe(184);
 });
 
-test('zones split the heart rate reserve at 60, 70, 80 and 90%', () => {
-  // A reserve of 130 bpm over a resting 55.
-  const zones = heartRateZones(185, 55);
-  expect(zones.map((z) => [z.zone, z.min, z.max])).toEqual([
-    [1, undefined, 132],
-    [2, 133, 145],
-    [3, 146, 158],
-    [4, 159, 171],
-    [5, 172, undefined],
-  ]);
+test('zone ranges read as the watch shows them', () => {
   expect(zones.map(formatZoneRange)).toEqual(['< 133 bpm', '133–145 bpm', '146–158 bpm', '159–171 bpm', '172+ bpm']);
 });
 
 test('time in zones counts each sample’s heart rate over the time before it', () => {
-  const zones = heartRateZones(185, 55);
   const seconds = timeInZones(
     [
       { t: 0, d: 0 },
@@ -41,7 +34,7 @@ test('time in zones is empty without heart rate', () => {
         { t: 0, d: 0 },
         { t: 10, d: 30 },
       ],
-      heartRateZones(185, 55)
+      zones
     )
   ).toEqual([0, 0, 0, 0, 0]);
 });

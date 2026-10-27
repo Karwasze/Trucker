@@ -3,8 +3,8 @@ import { screen, userEvent } from '@testing-library/react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 
 import type { TrainingPlan } from '@/api/types';
-import PlanEditorScreen from '@/app/(tabs)/plans/[id]';
-import PlansScreen from '@/app/(tabs)/plans/index';
+import PlanEditorScreen from '@/app/(tabs)/(training)/plans/[id]';
+import PlansScreen from '@/app/(tabs)/(training)/(lists)/plans';
 import { mockAlerts, mockServer, renderInApp, selectPlan, setNow, type Request } from '@/test-utils';
 
 const strength: TrainingPlan = {

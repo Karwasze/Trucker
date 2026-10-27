@@ -23,6 +23,7 @@ export default function PlansScreen() {
     <Screen
       title="Training plans"
       action={<SettingsButton />}
+      hasHeader
       refreshing={plans.refreshing || goals.refreshing}
       onRefresh={() => {
         plans.refresh();

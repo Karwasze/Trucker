@@ -18,7 +18,14 @@ if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 	exit 1
 fi
 
-git fetch --quiet --tags "$remote" "$branch"
+# --force: the release workflow moves each pushed tag onto its "Bump Helm
+# charts" commit, so the local copy of the previous release tag is always
+# stale. The remote's tags are the source of truth.
+if ! fetch_output="$(git fetch --force --tags "$remote" "$branch" 2>&1)"; then
+	echo "$fetch_output" >&2
+	echo "Fetching from $remote failed" >&2
+	exit 1
+fi
 
 if git rev-parse --quiet --verify "refs/tags/$tag" >/dev/null; then
 	echo "Tag '$tag' already exists" >&2

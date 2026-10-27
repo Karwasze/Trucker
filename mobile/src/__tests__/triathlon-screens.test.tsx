@@ -3,8 +3,8 @@ import { screen, userEvent } from '@testing-library/react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 
 import type { CardioWorkout, Insights, Triathlon } from '@/api/types';
-import HistoryScreen from '@/app/(tabs)/history/index';
-import TriathlonDetailScreen from '@/app/(tabs)/history/triathlon/[date]';
+import HistoryScreen from '@/app/(tabs)/(training)/(lists)/history';
+import TriathlonDetailScreen from '@/app/(tabs)/(training)/history/triathlon/[date]';
 import CardioProgressScreen from '@/app/(tabs)/stats/cardio';
 import { CardioInsights, InsightsProvider } from '@/insights/insights-view';
 import { ProgressProvider } from '@/progress/progress-context';

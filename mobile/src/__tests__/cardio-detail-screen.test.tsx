@@ -3,7 +3,7 @@ import { screen, userEvent } from '@testing-library/react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 
 import type { CardioWorkout, PlannedSession } from '@/api/types';
-import CardioDetailScreen from '@/app/(tabs)/history/cardio/[id]';
+import CardioDetailScreen from '@/app/(tabs)/(training)/history/cardio/[id]';
 import { healthHeartRateProfile, isHealthAvailable } from '@/health/healthkit';
 import { mockAlerts, mockServer, renderInApp, selectPlan, setNow, TEST_ZONES, type Request } from '@/test-utils';
 

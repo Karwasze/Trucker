@@ -17,14 +17,9 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Icon sf="figure.strengthtraining.traditional" md="fitness_center" />
       </NativeTabs.Trigger>
 
-      <NativeTabs.Trigger name="plans">
-        <NativeTabs.Trigger.Label>Training plan</NativeTabs.Trigger.Label>
+      <NativeTabs.Trigger name="(training)">
+        <NativeTabs.Trigger.Label>Training</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="list.bullet.clipboard" md="assignment" />
-      </NativeTabs.Trigger>
-
-      <NativeTabs.Trigger name="history">
-        <NativeTabs.Trigger.Label>History</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf="clock.arrow.circlepath" md="history" />
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="stats">
@@ -37,7 +32,6 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Icon sf="lightbulb" md="lightbulb" />
       </NativeTabs.Trigger>
 
-      {/* A sixth tab: on iPhone, iOS folds the last two into a "More" tab. */}
       <NativeTabs.Trigger name="achievements">
         <NativeTabs.Trigger.Label>Achievements</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="trophy" md="emoji_events" />

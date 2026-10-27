@@ -3,8 +3,8 @@ import { screen, userEvent } from '@testing-library/react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 
 import type { Goal, PlannedSession } from '@/api/types';
-import GoalCalendarScreen from '@/app/(tabs)/plans/goal-calendar';
-import GoalEditorScreen from '@/app/(tabs)/plans/goal';
+import GoalCalendarScreen from '@/app/(tabs)/(training)/plans/goal-calendar';
+import GoalEditorScreen from '@/app/(tabs)/(training)/plans/goal';
 import { mockAlerts, mockServer, renderInApp, selectPlan, setNow, type Request } from '@/test-utils';
 
 const TODAY = '2026-10-18'; // A Sunday.

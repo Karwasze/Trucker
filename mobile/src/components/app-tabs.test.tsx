@@ -12,12 +12,11 @@ jest.mock('expo-router/unstable-native-tabs', () => {
   return { NativeTabs: Object.assign(({ children }: { children: any }) => <>{children}</>, { Trigger }) };
 });
 
-test('Achievements is the sixth tab, which iOS puts under More with Insights', async () => {
+test('five tabs, with Training plans and History sharing one, so iOS shows no More tab', async () => {
   await render(<AppTabs />);
   expect(screen.getAllByTestId('tab').map((t) => t.props.children)).toEqual([
     '(workout)',
-    'plans',
-    'history',
+    '(training)',
     'stats',
     '(insights)',
     'achievements',

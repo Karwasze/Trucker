@@ -15,6 +15,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Card, Message, Screen, SectionLabel } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useQuery } from '@/hooks/use-query';
+import { SettingsButton } from '@/settings/settings-button';
 import { useSettings } from '@/settings/settings-context';
 import { formatDate } from '@/workout/format';
 
@@ -26,7 +27,11 @@ export default function AchievementsScreen() {
   const list = achievements.data;
 
   return (
-    <Screen hasHeader refreshing={achievements.refreshing} onRefresh={achievements.refresh}>
+    <Screen
+      title="Achievements"
+      action={<SettingsButton />}
+      refreshing={achievements.refreshing}
+      onRefresh={achievements.refresh}>
       {!list ? (
         <Message loading={!achievements.error} error={achievements.error} />
       ) : (

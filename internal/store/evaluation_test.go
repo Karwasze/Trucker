@@ -393,3 +393,25 @@ func TestEvaluateSession_TempoBlockWithoutSamples(t *testing.T) {
 		t.Errorf("expected met on distance alone, got %+v", v)
 	}
 }
+
+func TestEvaluateSession_BlockAtTheEnd(t *testing.T) {
+	// An 18 km long run finishing with the last 6 km in zone 3.
+	s := PlannedSession{
+		Date: "2026-10-14", Activity: ActivityRunning, Kind: KindLong, TargetDistanceM: fp(18000),
+		TempoBlock: &TempoBlock{DistanceM: 6000, Position: BlockAtEnd},
+	}
+	finish := func(hr float64) *CardioWorkout {
+		return synthetic(ActivityRunning, stretch{12 * 480, pace(480), 145}, stretch{6 * 450, pace(450), hr})
+	}
+	v := evaluateSession(s, finish(158), "2026-10-14", testZones)
+	if c := check(t, v, "Finish heart rate"); !c.OK || c.Actual != "158 bpm" || c.Target != "zone 3 (146–158 bpm)" {
+		t.Errorf("expected the finish in zone 3 at 158 bpm, got %+v", c)
+	}
+	if v.Status != VerdictMet {
+		t.Errorf("expected met, got %+v", v)
+	}
+	// Run steady to the end, the finish is too easy.
+	if c := check(t, evaluateSession(s, finish(140), "2026-10-14", testZones), "Finish heart rate"); c.OK {
+		t.Errorf("expected a steady finish too easy, got %+v", c)
+	}
+}

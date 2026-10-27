@@ -146,6 +146,9 @@ type planWeek struct {
 	// stepBack marks a triathlon's peak week between two that go the
 	// longest, whose long sessions are shorter (see goalWeeks).
 	stepBack bool
+	// peakProgress is how far a peak training week is through the peak's
+	// training weeks, from 0 for the first to 1 for the last.
+	peakProgress float64
 }
 
 // mondayOf returns the Monday of the week of t, at midnight.
@@ -183,6 +186,18 @@ func planWeeks(start, race time.Time, taperWeeks int) []planWeek {
 		}
 		w.recovery = w.phase != PhaseTaper && w.phase != PhaseRace && (i+1)%recoveryEvery == 0
 		weeks[i] = w
+	}
+
+	var peakWeeks []int
+	for i, w := range weeks {
+		if w.phase == PhasePeak && !w.recovery {
+			peakWeeks = append(peakWeeks, i)
+		}
+	}
+	for n, i := range peakWeeks {
+		if len(peakWeeks) > 1 {
+			weeks[i].peakProgress = float64(n) / float64(len(peakWeeks)-1)
+		}
 	}
 	return weeks
 }
@@ -428,18 +443,16 @@ func trainingWeek(g Goal, f Fitness, week planWeek, level map[string]float64, da
 			easyKind = KindTechnique
 		}
 		longSession := newSession(activity, KindLong, week.phase, roundDistance(activity, long))
-		// A lone weekly ride or run carries the phase's quality as a block.
-		if n == 1 && activity != ActivitySwimming && !week.recovery && !ease {
-			switch week.phase {
-			case PhaseBuild:
-				longSession = withBlock(longSession, KindTempo)
-			case PhasePeak:
-				longSession = withBlock(longSession, KindIntervals)
-			}
+		// A lone weekly session carries the phase's quality as a block.
+		if n == 1 && !week.recovery && !ease {
+			longSession = withQualityBlock(longSession, week)
 		}
 		planned = append(planned, longSession)
-		if quality != "" {
+		switch quality {
+		case KindTempo:
 			planned = append(planned, newSession(activity, quality, week.phase, roundDistance(activity, other)))
+		case KindIntervals:
+			planned = append(planned, intervalSession(activity, week.phase, roundDistance(activity, other), week.peakProgress))
 		}
 		for range easyCount {
 			planned = append(planned, newSession(activity, easyKind, week.phase, roundDistance(activity, other)))
@@ -479,28 +492,100 @@ func trainingWeek(g Goal, f Fitness, week planWeek, level map[string]float64, da
 	return sessions
 }
 
-// withBlock adds a quality block of kind to a long session's description:
-// tempo over the middle third, kept as its TempoBlock to be checked, or
-// intervals over about 40% of it. The session's targets stay those of the
-// long session.
-func withBlock(s PlannedSession, kind string) PlannedSession {
-	distance := *s.TargetDistanceM
-	switch kind {
-	case KindTempo:
-		block := newSession(s.Activity, KindTempo, s.Phase, roundDistance(s.Activity, distance/3))
-		s.Description += fmt.Sprintf(", with %s in %s in the middle",
-			formatMetres(s.Activity, *block.TargetDistanceM), describeTarget(block))
-		s.TempoBlock = &TempoBlock{DistanceM: *block.TargetDistanceM}
-	case KindIntervals:
-		block := newSession(s.Activity, KindIntervals, s.Phase, distance*0.4)
-		rep := fmt.Sprintf("%.0f m", deref(block.RepDistanceM))
-		rest := "jog"
-		if block.RepDurationS != nil {
-			rep, rest = formatSeconds(*block.RepDurationS), "easy"
-		}
-		s.Description += fmt.Sprintf(", with %d×%s in %s, %s %s",
-			*block.Reps, rep, describeTarget(block), formatSeconds(*block.RecoveryS), rest)
+// withQualityBlock adds the quality of a week's phase to a lone weekly
+// long session:
+//
+//   - swims: drills in base, then sets in zone 3 in build, zone 4 in peak
+//     and a short set in the taper, as swimming is mostly technique
+//   - rides and runs: tempo in the middle third in build, and intervals in
+//     peak (see withIntervalBlock)
+//   - runs finish the peak's long runs at race effort instead, the last
+//     third in zone 3, as a long triathlon's run is held at that effort on
+//     tired legs rather than run fast
+//   - rides keep a short block of intervals through the taper, so race
+//     effort doesn't feel foreign on the day
+func withQualityBlock(s PlannedSession, week planWeek) PlannedSession {
+	switch {
+	case s.Activity == ActivitySwimming:
+		return withSwimSet(s)
+	case week.phase == PhaseBuild:
+		return withTempoBlock(s)
+	case week.phase == PhasePeak && s.Activity == ActivityRunning:
+		return withRaceEffortFinish(s)
+	case week.phase == PhasePeak:
+		return withIntervalBlock(s, week.peakProgress)
+	case week.phase == PhaseTaper && s.Activity == ActivityCycling:
+		return withIntervalBlock(s, 0)
 	}
+	return s
+}
+
+// swimDrillsM is how much of a base phase swim is drills.
+const swimDrillsM = 200
+
+// withSwimSet adds the phase's set to a long swim's description: drills
+// first in base, and in build, peak and taper reps of about 40% of the swim
+// (four in the taper), rested briefly.
+func withSwimSet(s PlannedSession) PlannedSession {
+	var reps int
+	var repM, rest float64
+	switch s.Phase {
+	case PhaseBase:
+		s.Description += fmt.Sprintf(", starting with %.0f m of drills", float64(swimDrillsM))
+		return s
+	case PhaseBuild:
+		repM, rest = 100, 20
+	case PhasePeak:
+		repM, rest = 200, 30
+	case PhaseTaper:
+		reps, repM, rest = 4, 100, 20
+	default:
+		return s
+	}
+	if reps == 0 {
+		reps = max(int(math.Round(*s.TargetDistanceM*0.4/repM)), 4)
+	}
+	zone := heartRateZone(KindIntervals)
+	if s.Phase == PhaseBuild {
+		zone = heartRateZone(KindTempo)
+	}
+	s.Description += fmt.Sprintf(", with %d×%.0f m in zone %d, %.0f s rest", reps, repM, zone, rest)
+	return s
+}
+
+// withRaceEffortFinish adds a finish of the last third in zone 3 to a long
+// session, kept as its TempoBlock to be checked.
+func withRaceEffortFinish(s PlannedSession) PlannedSession {
+	distance := roundDistance(s.Activity, *s.TargetDistanceM/3)
+	s.Description += fmt.Sprintf(", finishing with the last %s in zone %d",
+		formatMetres(s.Activity, distance), heartRateZone(KindTempo))
+	s.TempoBlock = &TempoBlock{DistanceM: distance, Position: BlockAtEnd}
+	return s
+}
+
+// withTempoBlock adds tempo over the middle third to a long session's
+// description, kept as its TempoBlock to be checked. The session's targets
+// stay those of the long session.
+func withTempoBlock(s PlannedSession) PlannedSession {
+	block := newSession(s.Activity, KindTempo, s.Phase, roundDistance(s.Activity, *s.TargetDistanceM/3))
+	s.Description += fmt.Sprintf(", with %s in %s in the middle",
+		formatMetres(s.Activity, *block.TargetDistanceM), describeTarget(block))
+	s.TempoBlock = &TempoBlock{DistanceM: *block.TargetDistanceM}
+	return s
+}
+
+// withIntervalBlock adds intervals over about 40% of a long session to its
+// description, sized for a week progress through the peak (see
+// intervalSession). The session's targets stay those of the long session.
+func withIntervalBlock(s PlannedSession, progress float64) PlannedSession {
+	block := intervalSession(s.Activity, s.Phase, *s.TargetDistanceM*0.4, progress)
+	rep := fmt.Sprintf("%.0f m", deref(block.RepDistanceM))
+	rest := "jog"
+	if block.RepDurationS != nil {
+		rep, rest = formatSeconds(*block.RepDurationS), "easy"
+	}
+	s.Description += fmt.Sprintf(", with %d×%s in %s, %s %s",
+		*block.Reps, rep, describeTarget(block), formatSeconds(*block.RecoveryS), rest)
 	return s
 }
 
@@ -684,13 +769,50 @@ func heartRateZone(effort string) int {
 	return 2
 }
 
+// rideReps are the timed reps of a ride's intervals through the peak, the
+// first in its first training week and the last in its last: longer reps
+// and more time in zone 4 as the race nears, as a half or full distance
+// triathlon's ride is held near threshold for hours. Recoveries are about
+// half a rep. taperRideReps keeps the intensity with less of it.
+type rideRep struct {
+	reps              int
+	duration, recover float64
+}
+
+var (
+	rideReps = []rideRep{
+		{4, 8 * 60, 4 * 60},
+		{4, 10 * 60, 5 * 60},
+		{3, 12 * 60, 6 * 60},
+		{3, 15 * 60, 6 * 60},
+		{2, 20 * 60, 8 * 60},
+	}
+	taperRideReps = rideRep{3, 8 * 60, 4 * 60}
+)
+
+// intervalSession is an interval session of distance, whose ride reps
+// lengthen with the week's progress through the peak (see rideReps).
+func intervalSession(activity, phase string, distance, progress float64) PlannedSession {
+	s := newSession(activity, KindIntervals, phase, distance)
+	if activity != ActivityCycling {
+		return s
+	}
+	step := taperRideReps
+	if phase != PhaseTaper {
+		step = rideReps[int(math.Round(progress*float64(len(rideReps)-1)))]
+	}
+	s.Reps, s.RepDurationS, s.RecoveryS = &step.reps, fp(step.duration), fp(step.recover)
+	s.Description = describeSession(s)
+	return s
+}
+
 // intervalStructure is the reps of an interval session: distance reps for
-// runs and swims, timed reps for rides, fewer in the taper.
+// runs and swims, fewer in the taper, and for rides the first of rideReps
+// (see intervalSession).
 func intervalStructure(activity, phase string, distance float64) (reps int, repDistance, repDuration, recovery float64) {
 	switch activity {
 	case ActivityCycling:
-		reps = clampInt(int(math.Round(distance/10000)), 3, 6)
-		repDuration, recovery = 300, 180
+		return rideReps[0].reps, 0, rideReps[0].duration, rideReps[0].recover
 	case ActivitySwimming:
 		reps = clampInt(int(math.Round(distance*0.5/100)), 4, 20)
 		repDistance, recovery = 100, 20

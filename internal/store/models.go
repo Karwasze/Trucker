@@ -396,15 +396,21 @@ type PlannedSession struct {
 	Verdict         *Verdict       `json:"verdict,omitempty"`
 }
 
-// TempoBlock is DistanceM at tempo in the middle of a long session, to a
-// speed range (m/s) or a heart rate range.
+// TempoBlock is DistanceM in zone 3 within a long session: in its middle,
+// or finishing it when Position is BlockAtEnd. Blocks planned before zones
+// carry a speed range (m/s) or a heart rate range, which are no longer
+// used.
 type TempoBlock struct {
 	DistanceM float64  `json:"distance_m"`
+	Position  string   `json:"position,omitempty"`
 	SpeedMin  *float64 `json:"speed_min,omitempty"`
 	SpeedMax  *float64 `json:"speed_max,omitempty"`
 	HRMin     *float64 `json:"hr_min,omitempty"`
 	HRMax     *float64 `json:"hr_max,omitempty"`
 }
+
+// BlockAtEnd is the Position of a TempoBlock finishing its session.
+const BlockAtEnd = "end"
 
 // Statuses of a Verdict.
 const (

@@ -438,7 +438,7 @@ func scanGoal(row interface{ Scan(...any) error }) (Goal, error) {
 const sessionColumns = `id, goal_id, date, activity, kind, phase, target_distance_m, target_duration_s,
 	intensity, description, speed_min, speed_max, hr_min, hr_max, reps, rep_distance_m, rep_duration_s,
 	recovery_s, cardio_workout_id, tempo_distance_m, tempo_speed_min, tempo_speed_max, tempo_hr_min,
-	tempo_hr_max`
+	tempo_hr_max, tempo_position`
 
 // querySessions returns the sessions matching where, by date then ID.
 func querySessions(q querier, where string, args ...any) ([]PlannedSession, error) {
@@ -451,15 +451,16 @@ func querySessions(q querier, where string, args ...any) ([]PlannedSession, erro
 	for rows.Next() {
 		var p PlannedSession
 		var tempoDistance *float64
+		var tempoPosition sql.NullString
 		var tempo TempoBlock
 		if err := rows.Scan(&p.ID, &p.GoalID, &p.Date, &p.Activity, &p.Kind, &p.Phase, &p.TargetDistanceM,
 			&p.TargetDurationS, &p.Intensity, &p.Description, &p.SpeedMin, &p.SpeedMax, &p.HRMin, &p.HRMax,
 			&p.Reps, &p.RepDistanceM, &p.RepDurationS, &p.RecoveryS, &p.CardioWorkoutID, &tempoDistance,
-			&tempo.SpeedMin, &tempo.SpeedMax, &tempo.HRMin, &tempo.HRMax); err != nil {
+			&tempo.SpeedMin, &tempo.SpeedMax, &tempo.HRMin, &tempo.HRMax, &tempoPosition); err != nil {
 			return nil, err
 		}
 		if tempoDistance != nil {
-			tempo.DistanceM = *tempoDistance
+			tempo.DistanceM, tempo.Position = *tempoDistance, tempoPosition.String
 			p.TempoBlock = &tempo
 		}
 		sessions = append(sessions, p)
@@ -470,19 +471,24 @@ func querySessions(q querier, where string, args ...any) ([]PlannedSession, erro
 func insertSession(tx *sql.Tx, p PlannedSession) error {
 	var tempo struct {
 		DistanceM, SpeedMin, SpeedMax, HRMin, HRMax *float64
+		Position                                    *string
 	}
 	if b := p.TempoBlock; b != nil {
 		tempo.DistanceM, tempo.SpeedMin, tempo.SpeedMax, tempo.HRMin, tempo.HRMax = &b.DistanceM, b.SpeedMin, b.SpeedMax, b.HRMin, b.HRMax
+		if b.Position != "" {
+			tempo.Position = &b.Position
+		}
 	}
 	_, err := tx.Exec(`
 		INSERT INTO planned_sessions (goal_id, date, activity, kind, phase, target_distance_m,
 			target_duration_s, intensity, description, speed_min, speed_max, hr_min, hr_max, reps,
 			rep_distance_m, rep_duration_s, recovery_s, cardio_workout_id, tempo_distance_m, tempo_speed_min,
-			tempo_speed_max, tempo_hr_min, tempo_hr_max)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			tempo_speed_max, tempo_hr_min, tempo_hr_max, tempo_position)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, p.GoalID, p.Date, p.Activity, p.Kind, p.Phase, p.TargetDistanceM, p.TargetDurationS, p.Intensity,
 		p.Description, p.SpeedMin, p.SpeedMax, p.HRMin, p.HRMax, p.Reps, p.RepDistanceM, p.RepDurationS,
-		p.RecoveryS, p.CardioWorkoutID, tempo.DistanceM, tempo.SpeedMin, tempo.SpeedMax, tempo.HRMin, tempo.HRMax)
+		p.RecoveryS, p.CardioWorkoutID, tempo.DistanceM, tempo.SpeedMin, tempo.SpeedMax, tempo.HRMin, tempo.HRMax,
+		tempo.Position)
 	return err
 }
 

@@ -128,17 +128,23 @@ func averageSpeed(w *CardioWorkout) float64 {
 }
 
 // tempoBlockCheck checks a long session's tempo block by the heart rate of
-// the middle of the samples, by distance when they have it, else by time.
-// The rest of the session is easy, run by zone, so it isn't checked.
-// Without samples the block can't be told from the rest, so ok is false.
+// its part of the samples, the middle or the end, by distance when they
+// have it, else by time. The rest of the session is easy, run by zone, so
+// it isn't checked. Without samples the block can't be told from the rest,
+// so ok is false.
 func tempoBlockCheck(s PlannedSession, w *CardioWorkout, zones *HeartRateZones) (check Check, ok bool) {
 	n := len(w.Samples)
 	if n < 3 || w.Samples[n-1].T <= 0 || s.TargetDistanceM == nil || *s.TargetDistanceM <= 0 {
 		return Check{}, false
 	}
 	last := w.Samples[n-1]
-	part := math.Min(s.TempoBlock.DistanceM / *s.TargetDistanceM, 1) * tempoBlockCore
-	lo, hi := 0.5-part/2, 0.5+part/2
+	share := math.Min(s.TempoBlock.DistanceM / *s.TargetDistanceM, 1)
+	name, center := "Tempo block heart rate", 0.5
+	if s.TempoBlock.Position == BlockAtEnd {
+		name, center = "Finish heart rate", 1-share/2
+	}
+	part := share * tempoBlockCore
+	lo, hi := center-part/2, center+part/2
 	from, to := lo*last.T, hi*last.T
 	if last.D > 0 {
 		from, to = sampleTimeAt(w.Samples, lo*last.D), sampleTimeAt(w.Samples, hi*last.D)
@@ -147,7 +153,7 @@ func tempoBlockCheck(s PlannedSession, w *CardioWorkout, zones *HeartRateZones) 
 	if !ok {
 		return Check{}, false
 	}
-	check, _ = zoneCheck("Tempo block heart rate", hr, zones.zone(heartRateZone(KindTempo)))
+	check, _ = zoneCheck(name, hr, zones.zone(heartRateZone(KindTempo)))
 	return check, true
 }
 

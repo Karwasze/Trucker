@@ -1,6 +1,7 @@
 package store
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -396,24 +397,37 @@ func TestGeneratePlan_ThreeDayTriathlon(t *testing.T) {
 		t.Errorf("expected bricks in build and peak, got %v", kinds)
 	}
 
-	// Rides and runs carry a tempo block in build and intervals in peak;
-	// swims stay steady, and so do base and recovery weeks.
+	// Each lone session carries its phase's quality: rides and runs tempo
+	// in the middle in build; rides intervals in peak and taper, runs a
+	// race-effort finish in peak; swims drills in base and sets after.
+	// Recovery weeks stay steady.
 	for _, s := range sessions {
 		week := int(day(s.Date).Sub(day(g.StartDate)).Hours() / 24 / 7)
 		if s.Kind != KindLong || (week+1)%4 == 0 {
 			continue
 		}
-		tempo := strings.Contains(s.Description, "in the middle")
-		intervals := strings.Contains(s.Description, "×")
-		wantTempo := s.Phase == PhaseBuild && s.Activity != ActivitySwimming
-		wantIntervals := s.Phase == PhasePeak && s.Activity != ActivitySwimming
-		if tempo != wantTempo || intervals != wantIntervals {
-			t.Errorf("%s %s on %s: got %q", s.Phase, s.Activity, s.Date, s.Description)
+		var want string
+		switch {
+		case s.Activity == ActivitySwimming && s.Phase == PhaseBase:
+			want = "drills"
+		case s.Activity == ActivitySwimming:
+			want = " s rest"
+		case s.Phase == PhaseBuild:
+			want = "in the middle"
+		case s.Phase == PhasePeak && s.Activity == ActivityRunning:
+			want = "finishing with the last"
+		case s.Phase == PhasePeak, s.Phase == PhaseTaper && s.Activity == ActivityCycling:
+			want = "×"
 		}
-		// The tempo block is kept to be checked, a third of the session.
-		if tempo != (s.TempoBlock != nil) {
-			t.Errorf("%s %s on %s: expected a tempo block with %q, got %+v", s.Phase, s.Activity, s.Date, s.Description, s.TempoBlock)
-		} else if tempo && s.TempoBlock.DistanceM != roundDistance(s.Activity, *s.TargetDistanceM/3) {
+		if want == "" && strings.Contains(s.Description, ", ") || want != "" && !strings.Contains(s.Description, want) {
+			t.Errorf("%s %s on %s: expected %q, got %q", s.Phase, s.Activity, s.Date, want, s.Description)
+		}
+		// Tempo blocks and finishes are kept to be checked, a third of the
+		// session.
+		block := want == "in the middle" || want == "finishing with the last"
+		if block != (s.TempoBlock != nil) {
+			t.Errorf("%s %s on %s: expected a block with %q, got %+v", s.Phase, s.Activity, s.Date, s.Description, s.TempoBlock)
+		} else if block && s.TempoBlock.DistanceM != roundDistance(s.Activity, *s.TargetDistanceM/3) {
 			t.Errorf("expected a third of %v in the block, got %v", *s.TargetDistanceM, s.TempoBlock.DistanceM)
 		}
 	}
@@ -578,5 +592,135 @@ func TestRaceWeek_TriathlonRunsBeforeRace(t *testing.T) {
 	run, ride := byActivity[ActivityRunning][0], byActivity[ActivityCycling][0]
 	if run.Date != ride.Date || run.Kind != KindBrick || *run.TargetDistanceM != 3000 {
 		t.Errorf("expected a 3 km run off the ride on %s, got %+v", ride.Date, run)
+	}
+}
+
+func TestGeneratePlan_RideIntervalsLengthenThroughPeak(t *testing.T) {
+	// One ride a week: the long ride carries the peak's intervals, whose
+	// reps lengthen week by week, and come back down in the taper.
+	g, f := halfTri()
+	var peak, taper []string
+	for _, s := range generate(t, generatorInput{Goal: g, From: day(g.StartDate), Fitness: f}) {
+		if s.Activity != ActivityCycling || !strings.Contains(s.Description, "zone 4") {
+			continue
+		}
+		switch s.Phase {
+		case PhasePeak:
+			peak = append(peak, s.Description)
+		case PhaseTaper:
+			taper = append(taper, s.Description)
+		}
+	}
+	if len(peak) < 3 {
+		t.Fatalf("expected peak rides with intervals, got %v", peak)
+	}
+	if !strings.Contains(peak[0], "with 4×8 min in zone 4, 4 min easy") {
+		t.Errorf("expected the first peak ride at 4×8 min, got %q", peak[0])
+	}
+	if !strings.Contains(peak[len(peak)-1], "with 2×20 min in zone 4, 8 min easy") {
+		t.Errorf("expected the last peak ride at 2×20 min, got %q", peak[len(peak)-1])
+	}
+	// Time in zone 4 never drops through the peak.
+	minutes := func(description string) int {
+		var reps, length int
+		i := strings.Index(description, "with ")
+		fmt.Sscanf(description[i:], "with %d×%d min", &reps, &length)
+		return reps * length
+	}
+	for i := 1; i < len(peak); i++ {
+		if minutes(peak[i]) < minutes(peak[i-1]) {
+			t.Errorf("expected zone 4 time to grow, got %q after %q", peak[i], peak[i-1])
+		}
+	}
+	// The taper cuts the volume but keeps a little intensity.
+	if len(taper) == 0 {
+		t.Error("expected taper rides with intervals")
+	}
+	for _, d := range taper {
+		if !strings.Contains(d, "with 3×8 min in zone 4") {
+			t.Errorf("expected taper rides at 3×8 min, got %q", d)
+		}
+	}
+}
+
+func TestGeneratePlan_TaperRideIntervals(t *testing.T) {
+	// Two rides a week: intervals get a ride of their own, shorter in the
+	// taper but as hard.
+	g := Goal{
+		Name: "Fondo", StartDate: "2026-10-16", RaceDate: "2027-04-04", BikeM: fp(100000),
+		Weekdays: []string{"wednesday", "sunday"}, LongDay: "sunday",
+	}
+	taper := 0
+	for _, s := range generate(t, generatorInput{Goal: g, From: day(g.StartDate)}) {
+		if s.Kind == KindIntervals && s.Phase == PhaseTaper {
+			taper++
+			if want := "Intervals 3×8 min in zone 4, 4 min easy"; !strings.HasPrefix(s.Description, want) {
+				t.Errorf("expected %q, got %q", want, s.Description)
+			}
+		}
+	}
+	if taper == 0 {
+		t.Error("expected interval rides in the taper")
+	}
+}
+
+func TestGeneratePlan_LoneSwimByPhase(t *testing.T) {
+	// One swim a week: drills in base, sets in build, peak and taper, and
+	// steady in recovery weeks.
+	g, f := halfTri()
+	seen := map[string]bool{}
+	for _, s := range generate(t, generatorInput{Goal: g, From: day(g.StartDate), Fitness: f}) {
+		if s.Activity != ActivitySwimming || s.Kind == KindRace || s.Phase == PhaseRace {
+			continue
+		}
+		week := int(day(s.Date).Sub(mondayOf(day(g.StartDate))).Hours() / 24 / 7)
+		recovery := (week+1)%4 == 0 && s.Phase != PhaseTaper
+		var want string
+		switch {
+		case recovery:
+			want = " · zone 2"
+		case s.Phase == PhaseBase:
+			want = " · zone 2, starting with 200 m of drills"
+		case s.Phase == PhaseBuild:
+			want = "×100 m in zone 3, 20 s rest"
+		case s.Phase == PhasePeak:
+			want = "×200 m in zone 4, 30 s rest"
+		case s.Phase == PhaseTaper:
+			want = "with 4×100 m in zone 4, 20 s rest"
+		}
+		if recovery && s.Description != "Long swim "+formatMetres(ActivitySwimming, *s.TargetDistanceM)+want ||
+			!strings.Contains(s.Description, want) {
+			t.Errorf("%s %s (week %d): expected %q in %q", s.Date, s.Phase, week+1, want, s.Description)
+		}
+		seen[s.Phase] = true
+	}
+	for _, phase := range []string{PhaseBase, PhaseBuild, PhasePeak, PhaseTaper} {
+		if !seen[phase] {
+			t.Errorf("expected swims in %s", phase)
+		}
+	}
+}
+
+func TestGeneratePlan_PeakLongRunFinishesAtRaceEffort(t *testing.T) {
+	// One run a week: the peak's long run finishes its last third in zone
+	// 3, the effort of the race, rather than carrying short fast reps.
+	g, f := halfTri()
+	peak := 0
+	for _, s := range generate(t, generatorInput{Goal: g, From: day(g.StartDate), Fitness: f}) {
+		if s.Activity != ActivityRunning || s.Kind != KindLong || s.Phase != PhasePeak || !strings.Contains(s.Description, "zone 3") {
+			continue
+		}
+		peak++
+		block := roundDistance(ActivityRunning, *s.TargetDistanceM/3)
+		want := fmt.Sprintf(" · zone 2, finishing with the last %s in zone 3", formatMetres(ActivityRunning, block))
+		if !strings.HasSuffix(s.Description, want) || strings.Contains(s.Description, "×") {
+			t.Errorf("expected %q to end with %q", s.Description, want)
+		}
+		if s.TempoBlock == nil || s.TempoBlock.DistanceM != block || s.TempoBlock.Position != BlockAtEnd {
+			t.Errorf("expected a block of the last %v m kept to be checked, got %+v", block, s.TempoBlock)
+		}
+	}
+	if peak == 0 {
+		t.Error("expected peak long runs finishing at race effort")
 	}
 }

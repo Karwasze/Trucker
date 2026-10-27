@@ -13,7 +13,7 @@ import { formatDuration } from '@/workout/format';
 /** The color of each zone, easiest first. */
 function useZoneColors(): string[] {
   const theme = useTheme();
-  return [theme.textSecondary, theme.accent, theme.success, theme.warning, theme.danger];
+  return [theme.textSecondary, theme.info, theme.success, theme.warning, theme.danger];
 }
 
 const missingText = (missing: MissingForZones) =>

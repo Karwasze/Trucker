@@ -20,7 +20,7 @@ const SHOW_MS = 3000;
 const BURST_MS = 1300;
 const PARTICLE_COUNT = 22;
 const CHECK_SIZE = 44;
-const CONFETTI = ['#3D9BF5', '#3FBF73', '#F7B750', '#F05A5A', '#A97CF8', '#2DD4BF'];
+const CONFETTI = ['#FF5A45', '#3D9BF5', '#3FBF73', '#F7B750', '#A97CF8', '#2DD4BF'];
 
 /** The celebration's content below the hardware, for sizing the island. */
 export const CELEBRATION_CONTENT_HEIGHT = 74;

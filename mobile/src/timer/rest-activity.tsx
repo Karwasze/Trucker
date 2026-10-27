@@ -17,7 +17,7 @@ export type RestActivityProps = {
  */
 const RestActivity = (props: RestActivityProps, environment: LiveActivityEnvironment) => {
   'widget';
-  const color = environment.isStale ? '#3FBF73' : '#3D9BF5';
+  const color = environment.isStale ? '#3FBF73' : '#FF5A45';
   const interval = { lower: new Date(props.startedAt), upper: new Date(props.endsAt) };
   const total = Math.round((props.endsAt - props.startedAt) / 1000);
   const target = `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;

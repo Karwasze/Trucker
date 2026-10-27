@@ -8,35 +8,27 @@ const session: PlannedSession = {
   id: 1,
   goal_id: 1,
   date: '2026-10-17',
-  activity: 'cycling',
-  kind: 'long',
-  phase: 'build',
-  intensity: 'easy',
-  description: 'Long ride 60 km · 101–126 bpm, with 20 km @ 134–148 bpm in the middle',
+  activity: 'running',
+  kind: 'intervals',
+  phase: 'peak',
+  intensity: 'Z4',
+  description: 'Intervals 6×800 m in zone 4, 2 min jog · 8 km in all',
   verdict: {
-    status: 'met',
+    status: 'partial',
     checks: [
-      { name: 'Distance', actual: '60.0 km', target: '60.0 km', ok: true },
-      {
-        name: 'Tempo block heart rate',
-        actual: '160 bpm',
-        target: '134–148 bpm',
-        ok: true,
-        warning: 'Harder than planned: ease off to keep fresh for the next sessions.',
-      },
+      { name: 'Distance', actual: '8 km', target: '8 km', ok: true },
+      { name: 'Reps', actual: '4', target: '6', ok: false },
     ],
   },
 };
 
-test('a check done harder than planned counts, with its warning', async () => {
+test('lists each check, marking the ones missed', async () => {
   await renderInApp(<SessionDetails session={session} />);
-  expect(screen.getByText('Met')).toBeOnTheScreen();
-  expect(screen.getByText('✓ Tempo block heart rate 160 bpm (target 134–148 bpm)')).toBeOnTheScreen();
-  expect(screen.getByText('⚠ Harder than planned: ease off to keep fresh for the next sessions.')).toBeOnTheScreen();
-  expect(screen.queryByText(/⚠.*Distance/)).toBeNull();
+  expect(screen.getByText('✓ Distance 8 km (target 8 km)')).toBeOnTheScreen();
+  expect(screen.getByText('✗ Reps 4 (target 6)')).toBeOnTheScreen();
 });
 
-test('compact leaves out the checks and their warnings', async () => {
+test('compact leaves out the checks', async () => {
   await renderInApp(<SessionDetails session={session} compact />);
-  expect(screen.queryByText(/^⚠/)).toBeNull();
+  expect(screen.queryByText(/^[✓✗]/)).toBeNull();
 });

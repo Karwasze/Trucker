@@ -425,9 +425,6 @@ const (
 type Verdict struct {
 	Status string  `json:"status"`
 	Checks []Check `json:"checks"`
-	// TooEasy is set when a heart rate check failed by staying below its
-	// zone.
-	TooEasy bool `json:"-"`
 }
 
 // Check compares what was done with the target on one aspect of a session,
@@ -437,6 +434,4 @@ type Check struct {
 	Actual string `json:"actual"`
 	Target string `json:"target"`
 	OK     bool   `json:"ok"`
-	// Warning is set on a check that passed by doing more than planned.
-	Warning string `json:"warning,omitempty"`
 }

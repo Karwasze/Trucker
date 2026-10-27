@@ -62,16 +62,9 @@ export function SessionDetails({ session: s, compact }: { session: PlannedSessio
       )}
       {!compact &&
         s.verdict?.checks.map((c) => (
-          <View key={c.name}>
-            <ThemedText type="small" style={{ color: c.ok ? theme.textSecondary : theme.warning }}>
-              {c.ok ? '✓' : '✗'} {c.name} {c.actual} (target {c.target})
-            </ThemedText>
-            {c.warning && (
-              <ThemedText type="small" style={{ color: theme.warning }}>
-                ⚠ {c.warning}
-              </ThemedText>
-            )}
-          </View>
+          <ThemedText key={c.name} type="small" style={{ color: c.ok ? theme.textSecondary : theme.warning }}>
+            {c.ok ? '✓' : '✗'} {c.name} {c.actual} (target {c.target})
+          </ThemedText>
         ))}
     </View>
   );

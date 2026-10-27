@@ -131,9 +131,6 @@ type generatorInput struct {
 	// Hold keeps the first week at PrevLevel instead of growing it, after
 	// a week well short of the plan.
 	Hold bool
-	// EaseQuality makes the first week's quality sessions easy, after
-	// quality sessions done below their zone.
-	EaseQuality bool
 }
 
 // planWeek is a week (from Monday) of a goal's plan, counted from the week
@@ -325,11 +322,10 @@ func generatePlan(in generatorInput) ([]PlannedSession, []string) {
 				days = append(days, day)
 			}
 		}
-		ease := in.EaseQuality && first
 		if week.phase == PhaseRace {
 			sessions = append(sessions, raceWeek(g, days, race)...)
 		} else {
-			sessions = append(sessions, trainingWeek(g, in.Fitness, week, level, days, ease)...)
+			sessions = append(sessions, trainingWeek(g, in.Fitness, week, level, days)...)
 		}
 		first = false
 	}
@@ -389,7 +385,7 @@ func sessionCounts(legs []string, days int) map[string]int {
 
 // trainingWeek plans a week before race week on days, from each
 // discipline's weekly level.
-func trainingWeek(g Goal, f Fitness, week planWeek, level map[string]float64, days []time.Time, ease bool) []PlannedSession {
+func trainingWeek(g Goal, f Fitness, week planWeek, level map[string]float64, days []time.Time) []PlannedSession {
 	if len(days) == 0 {
 		return nil
 	}
@@ -422,7 +418,7 @@ func trainingWeek(g Goal, f Fitness, week planWeek, level map[string]float64, da
 		}
 
 		quality := ""
-		if !week.recovery && !ease && n >= 2 {
+		if !week.recovery && n >= 2 {
 			switch week.phase {
 			case PhaseBuild:
 				quality = KindTempo
@@ -444,7 +440,7 @@ func trainingWeek(g Goal, f Fitness, week planWeek, level map[string]float64, da
 		}
 		longSession := newSession(activity, KindLong, week.phase, roundDistance(activity, long))
 		// A lone weekly session carries the phase's quality as a block.
-		if n == 1 && !week.recovery && !ease {
+		if n == 1 && !week.recovery {
 			longSession = withQualityBlock(longSession, week)
 		}
 		planned = append(planned, longSession)
@@ -736,11 +732,7 @@ func newSession(activity, kind, phase string, distance float64) PlannedSession {
 		return s
 	}
 
-	effort := kind
-	if kind == KindBrick {
-		effort = KindTempo
-	}
-	s.Intensity = fmt.Sprintf("Z%d", heartRateZone(effort))
+	s.Intensity = fmt.Sprintf("Z%d", sessionZone(s))
 
 	if kind == KindIntervals {
 		reps, repDistance, repDuration, recovery := intervalStructure(activity, phase, distance)
@@ -767,6 +759,16 @@ func heartRateZone(effort string) int {
 		return 4
 	}
 	return 2
+}
+
+// sessionZone is the heart rate zone a session is done in: its kind's,
+// except bricks in build, which follow a ride with zone 3 in it and so are
+// run in zone 2. From the peak on they rehearse the race, in zone 3.
+func sessionZone(s PlannedSession) int {
+	if s.Kind == KindBrick && s.Phase == PhaseBuild {
+		return 2
+	}
+	return heartRateZone(s.Kind)
 }
 
 // rideReps are the timed reps of a ride's intervals through the peak, the
@@ -869,7 +871,7 @@ func describeSession(s PlannedSession) string {
 // describeTarget writes a session's intensity target, its heart rate zone,
 // which the watch shows during the workout.
 func describeTarget(s PlannedSession) string {
-	return fmt.Sprintf("zone %d", heartRateZone(s.Kind))
+	return fmt.Sprintf("zone %d", sessionZone(s))
 }
 
 // formatClock writes seconds as m:ss.

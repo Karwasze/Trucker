@@ -106,8 +106,8 @@ function ZoneRangesCard({ data, error }: { data?: ZonesState; error: string | nu
       ))}
       <ThemedText type="small" themeColor="textSecondary">
         From your max heart rate of {max_hr} bpm (by age) and resting heart rate of {resting_hr} bpm in Apple Health, as
-        Apple Watch works out its zones. Tempo and interval sessions are judged by them. If you set zones on the watch
-        by hand, they may differ.
+        Apple Watch works out its zones. The plan suggests a zone for each session; sessions are judged on distance and
+        reps, not heart rate. If you set zones on the watch by hand, they may differ.
       </ThemedText>
     </Card>
   );

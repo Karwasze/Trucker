@@ -3,7 +3,6 @@ package store
 import (
 	"database/sql"
 	"errors"
-	"fmt"
 	"math"
 )
 
@@ -45,20 +44,6 @@ func computeHeartRateZones(maxHR, restingHR float64) []HeartRateZone {
 }
 
 func ip(v int) *int { return &v }
-
-// zone returns zone n (1 to 5).
-func (z *HeartRateZones) zone(n int) HeartRateZone { return z.Zones[n-1] }
-
-// describe writes zone n with its range, e.g. "zone 3 (146–158 bpm)".
-func (z HeartRateZone) describe() string {
-	switch {
-	case z.Min == nil:
-		return fmt.Sprintf("zone %d (< %d bpm)", z.Zone, *z.Max+1)
-	case z.Max == nil:
-		return fmt.Sprintf("zone %d (%d+ bpm)", z.Zone, *z.Min)
-	}
-	return fmt.Sprintf("zone %d (%d–%d bpm)", z.Zone, *z.Min, *z.Max)
-}
 
 // SetHeartRateProfile records the max and resting heart rate as of date
 // and returns the zones in effect then. A profile the same as the one in

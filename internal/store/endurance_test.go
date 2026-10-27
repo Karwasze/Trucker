@@ -437,30 +437,6 @@ func TestGeneratePlan_ThreeDayTriathlon(t *testing.T) {
 	}
 }
 
-func TestGeneratePlan_EaseQuality(t *testing.T) {
-	g := tenK()
-	// Week 6 (Nov 23) is in build, with a tempo run.
-	from := day("2026-11-23")
-	normal := generate(t, generatorInput{Goal: g, From: from, PrevLevel: map[string]float64{ActivityRunning: 25000}})
-	eased := generate(t, generatorInput{Goal: g, From: from, PrevLevel: map[string]float64{ActivityRunning: 25000}, EaseQuality: true})
-
-	quality := func(sessions []PlannedSession, week string) int {
-		n := 0
-		for _, s := range sessions {
-			if mondayOf(day(s.Date)).Format(dateLayout) == week && (s.Kind == KindTempo || s.Kind == KindIntervals) {
-				n++
-			}
-		}
-		return n
-	}
-	if quality(normal, "2026-11-23") != 1 || quality(eased, "2026-11-23") != 0 {
-		t.Errorf("expected the tempo run eased in the first week only")
-	}
-	if quality(eased, "2026-11-30") != 1 {
-		t.Errorf("expected quality back the week after")
-	}
-}
-
 func TestNewSession_HeartRateZones(t *testing.T) {
 	// Zones are numbered as in the Fitness app.
 	cases := []struct {
@@ -470,7 +446,8 @@ func TestNewSession_HeartRateZones(t *testing.T) {
 		{ActivityRunning, KindLong, "Z2", "Long run 6 km · zone 2"},
 		{ActivityCycling, KindEasy, "Z2", "Easy ride 30 km · zone 2"},
 		{ActivityRunning, KindTempo, "Z3", "Tempo run 8 km: the middle half in zone 3"},
-		{ActivityRunning, KindBrick, "Z3", "Brick run 3 km straight off the bike · zone 3"},
+		// In build; from the peak on, bricks are in zone 3.
+		{ActivityRunning, KindBrick, "Z2", "Brick run 3 km straight off the bike · zone 2"},
 	}
 	for _, c := range cases {
 		distance := map[string]float64{KindRecovery: 4000, KindLong: 6000, KindEasy: 30000, KindTempo: 8000, KindBrick: 3000}[c.kind]
@@ -722,5 +699,28 @@ func TestGeneratePlan_PeakLongRunFinishesAtRaceEffort(t *testing.T) {
 	}
 	if peak == 0 {
 		t.Error("expected peak long runs finishing at race effort")
+	}
+}
+
+func TestGeneratePlan_BricksEasyInBuild(t *testing.T) {
+	// Build bricks follow a ride with zone 3 in it, so they're run in zone
+	// 2; from the peak on they rehearse the race, in zone 3.
+	g, f := halfTri()
+	seen := map[string]bool{}
+	for _, s := range generate(t, generatorInput{Goal: g, From: day(g.StartDate), Fitness: f}) {
+		if s.Kind != KindBrick {
+			continue
+		}
+		zone := "Z3"
+		if s.Phase == PhaseBuild {
+			zone = "Z2"
+		}
+		if s.Intensity != zone || !strings.HasSuffix(s.Description, " · zone "+zone[1:]) {
+			t.Errorf("%s %s brick: expected %s, got %s %q", s.Date, s.Phase, zone, s.Intensity, s.Description)
+		}
+		seen[s.Phase] = true
+	}
+	if !seen[PhaseBuild] || !seen[PhasePeak] {
+		t.Errorf("expected bricks in build and peak, got %v", seen)
 	}
 }

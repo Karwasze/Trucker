@@ -17,9 +17,6 @@ const (
 	// this many missed sessions, holds the next week's volume.
 	holdBelowShare  = 0.7
 	holdAfterMissed = 2
-	// This many quality sessions in a row below their zone ease the next
-	// week's.
-	qualityEasyInRow = 2
 )
 
 // CreateGoal saves a goal starting today (YYYY-MM-DD) as the active goal,
@@ -181,11 +178,7 @@ func judge(q querier, session *PlannedSession, today string) error {
 			workout = &w
 		}
 	}
-	zones, err := heartRateZones(q, session.Date)
-	if err != nil {
-		return err
-	}
-	verdict := evaluateSession(*session, workout, today, zones)
+	verdict := evaluateSession(*session, workout, today)
 	session.Verdict = &verdict
 	if workout != nil {
 		summary := *workout
@@ -272,7 +265,7 @@ func (s *Store) adapt(tx *sql.Tx, goalID int, today string) error {
 // regenerate replaces the goal's sessions from from (YYYY-MM-DD) that
 // weren't filled yet with a fresh plan, continuing from the volume of the
 // last full week planned before it and adapting to how the last finished
-// week and the last quality sessions went (see generatePlan).
+// week went (see generatePlan).
 func (s *Store) regenerate(tx *sql.Tx, g Goal, from, today string) ([]string, error) {
 	now, err := time.Parse(dateLayout, today)
 	if err != nil {
@@ -303,26 +296,18 @@ func (s *Store) regenerate(tx *sql.Tx, g Goal, from, today string) ([]string, er
 	weeks := planWeeks(goalStart, race, taperWeeks(g, fitness))
 	in.PrevLevel = previousLevel(past, weeks, start)
 
-	// How the last finished week and quality sessions went, judged with
-	// their workouts.
+	// How the last finished week went, judged with its workouts.
 	lastWeek := mondayOf(now).AddDate(0, 0, -7).Format(dateLayout)
 	thisWeek := mondayOf(now).Format(dateLayout)
 	var planned, done float64
 	missed := 0
-	var quality []PlannedSession
 	for i := range past {
 		p := &past[i]
-		if p.Date >= today || p.Kind == KindRace {
+		if p.Date < lastWeek || p.Date >= thisWeek || p.Kind == KindRace {
 			continue
 		}
 		if err := judge(tx, p, today); err != nil {
 			return nil, err
-		}
-		if p.Kind == KindTempo || p.Kind == KindIntervals {
-			quality = append(quality, *p)
-		}
-		if p.Date < lastWeek || p.Date >= thisWeek {
-			continue
 		}
 		planned += deref(p.TargetDistanceM)
 		if p.Workout != nil {
@@ -333,14 +318,6 @@ func (s *Store) regenerate(tx *sql.Tx, g Goal, from, today string) ([]string, er
 		}
 	}
 	in.Hold = in.PrevLevel != nil && planned > 0 && (done < planned*holdBelowShare || missed >= holdAfterMissed)
-
-	if len(quality) >= qualityEasyInRow {
-		easy := true
-		for _, q := range quality[len(quality)-qualityEasyInRow:] {
-			easy = easy && q.Verdict.TooEasy
-		}
-		in.EaseQuality = easy
-	}
 
 	sessions, warnings := generatePlan(in)
 	// Filled sessions stay, so don't plan the same activity on their day

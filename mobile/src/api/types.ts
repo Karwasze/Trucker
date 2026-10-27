@@ -285,8 +285,7 @@ export type VerdictStatus = 'met' | 'partial' | 'missed' | 'pending';
 
 export type Verdict = {
   status: VerdictStatus;
-  /** warning is set on a check passed by doing more than planned. */
-  checks: { name: string; actual: string; target: string; ok: boolean; warning?: string }[];
+  checks: { name: string; actual: string; target: string; ok: boolean }[];
 };
 
 /** A heart rate zone, 1 to 5 as the watch numbers them, in whole bpm. Zone 1 has no min, zone 5 no max. */

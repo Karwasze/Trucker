@@ -325,7 +325,14 @@ func TestCreateGoal_KeepsTempoBlocks(t *testing.T) {
 	}
 }
 
-func TestAdapt_EasesQualityAfterTwoBelowTheirZone(t *testing.T) {
+// tempoWorkout runs 10 easy minutes each side of 25 minutes at 5:00/km and
+// a heart rate.
+func tempoWorkout(hr float64) *CardioWorkout {
+	return synthetic(ActivityRunning,
+		stretch{600, pace(400), 130}, stretch{1500, pace(300), hr}, stretch{600, pace(400), 130})
+}
+
+func TestAdapt_HeartRateNeverChangesThePlan(t *testing.T) {
 	// The quality sessions in the next week, after filling the first two
 	// tempo runs with workouts at hr through the middle.
 	nextQuality := func(hr float64) int {
@@ -366,10 +373,9 @@ func TestAdapt_EasesQualityAfterTwoBelowTheirZone(t *testing.T) {
 		return n
 	}
 
-	if n := nextQuality(152); n == 0 {
-		t.Fatal("expected a quality session next week after tempo runs in zone 3")
-	}
-	if n := nextQuality(135); n != 0 {
-		t.Errorf("expected next week's quality eased after two tempo runs below zone 3, got %d", n)
+	// Zones are a suggestion: tempo runs well below zone 3 change nothing.
+	inZone, below := nextQuality(152), nextQuality(120)
+	if inZone == 0 || below != inZone {
+		t.Errorf("expected next week's quality sessions alike, got %d in zone and %d below", inZone, below)
 	}
 }

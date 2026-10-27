@@ -92,7 +92,18 @@ xcodebuild \
   # Expo's configure step...); there's no setting to turn the note off.
   sed '/^note: Run script build phase .* will be run during every build/d'
 
-step "Installing"
-npx expo run:ios --device "$device" --binary ios/build/Build/Products/Release-iphoneos/Trucker.app
+app=ios/build/Build/Products/Release-iphoneos/Trucker.app
 
-step "Done: open Trucker on the phone"
+step "Installing"
+# devicectl rather than `expo run:ios --binary`, which starts Metro after
+# installing and keeps running until it's stopped.
+xcrun devicectl device install app --device "$device" "$app" >/dev/null
+
+step "Launching"
+bundle_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")"
+if ! xcrun devicectl device process launch --device "$device" "$bundle_id" >/dev/null; then
+  echo "Installed, but couldn't launch it (is the phone locked?). Open Trucker on the phone."
+  exit 0
+fi
+
+step "Done"

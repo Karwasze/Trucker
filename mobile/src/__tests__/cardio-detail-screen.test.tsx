@@ -31,10 +31,10 @@ const ride: CardioWorkout = {
 };
 const indoor: CardioWorkout = { ...ride, id: 6, distance_m: undefined, laps: undefined, source_uuid: 'indoor' };
 
-const session = (id: number, description: string, filledBy?: number): PlannedSession => ({
+const session = (id: number, description: string, filledBy?: number, date = '2026-10-17'): PlannedSession => ({
   id,
   goal_id: 3,
-  date: '2026-10-17',
+  date,
   activity: 'cycling',
   kind: 'long',
   phase: 'base',
@@ -55,9 +55,9 @@ function server(workout: CardioWorkout, sessions: PlannedSession[] = []) {
       const { session_id, cardio_id } = body as { session_id: number; cardio_id: number | null };
       sessions = sessions.map((s) =>
         s.id === session_id
-          ? session(s.id, s.description, cardio_id ?? undefined)
+          ? session(s.id, s.description, cardio_id ?? undefined, s.date)
           : s.cardio_workout_id === cardio_id
-            ? session(s.id, s.description)
+            ? session(s.id, s.description, undefined, s.date)
             : s
       );
       return { success: true };
@@ -125,6 +125,22 @@ test('the session it fills can be changed or cleared', async () => {
 
   await user.press(screen.getByRole('button', { name: 'No session' }));
   expect(matches().at(-1)).toEqual({ session_id: 22, cardio_id: null });
+});
+
+test('it can count as an open session the day before or after', async () => {
+  const requests = server(ride, [
+    session(21, 'Long ride 40 km · easy', undefined, '2026-10-16'),
+    session(22, 'Recovery spin: 30 min', 9, '2026-10-18'),
+  ]);
+  const user = userEvent.setup();
+  await renderInApp(<CardioDetailScreen />);
+  await user.press(await screen.findByRole('button', { name: 'Long ride 40 km · Fri' }));
+  expect(requests.filter((r) => r.method === 'PUT').map((r) => r.body)).toEqual([{ session_id: 21, cardio_id: 5 }]);
+  expect(await screen.findByRole('button', { name: 'Long ride 40 km · Fri', selected: true })).toBeOnTheScreen();
+  // Another workout filled the day after's.
+  expect(screen.queryByRole('button', { name: /Recovery spin/ })).toBeNull();
+  const query = requests.find((r) => r.path === '/api/goals/sessions')!.query;
+  expect([query.get('from'), query.get('to')]).toEqual(['2026-10-16', '2026-10-18']);
 });
 
 test('deleting dismisses it from Apple Health imports and goes back', async () => {

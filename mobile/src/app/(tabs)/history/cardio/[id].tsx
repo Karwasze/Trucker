@@ -9,6 +9,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Chip, Message, Screen, SectionLabel } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { SessionDetails } from '@/goals/session-card';
+import { matchRange, sessionLabel, withinMatch } from '@/goals/session-match';
 import { useHealthState } from '@/health/health-state';
 import { WorkoutZones } from '@/health/heart-rate-zones';
 import { useQuery } from '@/hooks/use-query';
@@ -31,11 +32,11 @@ export default function CardioDetailScreen() {
   const { dismiss } = useHealthState();
   const workout = useQuery(`cardio:${serverUrl}:${id}`, () => api.getCardio(Number(id)));
   const [deleting, setDeleting] = useState(false);
-  // The active goal's sessions on the workout's day, to say which it fills.
+  // The active goal's sessions the workout may count as, to say which it fills.
   const date = workout.data?.date;
   const sessions = useQuery(date ? `cardio-sessions:${serverUrl}:${id}:${date}` : null, async () => {
     const goal = (await api.listGoals()).find((g) => g.active);
-    return goal ? api.goalSessions(goal.id, localDate(), date, date) : [];
+    return goal ? api.goalSessions(goal.id, localDate(), ...matchRange([date!])) : [];
   });
   const [matching, setMatching] = useState(false);
 
@@ -121,7 +122,7 @@ export default function CardioDetailScreen() {
             </Card>
           )}
           {sessions.data && sessions.data.length > 0 && (
-            <CountsAs workoutId={w.id} sessions={sessions.data} disabled={matching} onMatch={match} />
+            <CountsAs workout={w} sessions={sessions.data} disabled={matching} onMatch={match} />
           )}
           <Button title="Delete workout" variant="danger" loading={deleting} onPress={() => confirmDelete(w)} />
         </>
@@ -196,21 +197,25 @@ function DistanceEntry({ workout: w, onSaved }: { workout: CardioWorkout; onSave
   );
 }
 
-/** Which of the day's planned sessions the workout fills, and how it went. */
+/**
+ * Which of the planned sessions from the day before to the day after the
+ * workout fills, and how it went.
+ */
 function CountsAs({
-  workoutId,
+  workout,
   sessions,
   disabled,
   onMatch,
 }: {
-  workoutId: number;
+  workout: CardioWorkout;
   sessions: PlannedSession[];
   disabled: boolean;
   onMatch: (session: PlannedSession | null, current: PlannedSession | undefined) => void;
 }) {
-  const current = sessions.find((s) => s.cardio_workout_id === workoutId);
+  const current = sessions.find((s) => s.cardio_workout_id === workout.id);
   // Sessions another workout filled aren't offered.
-  const options = sessions.filter((s) => !s.cardio_workout_id || s.cardio_workout_id === workoutId);
+  const options = sessions.filter((s) => s === current || (!s.cardio_workout_id && withinMatch(s, workout.date)));
+  if (options.length === 0) return null;
   return (
     <>
       <SectionLabel>Counts as</SectionLabel>
@@ -220,7 +225,7 @@ function CountsAs({
           {options.map((s) => (
             <Chip
               key={s.id}
-              label={s.description.split(' · ')[0].split(':')[0]}
+              label={sessionLabel(s, workout.date)}
               selected={current?.id === s.id}
               inCard
               onPress={() => !disabled && current?.id !== s.id && onMatch(s, current)}

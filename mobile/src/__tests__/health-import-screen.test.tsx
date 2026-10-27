@@ -28,10 +28,10 @@ const swim: NewCardioWorkout = {
   duration_seconds: 1800,
   source_uuid: 'swim',
 };
-const session = (id: number, description: string): PlannedSession => ({
+const session = (id: number, description: string, date = '2026-10-17'): PlannedSession => ({
   id,
   goal_id: 3,
-  date: '2026-10-17',
+  date,
   activity: 'running',
   kind: 'easy',
   phase: 'base',
@@ -91,6 +91,32 @@ test('a workout fills the open session of its activity that day, unless another 
   await user.press(screen.getByRole('button', { name: 'Strides' }));
   await user.press(screen.getByRole('button', { name: 'Import 2 workouts' }));
   expect(requests.find((r) => r.method === 'POST')?.body).toEqual([{ ...run, planned_session_id: 12 }, swim]);
+});
+
+test('a workout done a day late fills the open session the day before; the day after only by choice', async () => {
+  const requests = fakeServer([
+    session(11, 'Easy run 6 km · 5:45–6:15/km', '2026-10-16'),
+    session(12, 'Long run 20 km', '2026-10-18'),
+  ]);
+  const user = userEvent.setup();
+  await renderInApp(<HealthImportScreen />);
+  expect(await screen.findByRole('button', { name: 'Easy run 6 km · Fri' })).toBeSelected();
+  expect(screen.getByRole('button', { name: 'Long run 20 km · Sun' })).not.toBeSelected();
+  const query = requests.find((r) => r.path === '/api/goals/sessions')!.query;
+  expect([query.get('from'), query.get('to')]).toEqual(['2026-10-16', '2026-10-19']);
+
+  await user.press(screen.getByRole('button', { name: 'Import 2 workouts' }));
+  expect(requests.find((r) => r.method === 'POST')?.body).toEqual([{ ...run, planned_session_id: 11 }, swim]);
+});
+
+test("a workout on a session's day fills it before one done a day late", async () => {
+  const early: NewCardioWorkout = { ...run, date: '2026-10-16', source_uuid: 'early' };
+  jest.mocked(healthWorkoutsSince).mockResolvedValue([run, early]);
+  const requests = fakeServer([session(11, 'Easy run 6 km', '2026-10-16')]);
+  const user = userEvent.setup();
+  await renderInApp(<HealthImportScreen />);
+  await user.press(await screen.findByRole('button', { name: 'Import 2 workouts' }));
+  expect(requests.find((r) => r.method === 'POST')?.body).toEqual([run, { ...early, planned_session_id: 11 }]);
 });
 
 test('skipping all imports nothing and dismisses everything', async () => {

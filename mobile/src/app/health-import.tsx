@@ -9,6 +9,7 @@ import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Chip, Message, Screen } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
+import { addDays, matchRange, sessionLabel, withinMatch } from '@/goals/session-match';
 import { CardioSummary } from '@/health/cardio-summary';
 import { IMPORT_LOOKBACK_DAYS, useHealthImports, useHealthReport, useHealthState } from '@/health/health-state';
 import type { HealthWorkoutStatus } from '@/health/healthkit';
@@ -16,23 +17,26 @@ import { useQuery } from '@/hooks/use-query';
 import { useTheme } from '@/hooks/use-theme';
 import { useSettings } from '@/settings/settings-context';
 
-/** "Easy run 6 km" from "Easy run 6 km · 5:45–6:15/km". */
-const shortName = (s: PlannedSession) => s.description.split(' · ')[0].split(':')[0];
-
 /**
  * Pairs each workout with the open session of the same activity on its
- * date, at most one workout per session.
+ * date or, failing that, the day before (done a day late), at most one
+ * workout per session. A session the day after is only filled by choice, so
+ * an extra workout doesn't take the next day's session.
  */
 function defaultMatches(workouts: NewCardioWorkout[], sessions: PlannedSession[]) {
   const matches = new Map<string, number | null>();
   const taken = new Set<number>();
-  workouts.forEach((w, i) => {
-    const session = sessions.find(
-      (s) => !s.workout && !taken.has(s.id) && s.date === w.date && s.activity === w.activity
-    );
-    if (session) taken.add(session.id);
-    matches.set(w.source_uuid ?? String(i), session?.id ?? null);
-  });
+  for (const days of [0, -1]) {
+    workouts.forEach((w, i) => {
+      const key = w.source_uuid ?? String(i);
+      if (matches.get(key)) return;
+      const session = sessions.find(
+        (s) => !s.workout && !taken.has(s.id) && s.date === addDays(w.date, days) && s.activity === w.activity
+      );
+      if (session) taken.add(session.id);
+      matches.set(key, session?.id ?? null);
+    });
+  }
   return matches;
 }
 
@@ -51,15 +55,12 @@ export default function HealthImportScreen() {
   const [unticked, setUnticked] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
 
-  // The active goal's sessions on the workouts' dates.
-  const dates = imports.candidates.map((w) => w.date).sort();
-  const sessions = useQuery(
-    dates.length > 0 ? `import-sessions:${serverUrl}:${dates[0]}:${dates.at(-1)}` : null,
-    async () => {
-      const goal = (await api.listGoals()).find((g) => g.active);
-      return goal ? api.goalSessions(goal.id, localDate(), dates[0], dates.at(-1)) : [];
-    }
-  );
+  // The active goal's sessions the workouts may count as.
+  const range = imports.candidates.length > 0 ? matchRange(imports.candidates.map((w) => w.date)) : null;
+  const sessions = useQuery(range ? `import-sessions:${serverUrl}:${range[0]}:${range[1]}` : null, async () => {
+    const goal = (await api.listGoals()).find((g) => g.active);
+    return goal ? api.goalSessions(goal.id, localDate(), range![0], range![1]) : [];
+  });
   // Matches the lifter changed; the rest follow defaultMatches.
   const [chosen, setChosen] = useState<Map<string, number | null>>(new Map());
   const defaults = defaultMatches(imports.candidates, sessions.data ?? []);
@@ -117,7 +118,7 @@ export default function HealthImportScreen() {
           {imports.candidates.map((w, i) => {
             const uuid = uuidOf(i);
             const checked = !unticked.has(uuid);
-            const options = (sessions.data ?? []).filter((s) => s.date === w.date && !s.workout);
+            const options = (sessions.data ?? []).filter((s) => withinMatch(s, w.date) && !s.workout);
             const match = matchOf(uuid);
             return (
               <Card key={uuid} style={!checked && { opacity: 0.5 }}>
@@ -147,7 +148,7 @@ export default function HealthImportScreen() {
                       {options.map((s) => (
                         <Chip
                           key={s.id}
-                          label={shortName(s)}
+                          label={sessionLabel(s, w.date)}
                           selected={match === s.id}
                           inCard
                           onPress={() => choose(uuid, s.id)}

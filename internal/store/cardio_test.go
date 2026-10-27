@@ -183,3 +183,48 @@ func TestSetCardioDistance(t *testing.T) {
 		t.Errorf("expected ErrCardioWorkoutNotFound, got %v", err)
 	}
 }
+
+func TestGetCardioWorkout_DropsMileSplits(t *testing.T) {
+	s := newTestStore(t)
+	// The watch marks a split every kilometre and every mile of a 3.5 km
+	// run, interleaved.
+	run := cardioRun("a", "2026-10-10", 3.5)
+	run.Laps = []CardioLap{
+		{T: 0, Duration: 300, D: 1000},
+		{T: 0, Duration: 483, D: 1609.3},
+		{T: 300, Duration: 300, D: 1000},
+		{T: 483, Duration: 483, D: 1609.3},
+		{T: 600, Duration: 300, D: 1000},
+		{T: 966, Duration: 84, D: 281.4},
+		{T: 900, Duration: 150, D: 500},
+	}
+	saved, err := s.SaveCardioWorkouts([]CardioWorkout{run})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.GetCardioWorkout(saved[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []CardioLap{
+		{T: 0, Duration: 300, D: 1000},
+		{T: 300, Duration: 300, D: 1000},
+		{T: 600, Duration: 300, D: 1000},
+		{T: 900, Duration: 150, D: 500},
+	}
+	if !reflect.DeepEqual(got.Laps, want) {
+		t.Errorf("got laps %+v, want %+v", got.Laps, want)
+	}
+}
+
+func TestKilometreLaps_KeepsLapsMarkedByHand(t *testing.T) {
+	laps := []CardioLap{
+		{T: 0, Duration: 600, D: 2000},
+		{T: 600, Duration: 200, D: 800},
+		{T: 800, Duration: 120, D: 300},
+	}
+	if got := kilometreLaps(laps); !reflect.DeepEqual(got, laps) {
+		t.Errorf("got %+v, want %+v", got, laps)
+	}
+}

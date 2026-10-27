@@ -1,6 +1,7 @@
 package store
 
 import (
+	"cmp"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -129,8 +130,53 @@ func getCardioWorkout(q querier, id int) (CardioWorkout, error) {
 		if err := json.Unmarshal([]byte(laps.String), &w.Laps); err != nil {
 			return CardioWorkout{}, err
 		}
+		w.Laps = kilometreLaps(w.Laps)
 	}
 	return w, nil
+}
+
+// lapOverlapS is how far a lap may start before the previous one ends and
+// still follow it, as lap times are rounded.
+const lapOverlapS = 0.5
+
+// kilometreLaps returns the laps of the series with the most laps, in
+// order. The watch splits runs every kilometre and every mile, marking
+// both as overlapping series of segments; the kilometre series always has
+// more of them. Laps marked by hand don't overlap, so they're kept as is.
+func kilometreLaps(laps []CardioLap) []CardioLap {
+	sorted := slices.Clone(laps)
+	slices.SortStableFunc(sorted, func(a, b CardioLap) int { return cmp.Compare(a.T, b.T) })
+	var series [][]CardioLap
+	for _, lap := range sorted {
+		// The series that ended last before the lap starts takes it.
+		best := -1
+		for i, s := range series {
+			end := lastEnd(s)
+			if end <= lap.T+lapOverlapS && (best < 0 || end > lastEnd(series[best])) {
+				best = i
+			}
+		}
+		if best < 0 {
+			series = append(series, []CardioLap{lap})
+		} else {
+			series[best] = append(series[best], lap)
+		}
+	}
+	if len(series) <= 1 {
+		return laps
+	}
+	longest := series[0]
+	for _, s := range series[1:] {
+		if len(s) > len(longest) {
+			longest = s
+		}
+	}
+	return longest
+}
+
+func lastEnd(laps []CardioLap) float64 {
+	last := laps[len(laps)-1]
+	return last.T + last.Duration
 }
 
 // SetCardioDistance sets the distance (metres) of a cardio workout Health

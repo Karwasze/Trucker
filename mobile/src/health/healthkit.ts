@@ -41,6 +41,8 @@ const DISTANCE = {
 } as const satisfies Record<CardioActivity, string>;
 
 const HEART_RATE = 'HKQuantityTypeIdentifierHeartRate';
+const RESTING_HEART_RATE = 'HKQuantityTypeIdentifierRestingHeartRate';
+const DATE_OF_BIRTH = 'HKCharacteristicTypeIdentifierDateOfBirth';
 const BODY_MASS = 'HKQuantityTypeIdentifierBodyMass';
 
 /** Whether Apple Health can be read on this device. */
@@ -53,7 +55,8 @@ export function isHealthAvailable(): boolean {
 }
 
 /**
- * Asks for read access to workouts, what they measured and weight. iOS only
+ * Asks for read access to workouts, what they measured, weight, and the
+ * birth date and resting heart rate heart rate zones are worked out from. iOS only
  * shows the prompt once per type (asking again just prompts for types added
  * since); afterwards access is changed in the Health app, and reads of
  * denied types just come back empty.
@@ -70,6 +73,8 @@ export async function connectHealth(): Promise<void> {
       'HKQuantityTypeIdentifierSwimmingStrokeCount',
       HEART_RATE,
       BODY_MASS,
+      RESTING_HEART_RATE,
+      DATE_OF_BIRTH,
     ],
   });
 }
@@ -84,6 +89,32 @@ export async function healthBodyweight(): Promise<BodyweightEntry[]> {
   const byDate = new Map<string, number>();
   for (const s of samples) byDate.set(localDate(s.startDate), Math.round(s.quantity * 100) / 100);
   return [...byDate].map(([date, weight]) => ({ date, weight }));
+}
+
+/** Days of resting heart rate averaged, as the watch updates its zones monthly. */
+const RESTING_DAYS = 30;
+
+/**
+ * The birth date and resting heart rate (bpm, averaged over the last
+ * RESTING_DAYS, or the latest reading before then) recorded in Health,
+ * either missing when Health has none.
+ */
+export async function healthHeartRateProfile(): Promise<{ dateOfBirth?: Date; restingHeartRate?: number }> {
+  if (!healthkit) return {};
+  const since = new Date(Date.now() - RESTING_DAYS * 24 * 60 * 60 * 1000);
+  const [dateOfBirth, recent, latest] = await Promise.all([
+    healthkit.getDateOfBirthAsync().catch(() => undefined),
+    healthkit
+      .queryQuantitySamples(RESTING_HEART_RATE, { limit: 0, unit: 'count/min', filter: { date: { startDate: since } } })
+      .catch(() => []),
+    healthkit
+      .queryQuantitySamples(RESTING_HEART_RATE, { limit: 1, ascending: false, unit: 'count/min' })
+      .catch(() => []),
+  ]);
+  const readings = recent.length > 0 ? recent : latest;
+  const restingHeartRate =
+    readings.length > 0 ? Math.round(readings.reduce((sum, s) => sum + s.quantity, 0) / readings.length) : undefined;
+  return { dateOfBirth: dateOfBirth ?? undefined, restingHeartRate };
 }
 
 /**

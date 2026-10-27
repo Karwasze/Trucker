@@ -2,7 +2,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useState } from 'react';
 
 import { useQuery } from '@/hooks/use-query';
-import { healthWorkoutReport, healthWorkoutsSince, isHealthAvailable } from '@/health/healthkit';
+import {
+  connectHealth,
+  healthHeartRateProfile,
+  healthWorkoutReport,
+  healthWorkoutsSince,
+  isHealthAvailable,
+} from '@/health/healthkit';
+import { heartRateZones, maxHeartRate, type HeartRateZone } from '@/health/zones';
 import { useSettings } from '@/settings/settings-context';
 
 /**
@@ -122,4 +129,31 @@ export function useHealthReport(enabled: boolean) {
       return healthWorkoutReport(importSince(connectedAt!), importedUuids, dismissed);
     }
   );
+}
+
+/**
+ * Heart rate zones worked out from the birth date and resting heart rate in
+ * Health, or what's missing for them. Undefined until loaded, and while
+ * Health isn't connected.
+ */
+export type HeartRateZones =
+  { zones: HeartRateZone[]; max: number; resting: number } | { missing: ('birth date' | 'resting heart rate')[] };
+
+export function useHeartRateZones() {
+  const { state } = useHealthState();
+  return useQuery<HeartRateZones>(state.connectedAt && isHealthAvailable() ? 'heart-rate-zones' : null, async () => {
+    // Asks for the birth date and resting heart rate when connected before they were read.
+    await connectHealth();
+    const { dateOfBirth, restingHeartRate } = await healthHeartRateProfile();
+    if (!dateOfBirth || !restingHeartRate) {
+      return {
+        missing: [
+          ...(dateOfBirth ? [] : ['birth date' as const]),
+          ...(restingHeartRate ? [] : ['resting heart rate' as const]),
+        ],
+      };
+    }
+    const max = maxHeartRate(dateOfBirth, new Date());
+    return { zones: heartRateZones(max, restingHeartRate), max, resting: restingHeartRate };
+  });
 }

@@ -21,6 +21,7 @@ import { TIMESPANS, TimespanControl, timespanStart, type Timespan } from '@/comp
 import { Card, Message, Screen, SectionLabel } from '@/components/ui';
 import { Spacing, type ThemeColor } from '@/constants/theme';
 import { PHASE_NAMES } from '@/goals/presets';
+import { ZoneRanges } from '@/health/heart-rate-zones';
 import { useQuery } from '@/hooks/use-query';
 import { useTheme } from '@/hooks/use-theme';
 import { Tile, TileRow } from '@/progress/tile';
@@ -242,6 +243,8 @@ function CardioContent({ data, timespan }: { data: Insights; timespan: Timespan 
           data.cardio.map((c) => <CardioRow key={c.activity} summary={c} timespan={timespan} />)
         )}
       </Card>
+
+      <ZoneRanges />
 
       {data.triathlon && <TriathlonInsights summary={data.triathlon} timespan={timespan} />}
     </>

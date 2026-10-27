@@ -10,6 +10,7 @@ import { Button, Card, Chip, Message, Screen, SectionLabel } from '@/components/
 import { Spacing } from '@/constants/theme';
 import { SessionDetails } from '@/goals/session-card';
 import { useHealthState } from '@/health/health-state';
+import { WorkoutZones } from '@/health/heart-rate-zones';
 import { useQuery } from '@/hooks/use-query';
 import { useTheme } from '@/hooks/use-theme';
 import { useSettings } from '@/settings/settings-context';
@@ -88,6 +89,7 @@ export default function CardioDetailScreen() {
               </View>
             ))}
           </Card>
+          <WorkoutZones samples={w.samples} />
           {(!w.distance_m || w.manual_distance) && (
             <DistanceEntry
               workout={w}

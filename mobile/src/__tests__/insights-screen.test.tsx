@@ -5,8 +5,15 @@ import { router } from 'expo-router';
 import type { Goal, Insights } from '@/api/types';
 import CardioInsightsScreen from '@/app/(tabs)/(insights)/cardio';
 import StrengthInsightsScreen from '@/app/(tabs)/(insights)/index';
+import { connectHealth, healthHeartRateProfile } from '@/health/healthkit';
 import { InsightsProvider } from '@/insights/insights-view';
 import { mockServer, renderInApp, selectPlan, setNow, type Request } from '@/test-utils';
+
+jest.mock('@/health/healthkit', () => ({
+  isHealthAvailable: jest.fn(() => true),
+  connectHealth: jest.fn(async () => {}),
+  healthHeartRateProfile: jest.fn(async () => ({})),
+}));
 
 const TODAY = '2026-10-18';
 
@@ -217,5 +224,53 @@ test('tapping a lift or an activity opens its chart on Progress with the same ti
   expect(router.navigate).toHaveBeenLastCalledWith({
     pathname: '/stats',
     params: { activity: 'cycling', span: 'all' },
+  });
+});
+
+describe('heart rate zones', () => {
+  // Health state is cached per server, so each test connecting Health uses a server of its own.
+  let count = 0;
+  async function connect() {
+    const url = `http://insights-${++count}:8081`;
+    await selectPlan(null, url);
+    await AsyncStorage.setItem(`trucker.health:${url}`, JSON.stringify({ connectedAt: '2026-10-01T08:00:00.000Z' }));
+  }
+
+  test('are worked out from the birth date and resting heart rate in Health', async () => {
+    jest.mocked(healthHeartRateProfile).mockResolvedValue({
+      dateOfBirth: new Date('1991-03-02T00:00:00'),
+      restingHeartRate: 55,
+    });
+    mockServer({ 'GET /api/insights': empty });
+    await connect();
+    await renderCardio();
+
+    // Age 35: max 185, so a reserve of 130 bpm over 55.
+    expect(await screen.findByText('< 133 bpm')).toBeOnTheScreen();
+    expect(screen.getByText('133–145 bpm')).toBeOnTheScreen();
+    expect(screen.getByText('146–158 bpm')).toBeOnTheScreen();
+    expect(screen.getByText('159–171 bpm')).toBeOnTheScreen();
+    expect(screen.getByText('172+ bpm')).toBeOnTheScreen();
+    expect(screen.getByText(/max heart rate of 185 bpm \(by age\) and resting heart rate of 55 bpm/)).toBeOnTheScreen();
+    // Asks for access to the birth date and resting heart rate when connected before they were read.
+    expect(connectHealth).toHaveBeenCalled();
+  });
+
+  test('say what Health is missing for them', async () => {
+    jest.mocked(healthHeartRateProfile).mockResolvedValue({ restingHeartRate: 55 });
+    mockServer({ 'GET /api/insights': empty });
+    await connect();
+    await renderCardio();
+    expect(
+      await screen.findByText('Add your birth date to Apple Health to see your heart rate zones.')
+    ).toBeOnTheScreen();
+  });
+
+  test('are left out without Health connected', async () => {
+    mockServer({ 'GET /api/insights': empty });
+    await renderCardio();
+    expect(await screen.findByText('No cardio workouts.')).toBeOnTheScreen();
+    expect(screen.queryByText('Heart rate zones')).not.toBeOnTheScreen();
+    expect(healthHeartRateProfile).not.toHaveBeenCalled();
   });
 });

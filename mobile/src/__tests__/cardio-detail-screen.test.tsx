@@ -4,7 +4,14 @@ import { router, useLocalSearchParams } from 'expo-router';
 
 import type { CardioWorkout, PlannedSession } from '@/api/types';
 import CardioDetailScreen from '@/app/(tabs)/history/cardio/[id]';
+import { healthHeartRateProfile, isHealthAvailable } from '@/health/healthkit';
 import { mockAlerts, mockServer, renderInApp, selectPlan, setNow, type Request } from '@/test-utils';
+
+jest.mock('@/health/healthkit', () => ({
+  isHealthAvailable: jest.fn(() => false),
+  connectHealth: jest.fn(async () => {}),
+  healthHeartRateProfile: jest.fn(async () => ({})),
+}));
 
 const ride: CardioWorkout = {
   id: 5,
@@ -128,4 +135,56 @@ test('deleting dismisses it from Apple Health imports and goes back', async () =
   await alerts.press('Delete');
   expect(requests.find((r) => r.method === 'DELETE')?.query.get('id')).toBe('5');
   expect(router.back).toHaveBeenCalled();
+});
+
+describe('heart rate zones', () => {
+  // Age 35 and resting 55: zone 2 is 133–145 bpm, zone 3 146–158.
+  const run: CardioWorkout = {
+    ...ride,
+    activity: 'running',
+    laps: undefined,
+    samples: [
+      { t: 0, d: 0 },
+      { t: 600, d: 2000, hr: 140 },
+      { t: 900, d: 3000, hr: 150 },
+      { t: 1200, d: 4000, hr: 150 },
+    ],
+  };
+
+  async function connect() {
+    jest.mocked(isHealthAvailable).mockReturnValue(true);
+    jest.mocked(healthHeartRateProfile).mockResolvedValue({
+      dateOfBirth: new Date('1991-03-02T00:00:00'),
+      restingHeartRate: 55,
+    });
+    await AsyncStorage.setItem(
+      `trucker.health:http://cardio-${count}:8081`,
+      JSON.stringify({ connectedAt: '2026-10-01T08:00:00.000Z' })
+    );
+  }
+
+  test('show the time the workout spent in each', async () => {
+    await connect();
+    server(run);
+    await renderInApp(<CardioDetailScreen />);
+    expect(await screen.findByText('Heart rate zones')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Zone 1, 0:00')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Zone 2, 10:00')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Zone 3, 10:00')).toBeOnTheScreen();
+    expect(screen.getAllByText('50%')).toHaveLength(2);
+  });
+
+  test('are left out of a workout without heart rate', async () => {
+    await connect();
+    server({
+      ...run,
+      samples: [
+        { t: 0, d: 0 },
+        { t: 600, d: 2000 },
+      ],
+    });
+    await renderInApp(<CardioDetailScreen />);
+    expect(await screen.findByText('🏃 Run')).toBeOnTheScreen();
+    expect(screen.queryByText('Heart rate zones')).not.toBeOnTheScreen();
+  });
 });

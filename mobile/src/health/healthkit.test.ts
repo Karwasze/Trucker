@@ -2,6 +2,7 @@ import {
   appleWorkoutName,
   connectHealth,
   healthBodyweight,
+  healthHeartRateProfile,
   healthWorkoutReport,
   healthWorkoutsSince,
   isHealthAvailable,
@@ -14,6 +15,7 @@ jest.mock('@kingstinct/react-native-healthkit', () => ({
   requestAuthorization: jest.fn(async () => true),
   queryWorkoutSamples: jest.fn(),
   queryQuantitySamples: jest.fn(),
+  getDateOfBirthAsync: jest.fn(async () => undefined),
 }));
 const hk = jest.requireMock('@kingstinct/react-native-healthkit');
 
@@ -50,7 +52,7 @@ test('Health is available when the native module says so, and not when it throws
   expect(isHealthAvailable()).toBe(false);
 });
 
-test('connecting asks to read workouts, distances, heart rate and weight', async () => {
+test('connecting asks to read workouts, distances, heart rate, weight, resting heart rate and birth date', async () => {
   await connectHealth();
   const { toRead } = (hk.requestAuthorization.mock.calls[0] as unknown as [{ toRead: string[] }])[0];
   expect(toRead).toEqual(
@@ -59,6 +61,8 @@ test('connecting asks to read workouts, distances, heart rate and weight', async
       'HKQuantityTypeIdentifierDistanceCycling',
       'HKQuantityTypeIdentifierHeartRate',
       'HKQuantityTypeIdentifierBodyMass',
+      'HKQuantityTypeIdentifierRestingHeartRate',
+      'HKCharacteristicTypeIdentifierDateOfBirth',
     ])
   );
 });
@@ -190,4 +194,22 @@ test('isoWithOffset keeps local time and the offset in effect that day', () => {
   expect(isoWithOffset(at('2026-10-17T05:00:00Z'))).toBe('2026-10-17T07:00:00+02:00');
   // After the clocks go back.
   expect(isoWithOffset(at('2026-11-02T06:30:15Z'))).toBe('2026-11-02T07:30:15+01:00');
+});
+
+test('the heart rate profile is the birth date and resting heart rate averaged over the last 30 days', async () => {
+  const born = new Date('1991-03-02T00:00:00');
+  hk.getDateOfBirthAsync.mockResolvedValueOnce(born);
+  hk.queryQuantitySamples.mockImplementation(async (type: string, options: { limit: number }) =>
+    type === 'HKQuantityTypeIdentifierRestingHeartRate' && options.limit === 0
+      ? [{ quantity: 54 }, { quantity: 57 }]
+      : [{ quantity: 70 }]
+  );
+  expect(await healthHeartRateProfile()).toEqual({ dateOfBirth: born, restingHeartRate: 56 });
+});
+
+test('without recent resting heart rate the profile falls back to the latest reading', async () => {
+  hk.queryQuantitySamples.mockImplementation(async (_type: string, options: { limit: number }) =>
+    options.limit === 0 ? [] : [{ quantity: 61 }]
+  );
+  expect(await healthHeartRateProfile()).toEqual({ dateOfBirth: undefined, restingHeartRate: 61 });
 });

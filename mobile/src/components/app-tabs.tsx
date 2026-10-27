@@ -36,6 +36,12 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Label>Insights</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="lightbulb" md="lightbulb" />
       </NativeTabs.Trigger>
+
+      {/* A sixth tab: on iPhone, iOS folds the last two into a "More" tab. */}
+      <NativeTabs.Trigger name="achievements">
+        <NativeTabs.Trigger.Label>Achievements</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="trophy" md="emoji_events" />
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }

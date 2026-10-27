@@ -32,10 +32,6 @@ export default function RootLayout() {
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                 <Stack.Screen name="settings" options={{ title: 'Settings', headerBackButtonDisplayMode: 'minimal' }} />
                 <Stack.Screen
-                  name="achievements"
-                  options={{ title: 'Achievements', headerBackButtonDisplayMode: 'minimal' }}
-                />
-                <Stack.Screen
                   name="health-import"
                   options={{ title: 'Import from Apple Health', presentation: 'modal' }}
                 />

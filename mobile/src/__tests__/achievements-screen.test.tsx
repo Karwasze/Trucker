@@ -5,7 +5,7 @@ import { Pressable, Text } from 'react-native';
 
 import { AchievementsProvider, useAchievements } from '@/achievements/achievements-context';
 import type { Achievement } from '@/api/types';
-import AchievementsScreen from '@/app/achievements';
+import AchievementsScreen from '@/app/(tabs)/achievements';
 import { SERVER, mockServer, renderInApp, selectPlan, setNow } from '@/test-utils';
 
 const fiveK = (earned: number): Achievement => ({

@@ -138,8 +138,8 @@ func TestGoalSessionsAndMatchAPI(t *testing.T) {
 		fmt.Sprintf("/api/goals/sessions?id=%d&from=2026-10-19&to=2026-10-25&date=2026-10-21", goal.ID), "")
 	var week []store.PlannedSession
 	json.NewDecoder(w.Body).Decode(&week)
-	if w.Code != http.StatusOK || len(week) != 4 || week[0].Verdict.Status != store.VerdictMissed {
-		t.Fatalf("expected a week of 4 sessions, Monday missed, got %d %+v", w.Code, week)
+	if w.Code != http.StatusOK || len(week) != 4 || week[0].Verdict.Status != store.VerdictPending {
+		t.Fatalf("expected a week of 4 sessions, Monday still pending, got %d %+v", w.Code, week)
 	}
 	if w := serve(t, h.GoalSessionsAPI, "GET", "/api/goals/sessions?id=999", ""); w.Code != http.StatusNotFound {
 		t.Errorf("expected 404 for a missing goal, got %d", w.Code)

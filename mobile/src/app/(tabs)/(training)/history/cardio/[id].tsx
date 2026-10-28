@@ -198,8 +198,8 @@ function DistanceEntry({ workout: w, onSaved }: { workout: CardioWorkout; onSave
 }
 
 /**
- * Which of the planned sessions from the day before to the day after the
- * workout fills, and how it went.
+ * Which of the planned sessions of the workout's week it fills, and how it
+ * went.
  */
 function CountsAs({
   workout,

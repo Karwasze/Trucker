@@ -122,8 +122,8 @@ func TestMatchSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	week = sessionsOn(t, s, g.ID, "2026-10-19", "2026-10-25", "2026-10-21")
-	if week[0].CardioWorkoutID != nil || week[0].Verdict.Status != VerdictMissed {
-		t.Errorf("expected Monday empty and missed, got %+v", week[0])
+	if week[0].CardioWorkoutID != nil || week[0].Verdict.Status != VerdictPending {
+		t.Errorf("expected Monday empty and still pending this week, got %+v", week[0])
 	}
 	if week[1].CardioWorkoutID == nil || *week[1].CardioWorkoutID != id {
 		t.Errorf("expected Wednesday filled, got %+v", week[1])

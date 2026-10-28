@@ -9,7 +9,7 @@ import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Chip, Message, Screen } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
-import { addDays, matchRange, sessionLabel, withinMatch } from '@/goals/session-match';
+import { matchRange, sessionLabel, withinMatch } from '@/goals/session-match';
 import { CardioSummary } from '@/health/cardio-summary';
 import { IMPORT_LOOKBACK_DAYS, useHealthImports, useHealthReport, useHealthState } from '@/health/health-state';
 import type { HealthWorkoutStatus } from '@/health/healthkit';
@@ -19,19 +19,23 @@ import { useSettings } from '@/settings/settings-context';
 
 /**
  * Pairs each workout with the open session of the same activity on its
- * date or, failing that, the day before (done a day late), at most one
- * workout per session. A session the day after is only filled by choice, so
- * an extra workout doesn't take the next day's session.
+ * date or, failing that, the earliest open one of its week, at most one
+ * workout per session. Sessions come by date, so a skipped day is caught up
+ * before a later one is done early.
  */
 function defaultMatches(workouts: NewCardioWorkout[], sessions: PlannedSession[]) {
   const matches = new Map<string, number | null>();
   const taken = new Set<number>();
-  for (const days of [0, -1]) {
+  for (const sameDay of [true, false]) {
     workouts.forEach((w, i) => {
       const key = w.source_uuid ?? String(i);
       if (matches.get(key)) return;
       const session = sessions.find(
-        (s) => !s.workout && !taken.has(s.id) && s.date === addDays(w.date, days) && s.activity === w.activity
+        (s) =>
+          !s.workout &&
+          !taken.has(s.id) &&
+          s.activity === w.activity &&
+          (sameDay ? s.date === w.date : withinMatch(s, w.date))
       );
       if (session) taken.add(session.id);
       matches.set(key, session?.id ?? null);

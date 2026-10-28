@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"time"
 )
 
 const (
@@ -22,8 +23,9 @@ const (
 	repLengthSlack = 0.15
 )
 
-// evaluateSession judges how a planned session went: pending until its day
-// is over, missed when nothing was done by then, and otherwise met, partly
+// evaluateSession judges how a planned session went: pending until its week
+// is over, as it may be done any day of it, missed when nothing was done by
+// then, and otherwise met, partly
 // met or missed from these checks against workout:
 //
 //   - volume: distance (or duration) of at least volumeMet of the target;
@@ -36,7 +38,7 @@ const (
 // shows during the workout: they aren't judged after.
 func evaluateSession(s PlannedSession, w *CardioWorkout, today string) Verdict {
 	if w == nil {
-		if s.Date < today {
+		if weekOver(s.Date, today) {
 			return Verdict{Status: VerdictMissed, Checks: []Check{}}
 		}
 		return Verdict{Status: VerdictPending, Checks: []Check{}}
@@ -78,6 +80,16 @@ func evaluateSession(s PlannedSession, w *CardioWorkout, today string) Verdict {
 		v.Status = VerdictMissed
 	}
 	return v
+}
+
+// weekOver reports whether the Monday-to-Sunday week of date (YYYY-MM-DD)
+// ended before today.
+func weekOver(date, today string) bool {
+	d, err := time.Parse(dateLayout, date)
+	if err != nil {
+		return date < today
+	}
+	return mondayOf(d).AddDate(0, 0, 7).Format(dateLayout) <= today
 }
 
 // averageSpeed is a workout's distance over its duration, or 0 without a

@@ -93,23 +93,35 @@ test('a workout fills the open session of its activity that day, unless another 
   expect(requests.find((r) => r.method === 'POST')?.body).toEqual([{ ...run, planned_session_id: 12 }, swim]);
 });
 
-test('a workout done a day late fills the open session the day before; the day after only by choice', async () => {
+test('a workout on another day fills the earliest open session of its week', async () => {
   const requests = fakeServer([
-    session(11, 'Easy run 6 km · 5:45–6:15/km', '2026-10-16'),
+    session(10, 'Tempo run 8 km', '2026-10-11'),
+    session(11, 'Easy run 6 km · 5:45–6:15/km', '2026-10-14'),
     session(12, 'Long run 20 km', '2026-10-18'),
   ]);
   const user = userEvent.setup();
   await renderInApp(<HealthImportScreen />);
-  expect(await screen.findByRole('button', { name: 'Easy run 6 km · Fri' })).toBeSelected();
-  expect(screen.getByRole('button', { name: 'Long run 20 km · Sun' })).not.toBeSelected();
+  // The run's chips come first; the swim on Sunday is offered them too.
+  expect((await screen.findAllByRole('button', { name: 'Easy run 6 km · Wed' }))[0]).toBeSelected();
+  expect(screen.getAllByRole('button', { name: 'Long run 20 km · Sun' })[0]).not.toBeSelected();
+  // Last week's session is over.
+  expect(screen.queryByRole('button', { name: /Tempo run/ })).toBeNull();
   const query = requests.find((r) => r.path === '/api/goals/sessions')!.query;
-  expect([query.get('from'), query.get('to')]).toEqual(['2026-10-16', '2026-10-19']);
+  expect([query.get('from'), query.get('to')]).toEqual(['2026-10-12', '2026-10-18']);
 
   await user.press(screen.getByRole('button', { name: 'Import 2 workouts' }));
   expect(requests.find((r) => r.method === 'POST')?.body).toEqual([{ ...run, planned_session_id: 11 }, swim]);
 });
 
-test("a workout on a session's day fills it before one done a day late", async () => {
+test('a workout fills a session later in its week when none before is open', async () => {
+  const requests = fakeServer([session(12, 'Long run 20 km', '2026-10-18')]);
+  const user = userEvent.setup();
+  await renderInApp(<HealthImportScreen />);
+  await user.press(await screen.findByRole('button', { name: 'Import 2 workouts' }));
+  expect(requests.find((r) => r.method === 'POST')?.body).toEqual([{ ...run, planned_session_id: 12 }, swim]);
+});
+
+test("a workout on a session's day fills it before one from another day", async () => {
   const early: NewCardioWorkout = { ...run, date: '2026-10-16', source_uuid: 'early' };
   jest.mocked(healthWorkoutsSince).mockResolvedValue([run, early]);
   const requests = fakeServer([session(11, 'Easy run 6 km', '2026-10-16')]);

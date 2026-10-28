@@ -58,8 +58,13 @@ func TestEvaluateSession_Pending(t *testing.T) {
 	if v := evaluateSession(s, nil, "2026-10-14"); v.Status != VerdictPending {
 		t.Errorf("expected today's session pending, got %s", v.Status)
 	}
-	if v := evaluateSession(s, nil, "2026-10-15"); v.Status != VerdictMissed {
-		t.Errorf("expected a past session missed, got %s", v.Status)
+	// The week's goals count for the whole week, so a session can still be
+	// done until Sunday.
+	if v := evaluateSession(s, nil, "2026-10-18"); v.Status != VerdictPending {
+		t.Errorf("expected a session earlier in the week pending, got %s", v.Status)
+	}
+	if v := evaluateSession(s, nil, "2026-10-19"); v.Status != VerdictMissed {
+		t.Errorf("expected a session from a past week missed, got %s", v.Status)
 	}
 }
 

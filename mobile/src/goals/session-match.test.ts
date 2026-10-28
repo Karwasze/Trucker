@@ -18,16 +18,18 @@ test('addDays crosses months and the DST change', () => {
   expect(addDays('2026-10-25', 1)).toBe('2026-10-26');
 });
 
-test('matchRange widens the workout dates by a day each side', () => {
-  expect(matchRange(['2026-10-28', '2026-10-20'])).toEqual(['2026-10-19', '2026-10-29']);
+test('matchRange spans the weeks of the workout dates, Monday to Sunday', () => {
+  expect(matchRange(['2026-10-28', '2026-10-20'])).toEqual(['2026-10-19', '2026-11-01']);
+  // A Sunday is the end of its week, across the DST change.
+  expect(matchRange(['2026-10-25'])).toEqual(['2026-10-19', '2026-10-25']);
 });
 
-test('a workout counts as a session a day either side of it, not two', () => {
-  expect(withinMatch(session('2026-10-27'), '2026-10-28')).toBe(true);
+test('a workout counts as any session of its week, not the next or last', () => {
+  expect(withinMatch(session('2026-10-26'), '2026-10-28')).toBe(true);
   expect(withinMatch(session('2026-10-28'), '2026-10-28')).toBe(true);
-  expect(withinMatch(session('2026-10-29'), '2026-10-28')).toBe(true);
-  expect(withinMatch(session('2026-10-26'), '2026-10-28')).toBe(false);
-  expect(withinMatch(session('2026-10-30'), '2026-10-28')).toBe(false);
+  expect(withinMatch(session('2026-11-01'), '2026-10-28')).toBe(true);
+  expect(withinMatch(session('2026-10-25'), '2026-10-28')).toBe(false);
+  expect(withinMatch(session('2026-11-02'), '2026-10-28')).toBe(false);
 });
 
 test('a session on another day is labelled with its weekday', () => {

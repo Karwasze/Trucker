@@ -15,11 +15,13 @@ import { useQuery } from '@/hooks/use-query';
 import { useTheme } from '@/hooks/use-theme';
 import { useToday } from '@/hooks/use-today';
 import { useSettings } from '@/settings/settings-context';
+import { useTimer } from '@/timer/timer-context';
 import {
   completedSetCount,
   describeSets,
   draftExercise,
   draftFromPlan,
+  invalidSetCount,
   planFingerprint,
   toExercises,
   toWorkout,
@@ -37,6 +39,7 @@ const formatDay = (date: string) => formatDate(date, { weekday: 'long', month: '
 export default function TodayScreen() {
   const { api, planId, serverUrl } = useSettings();
   const achievements = useAchievements();
+  const timer = useTimer();
   const { today, recheck: recheckToday } = useToday();
   const { draft, setDraft } = useDraft();
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -88,11 +91,12 @@ export default function TodayScreen() {
       (!hasProgress(draft) &&
         (draft.date !== today ||
           draft.basedOn !== planId ||
-          // The plan was edited; skip drafts not built from it ("start another").
-          // Logging progresses the plan, so a logged draft never counts as edited.
+          // The plan was edited, or its workout was logged meanwhile; skip
+          // drafts not built from it ("start another"). Logging progresses the
+          // plan, so a logged draft never counts as edited.
           (!draft.logged &&
             draft.source !== undefined &&
-            draft.source !== planFingerprint(planDay.data?.exercises ?? []))));
+            (!!planDay.data?.workout || draft.source !== planFingerprint(planDay.data?.exercises ?? [])))));
     if (!stale) return;
     // Wait for a refetch on focus, so a workout just deleted in History isn't
     // brought back from the previous response.
@@ -180,6 +184,8 @@ export default function TodayScreen() {
     try {
       const logged = await api.createWorkout(toWorkout(draft));
       setDraft({ ...draft, logged });
+      // No set follows the last one, so there's nothing left to rest for.
+      timer.stop();
       achievements.check();
     } catch (e) {
       Alert.alert("Couldn't save workout", (e as Error).message);
@@ -229,6 +235,7 @@ export default function TodayScreen() {
 
   const loadingPlan = planId !== null && !planReady;
   const doneSets = draft ? completedSetCount(draft) : 0;
+  const invalidSets = draft ? invalidSetCount(draft.exercises, true) : 0;
   const isRestDay = planId !== null && planReady && planDay.data?.exercises.length === 0;
 
   return (
@@ -295,8 +302,14 @@ export default function TodayScreen() {
           {draft && draft.exercises.length > 0 && (
             <View style={styles.footer}>
               <Button
-                title={doneSets ? `Finish workout · ${doneSets} sets` : 'Tick off sets as you go'}
-                disabled={doneSets === 0}
+                title={
+                  invalidSets
+                    ? 'Fix the weight or reps in red'
+                    : doneSets
+                      ? `Finish workout · ${doneSets} sets`
+                      : 'Tick off sets as you go'
+                }
+                disabled={doneSets === 0 || invalidSets > 0}
                 loading={saving}
                 onPress={confirmFinish}
               />

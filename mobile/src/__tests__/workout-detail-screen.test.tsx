@@ -88,7 +88,7 @@ test('a workout emptied of sets can’t be saved', async () => {
   const user = userEvent.setup();
   await renderInApp(<WorkoutDetailScreen />);
   await user.press(await screen.findByRole('button', { name: 'Edit workout' }));
-  for (const label of ['Set 1 reps', 'Set 2 reps']) await user.clear(screen.getByLabelText(label));
+  for (let i = 0; i < 2; i++) await user.longPress(screen.getAllByHintText('Long press to remove this set')[0]);
   await user.press(screen.getByRole('button', { name: 'Save changes' }));
   expect(alerts.latest().title).toBe("Can't save workout");
   expect(requests.some((r) => r.method === 'PUT')).toBe(false);
@@ -121,4 +121,22 @@ test('deleting asks first, then goes back', async () => {
   await alerts.press('Delete');
   expect(requests.find((r) => r.method === 'DELETE')?.query.get('id')).toBe('4');
   expect(router.back).toHaveBeenCalled();
+});
+
+test('a set without a number for its weight or reps can’t be saved', async () => {
+  const requests = server();
+  const user = userEvent.setup();
+  await renderInApp(<WorkoutDetailScreen />);
+  await user.press(await screen.findByRole('button', { name: 'Edit workout' }));
+
+  const weight = screen.getByLabelText('Set 1 weight');
+  await user.clear(weight);
+  await user.type(weight, '.');
+  expect(screen.getByRole('button', { name: 'Fix the weight or reps in red' })).toBeDisabled();
+
+  await user.clear(weight);
+  await user.type(weight, '100');
+  await user.clear(screen.getByLabelText('Set 2 reps'));
+  expect(screen.getByRole('button', { name: 'Fix the weight or reps in red' })).toBeDisabled();
+  expect(requests.some((r) => r.method === 'PUT')).toBe(false);
 });

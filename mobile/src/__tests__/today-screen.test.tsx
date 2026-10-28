@@ -3,6 +3,7 @@ import { screen, userEvent } from '@testing-library/react-native';
 
 import type { NewWorkout, PlanToday, Workout } from '@/api/types';
 import TodayScreen from '@/app/(tabs)/(workout)/index';
+import { syncLiveActivity } from '@/timer/native';
 import { mockAlerts, mockServer, renderInApp, selectPlan, setNow, type Request } from '@/test-utils';
 
 const TODAY = '2026-10-18';
@@ -188,4 +189,69 @@ test('deleting today’s logged workout elsewhere brings the plan back', async (
   await renderInApp(<TodayScreen />);
   expect(await screen.findByRole('checkbox', { name: 'Set 1 done' })).not.toBeChecked();
   expect(requests.some((r) => r.method === 'POST')).toBe(true);
+});
+
+test('a ticked set without a number for its weight can’t be logged', async () => {
+  const requests = server();
+  await selectPlan(1);
+  const user = userEvent.setup();
+  await renderInApp(<TodayScreen />);
+
+  const weight = await screen.findByLabelText('Set 1 weight');
+  await user.clear(weight);
+  await user.type(weight, '.');
+  await user.press(screen.getByRole('checkbox', { name: 'Set 1 done' }));
+  expect(screen.getByRole('button', { name: 'Fix the weight or reps in red' })).toBeDisabled();
+
+  await user.clear(weight);
+  expect(screen.getByRole('button', { name: 'Fix the weight or reps in red' })).toBeDisabled();
+
+  await user.type(weight, '100');
+  expect(screen.getByRole('button', { name: 'Finish workout · 1 sets' })).toBeEnabled();
+  expect(requests.some((r) => r.method === 'POST')).toBe(false);
+});
+
+test('an untouched plan draft gives way to the plan’s workout logged meanwhile', async () => {
+  server();
+  await selectPlan(1);
+  const first = await renderInApp(<TodayScreen />);
+  await screen.findByRole('checkbox', { name: 'Set 1 done' });
+  await first.unmount();
+
+  // Logged since, e.g. the stored logged draft was replaced by the plan's.
+  server({
+    ...squatDay,
+    workout: { id: 3, date: TODAY, plan_id: 1, exercises: [{ name: 'Squat', sets: [{ weight: 100, reps: 5 }] }] },
+  });
+  await renderInApp(<TodayScreen />);
+  expect(await screen.findByText('Workout logged ✓')).toBeOnTheScreen();
+});
+
+test('finishing the workout stops the rest timer the last set started', async () => {
+  server();
+  await selectPlan(1);
+  const alerts = mockAlerts();
+  const user = userEvent.setup();
+  await renderInApp(<TodayScreen />);
+
+  await user.press(await screen.findByRole('checkbox', { name: 'Set 1 done' }));
+  expect(syncLiveActivity).toHaveBeenLastCalledWith(expect.objectContaining({ durationMs: expect.any(Number) }));
+  await user.press(screen.getByRole('button', { name: 'Finish workout · 1 sets' }));
+  await alerts.press('Finish');
+  await screen.findByText('Workout logged ✓');
+  expect(syncLiveActivity).toHaveBeenLastCalledWith(null);
+});
+
+test('a failed save leaves the rest timer running', async () => {
+  server(squatDay, { saves: false });
+  await selectPlan(1);
+  const alerts = mockAlerts();
+  const user = userEvent.setup();
+  await renderInApp(<TodayScreen />);
+
+  await user.press(await screen.findByRole('checkbox', { name: 'Set 1 done' }));
+  await user.press(screen.getByRole('button', { name: 'Finish workout · 1 sets' }));
+  await alerts.press('Finish');
+  expect(alerts.latest().title).toBe("Couldn't save workout");
+  expect(syncLiveActivity).not.toHaveBeenLastCalledWith(null);
 });

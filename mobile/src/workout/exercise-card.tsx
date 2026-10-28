@@ -7,7 +7,7 @@ import { Card } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useTimer } from '@/timer/timer-context';
-import type { DraftExercise, DraftSet } from '@/workout/draft';
+import { isValidReps, isValidWeight, type DraftExercise, type DraftSet } from '@/workout/draft';
 
 type Props = {
   exercise: DraftExercise;
@@ -63,6 +63,10 @@ export function ExerciseCard({ exercise, onChange, onRemove, trackDone = true, o
   const removeSet = (index: number) => onChange({ ...exercise, sets: exercise.sets.filter((_, i) => i !== index) });
 
   const doneCount = exercise.sets.filter((s) => s.done).length;
+
+  // Only flagged on sets that would be saved, not on ones still being filled in.
+  const invalidStyle = (set: DraftSet, valid: boolean) =>
+    (!trackDone || set.done) && !valid && { borderWidth: 2, borderColor: theme.danger };
 
   // The card needs a longer drag than its set rows, so a swipe on a set row
   // removes the set and a swipe anywhere else removes the exercise.
@@ -184,6 +188,7 @@ export function ExerciseCard({ exercise, onChange, onRemove, trackDone = true, o
                   styles.input,
                   styles.inputCol,
                   { color: theme.text, backgroundColor: theme.backgroundSelected },
+                  invalidStyle(set, isValidWeight(set.weight)),
                 ]}
               />
               <TextInput
@@ -196,6 +201,7 @@ export function ExerciseCard({ exercise, onChange, onRemove, trackDone = true, o
                   styles.input,
                   styles.inputCol,
                   { color: theme.text, backgroundColor: theme.backgroundSelected },
+                  invalidStyle(set, isValidReps(set.reps)),
                 ]}
               />
               {trackDone && (

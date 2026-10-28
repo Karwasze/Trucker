@@ -63,6 +63,20 @@ export function draftFromPlan(date: string, planId: number | null, exercises: Ex
   };
 }
 
+/** A weight is a number, so "." or an empty field isn't one; 0 is bodyweight. */
+export const isValidWeight = (weight: string) => weight.trim() !== '' && Number.isFinite(Number(weight));
+
+export const isValidReps = (reps: string) => /^\d+$/.test(reps);
+
+/**
+ * Sets that would be saved with a weight or reps that isn't a number. With
+ * `doneOnly`, only ticked sets count, as only they get logged.
+ */
+export const invalidSetCount = (exercises: DraftExercise[], doneOnly: boolean) =>
+  exercises
+    .flatMap((e) => e.sets)
+    .filter((s) => (!doneOnly || s.done) && !(isValidWeight(s.weight) && isValidReps(s.reps))).length;
+
 /**
  * Converts edited exercises back to the API shape, dropping sets without reps
  * and exercises left without sets. With `doneOnly`, sets that weren't ticked

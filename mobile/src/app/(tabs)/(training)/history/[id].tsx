@@ -10,7 +10,7 @@ import { Spacing } from '@/constants/theme';
 import { useQuery } from '@/hooks/use-query';
 import { useSettings } from '@/settings/settings-context';
 import { confirmDeleteWorkout } from '@/workout/confirm-delete';
-import { draftExercise, toExercises, type DraftExercise } from '@/workout/draft';
+import { draftExercise, invalidSetCount, toExercises, type DraftExercise } from '@/workout/draft';
 import { ExerciseCard } from '@/workout/exercise-card';
 import { ExercisePicker } from '@/workout/exercise-picker';
 import { formatDate, formatKg, volumeOf } from '@/workout/format';
@@ -32,6 +32,7 @@ export default function WorkoutDetailScreen() {
     edit !== null &&
     workout !== undefined &&
     JSON.stringify(toExercises(edit, false)) !== JSON.stringify(workout.exercises);
+  const invalid = edit !== null && invalidSetCount(edit, false) > 0;
 
   const startEditing = (w: Workout) => setEdit(w.exercises.map((e) => draftExercise(e.name, e.sets)));
 
@@ -44,7 +45,7 @@ export default function WorkoutDetailScreen() {
   };
 
   const save = async () => {
-    if (!edit || !workout) return;
+    if (!edit || !workout || invalid) return;
     const exercises = toExercises(edit, false);
     if (exercises.length === 0) {
       Alert.alert("Can't save workout", 'Keep at least one set, or delete the workout instead.');
@@ -97,7 +98,7 @@ export default function WorkoutDetailScreen() {
           headerRight: !workout
             ? undefined
             : editing
-              ? () => <HeaderButton title="Save" onPress={save} disabled={saving} bold />
+              ? () => <HeaderButton title="Save" onPress={save} disabled={saving || invalid} bold />
               : () => <HeaderButton title="Edit" onPress={() => startEditing(workout)} />,
         }}
       />
@@ -118,7 +119,12 @@ export default function WorkoutDetailScreen() {
           ))}
           <Button title="+ Add exercise" variant="secondary" onPress={() => setPickerOpen(true)} />
           <View style={styles.footer}>
-            <Button title="Save changes" loading={saving} onPress={save} />
+            <Button
+              title={invalid ? 'Fix the weight or reps in red' : 'Save changes'}
+              loading={saving}
+              disabled={invalid}
+              onPress={save}
+            />
             <Button title="Cancel" variant="secondary" compact onPress={cancel} />
           </View>
         </>

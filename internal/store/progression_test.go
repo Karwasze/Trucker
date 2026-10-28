@@ -339,6 +339,129 @@ func TestNextTarget_RepeatedStepsDoNotDrift(t *testing.T) {
 	}
 }
 
+func TestNextTargetUpTo(t *testing.T) {
+	scheme := PlanExercise{Name: "Pull-up", Sets: 3, Reps: 8}
+
+	tests := []struct {
+		name        string
+		sessions    [][]Set
+		maxWeight   float64
+		wantSets    []Set
+		wantOutcome string
+		wantReason  string
+	}{
+		{
+			name:        "below the cap the weight goes up as usual",
+			sessions:    [][]Set{setList(8, 80, 8, 80, 8, 80)},
+			maxWeight:   85,
+			wantSets:    setList(8, 82.5, 8, 82.5, 8, 82.5),
+			wantOutcome: ResultProgressed,
+			wantReason:  "Weight up 2.5 kg: you completed 3 × 8 @ 80 kg last time.",
+		},
+		{
+			name:        "at the cap a hit adds a rep per set instead",
+			sessions:    [][]Set{setList(8, 85, 8, 85, 8, 85)},
+			maxWeight:   85,
+			wantSets:    setList(9, 85, 9, 85, 9, 85),
+			wantOutcome: ResultProgressed,
+			wantReason:  "One more rep per set: you completed 3 × 8 @ 85 kg last time, your bodyweight.",
+		},
+		{
+			name:        "above the cap reps keep going up from the last session",
+			sessions:    [][]Set{setList(10, 86, 9, 86, 8, 86)},
+			maxWeight:   85,
+			wantSets:    setList(11, 86, 10, 86, 9, 86),
+			wantOutcome: ResultProgressed,
+			wantReason:  "One more rep per set: you completed 3 × 8 @ 86 kg last time, your bodyweight.",
+		},
+		{
+			name:        "misses at the cap are unchanged",
+			sessions:    [][]Set{setList(8, 85, 6, 85, 5, 85)},
+			maxWeight:   85,
+			wantSets:    setList(8, 85, 7, 85, 6, 85),
+			wantOutcome: ResultMissed,
+			wantReason:  "You didn't finish 3 × 8 @ 85 kg last time: same weight, one more rep on short sets. 2 more misses deload.",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotSets, gotOutcome, gotReason := nextTargetUpTo(scheme, tt.sessions, 0, tt.maxWeight)
+			if !reflect.DeepEqual(gotSets, tt.wantSets) {
+				t.Errorf("expected sets %v, got %v", tt.wantSets, gotSets)
+			}
+			if gotOutcome != tt.wantOutcome {
+				t.Errorf("expected outcome %q, got %q", tt.wantOutcome, gotOutcome)
+			}
+			if gotReason != tt.wantReason {
+				t.Errorf("expected reason %q, got %q", tt.wantReason, gotReason)
+			}
+		})
+	}
+}
+
+func TestExerciseTargets_PullUpCappedAtBodyweight(t *testing.T) {
+	s := newTestStore(t)
+	seedWorkout(t, s, "2026-10-10", []Exercise{
+		{Name: "Pull-up", Sets: setList(8, 85, 8, 85, 8, 85)},
+		{Name: "Bench Press", Sets: setList(8, 85, 8, 85, 8, 85)},
+	})
+	// Rounded down, 85.9 kg is 85 kg; later entries don't count yet.
+	if err := s.SaveBodyweight("2026-10-01", 85.9); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveBodyweight("2026-10-20", 90); err != nil {
+		t.Fatal(err)
+	}
+
+	pullUp := PlanExercise{Name: "Pull-up", Sets: 3, Reps: 8}
+	bench := PlanExercise{Name: "Bench Press", Sets: 3, Reps: 8}
+	targets, err := s.ExerciseTargets([]PlanExercise{pullUp, bench}, []PlanExercise{pullUp, bench}, "2026-10-14")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := setList(9, 85, 9, 85, 9, 85); !reflect.DeepEqual(targets[0].Sets, want) {
+		t.Errorf("pull-up: got %v, want %v", targets[0].Sets, want)
+	}
+	// Only pull-ups are capped.
+	if want := setList(8, 87.5, 8, 87.5, 8, 87.5); !reflect.DeepEqual(targets[1].Sets, want) {
+		t.Errorf("bench: got %v, want %v", targets[1].Sets, want)
+	}
+
+	sets, _, err := s.FreeExerciseTarget("Pull-up", "2026-10-14", PlanExercise{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := setList(9, 85, 9, 85, 9, 85); !reflect.DeepEqual(sets, want) {
+		t.Errorf("free pull-up: got %v, want %v", sets, want)
+	}
+
+	// Once bodyweight goes up, the weight does too.
+	targets, err = s.ExerciseTargets([]PlanExercise{pullUp}, []PlanExercise{pullUp}, "2026-10-21")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := setList(8, 87.5, 8, 87.5, 8, 87.5); !reflect.DeepEqual(targets[0].Sets, want) {
+		t.Errorf("pull-up after gaining weight: got %v, want %v", targets[0].Sets, want)
+	}
+}
+
+func TestExerciseTargets_PullUpWithoutBodyweight(t *testing.T) {
+	s := newTestStore(t)
+	seedWorkout(t, s, "2026-10-10", []Exercise{
+		{Name: "Pull-up", Sets: setList(8, 85, 8, 85, 8, 85)},
+	})
+
+	pullUp := PlanExercise{Name: "Pull-up", Sets: 3, Reps: 8}
+	targets, err := s.ExerciseTargets([]PlanExercise{pullUp}, []PlanExercise{pullUp}, "2026-10-14")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := setList(8, 87.5, 8, 87.5, 8, 87.5); !reflect.DeepEqual(targets[0].Sets, want) {
+		t.Errorf("got %v, want %v", targets[0].Sets, want)
+	}
+}
+
 func TestFreeExerciseTarget(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -385,7 +508,7 @@ func TestFreeExerciseTarget(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, _ := freeExerciseTarget(tt.sessions, PlanExercise{}, 0)
+			got, _ := freeExerciseTarget(tt.sessions, PlanExercise{}, 0, 0)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("got %v, want %v", got, tt.want)
 			}
@@ -447,7 +570,7 @@ func TestFreeExerciseTarget_ChosenScheme(t *testing.T) {
 	scheme := PlanExercise{Sets: 4, Reps: 6}
 
 	// The 3 × 5 session is left out: 4 × 6 progresses from its own sessions.
-	got, reason := freeExerciseTarget(sessions, scheme, 0)
+	got, reason := freeExerciseTarget(sessions, scheme, 0, 0)
 	if want := setList(6, 82.5, 6, 82.5, 6, 82.5, 5, 82.5); !reflect.DeepEqual(got, want) {
 		t.Errorf("got %v, want %v", got, want)
 	}
@@ -456,7 +579,7 @@ func TestFreeExerciseTarget_ChosenScheme(t *testing.T) {
 	}
 
 	// Without the scheme, the last session's shape is progressed.
-	got, _ = freeExerciseTarget(sessions, PlanExercise{}, 0)
+	got, _ = freeExerciseTarget(sessions, PlanExercise{}, 0, 0)
 	if want := setList(5, 102.5, 5, 102.5, 5, 102.5); !reflect.DeepEqual(got, want) {
 		t.Errorf("got %v, want %v", got, want)
 	}
@@ -465,7 +588,7 @@ func TestFreeExerciseTarget_ChosenScheme(t *testing.T) {
 func TestFreeExerciseTarget_ChosenSchemeWithoutHistory(t *testing.T) {
 	sessions := [][]Set{setList(5, 100, 5, 100, 5, 100)}
 
-	got, reason := freeExerciseTarget(sessions, PlanExercise{Sets: 4, Reps: 6}, 0)
+	got, reason := freeExerciseTarget(sessions, PlanExercise{Sets: 4, Reps: 6}, 0, 0)
 	if want := setList(6, 0, 6, 0, 6, 0, 6, 0); !reflect.DeepEqual(got, want) {
 		t.Errorf("got %v, want %v", got, want)
 	}
@@ -474,7 +597,7 @@ func TestFreeExerciseTarget_ChosenSchemeWithoutHistory(t *testing.T) {
 	}
 
 	// A chosen scheme gets a target even without any history at all.
-	got, _ = freeExerciseTarget(nil, PlanExercise{Sets: 2, Reps: 10}, 0)
+	got, _ = freeExerciseTarget(nil, PlanExercise{Sets: 2, Reps: 10}, 0, 0)
 	if want := setList(10, 0, 10, 0); !reflect.DeepEqual(got, want) {
 		t.Errorf("got %v, want %v", got, want)
 	}

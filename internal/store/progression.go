@@ -1,6 +1,7 @@
 package store
 
 import (
+	"database/sql"
 	"fmt"
 	"math"
 	"strconv"
@@ -69,6 +70,13 @@ var layoffs = []struct {
 // working weights, so it follows the plates the lifter actually adds.
 // Without history the weight is left at 0 for the lifter to fill in.
 func nextTarget(scheme PlanExercise, sessions [][]Set, daysOff int) ([]Set, string, string) {
+	return nextTargetUpTo(scheme, sessions, daysOff, 0)
+}
+
+// nextTargetUpTo is nextTarget with the weight capped at maxWeight (none when
+// 0): a hit at or above it adds a rep to each set of the last session at the
+// same weight (never below the planned reps) instead of adding weight.
+func nextTargetUpTo(scheme PlanExercise, sessions [][]Set, daysOff int, maxWeight float64) ([]Set, string, string) {
 	if len(sessions) == 0 {
 		return uniformSets(scheme, 0), "", "No history yet: pick a starting weight."
 	}
@@ -96,14 +104,18 @@ func nextTarget(scheme PlanExercise, sessions [][]Set, daysOff int) ([]Set, stri
 		planned += " @ " + formatKg(weight)
 	}
 	if hitScheme(last, weight, scheme) {
-		if weight == 0 {
+		capped := maxWeight > 0 && weight >= maxWeight
+		if weight == 0 || capped {
 			working := workSets(last, weight)
 			target := make([]Set, scheme.Sets)
 			for i := range target {
-				target[i] = Set{Reps: max(working[i].Reps+1, scheme.Reps)}
+				target[i] = Set{Reps: max(working[i].Reps+1, scheme.Reps), Weight: weight}
 			}
-			return target, ResultProgressed,
-				fmt.Sprintf("One more rep per set: you completed %s last time.", planned)
+			reason := fmt.Sprintf("One more rep per set: you completed %s last time.", planned)
+			if capped {
+				reason = fmt.Sprintf("One more rep per set: you completed %s last time, your bodyweight.", planned)
+			}
+			return target, ResultProgressed, reason
 		}
 		step := weightStep(sessions)
 		return uniformSets(scheme, roundWeight(weight+step)), ResultProgressed,
@@ -325,8 +337,12 @@ func (s *Store) ExerciseTargets(exercises, schemes []PlanExercise, date string) 
 		if err != nil {
 			return nil, err
 		}
+		maxWeight, err := s.maxWeight(ex.Name, date)
+		if err != nil {
+			return nil, err
+		}
 		sessions := sessionsInScheme(all, ex, schemes)
-		sets, _, reason := nextTarget(ex, sessions, off)
+		sets, _, reason := nextTargetUpTo(ex, sessions, off, maxWeight)
 		if len(sessions) == 0 && len(all) > 0 {
 			reason = fmt.Sprintf("No %d × %d history yet: pick a starting weight.", ex.Sets, ex.Reps)
 		}
@@ -346,13 +362,15 @@ func (s *Store) ExerciseTargets(exercises, schemes []PlanExercise, date string) 
 // lift trained in more than one scheme progresses each from its own
 // sessions. Without any, the target is the scheme at no weight for the
 // lifter to fill in.
-func freeExerciseTarget(sessions [][]Set, scheme PlanExercise, daysOff int) ([]Set, string) {
+//
+// The weight never goes up past maxWeight (see nextTargetUpTo).
+func freeExerciseTarget(sessions [][]Set, scheme PlanExercise, daysOff int, maxWeight float64) ([]Set, string) {
 	if scheme.Sets <= 0 || scheme.Reps <= 0 {
 		if len(sessions) == 0 {
 			return nil, ""
 		}
 		scheme = sessionScheme(sessions[len(sessions)-1])
-		sets, _, reason := nextTarget(scheme, sessions, daysOff)
+		sets, _, reason := nextTargetUpTo(scheme, sessions, daysOff, maxWeight)
 		return sets, reason
 	}
 
@@ -362,7 +380,7 @@ func freeExerciseTarget(sessions [][]Set, scheme PlanExercise, daysOff int) ([]S
 			kept = append(kept, session)
 		}
 	}
-	sets, _, reason := nextTarget(scheme, kept, daysOff)
+	sets, _, reason := nextTargetUpTo(scheme, kept, daysOff, maxWeight)
 	if len(kept) == 0 && len(sessions) > 0 {
 		reason = fmt.Sprintf("No %d × %d history yet: pick a starting weight.", scheme.Sets, scheme.Reps)
 	}
@@ -393,8 +411,34 @@ func (s *Store) FreeExerciseTarget(name, date string, scheme PlanExercise) ([]Se
 	if err != nil {
 		return nil, "", err
 	}
-	sets, reason := freeExerciseTarget(sessions, scheme, off)
+	maxWeight, err := s.maxWeight(name, date)
+	if err != nil {
+		return nil, "", err
+	}
+	sets, reason := freeExerciseTarget(sessions, scheme, off, maxWeight)
 	return sets, reason, nil
+}
+
+// bodyweightCapped are the exercises whose weight stops going up at the
+// lifter's bodyweight; past it they progress in reps.
+var bodyweightCapped = map[string]bool{"Pull-up": true}
+
+// maxWeight returns the most an exercise's target weight goes up to on date:
+// for bodyweightCapped exercises the last bodyweight logged on or before
+// date, rounded down to a whole kg, and otherwise (or without a bodyweight)
+// 0 for no cap.
+func (s *Store) maxWeight(name, date string) (float64, error) {
+	if !bodyweightCapped[name] {
+		return 0, nil
+	}
+	var weight float64
+	err := s.db.QueryRow(
+		"SELECT weight FROM bodyweight WHERE date <= ? ORDER BY date DESC LIMIT 1", date,
+	).Scan(&weight)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	return math.Floor(weight), err
 }
 
 // EvaluateProgression reports how a logged workout went for each exercise

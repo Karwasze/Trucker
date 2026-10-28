@@ -5,6 +5,9 @@ import {
   completedSetCount,
   describeSets,
   draftFromPlan,
+  invalidSetCount,
+  isValidReps,
+  isValidWeight,
   planFingerprint,
   toExercises,
   toWorkout,
@@ -78,6 +81,27 @@ test('toExercises parses inputs and drops sets without reps and empty exercises'
     { name: 'Bench', sets: [{ weight: 60, reps: 8 }] },
   ]);
   expect(toExercises(edited, true)).toEqual([{ name: 'Squat', sets: [{ weight: 100, reps: 5 }] }]);
+});
+
+test('a weight or reps that isn’t a number is invalid, empty included', () => {
+  expect(['0', '100', '102.5', '2.'].every(isValidWeight)).toBe(true);
+  expect(['.', '', ' ', '1.2.3'].some(isValidWeight)).toBe(false);
+  expect(isValidReps('5')).toBe(true);
+  expect(['', '5.5'].some(isValidReps)).toBe(false);
+
+  const exercises: DraftExercise[] = [
+    {
+      key: 'a',
+      name: 'Squat',
+      sets: [
+        { weight: '.', reps: '5', done: true },
+        { weight: '100', reps: '', done: false },
+        { weight: '100', reps: '5', done: true },
+      ],
+    },
+  ];
+  expect(invalidSetCount(exercises, true)).toBe(1);
+  expect(invalidSetCount(exercises, false)).toBe(2);
 });
 
 test('toWorkout logs only completed sets and the plan when there is one', () => {

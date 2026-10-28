@@ -63,12 +63,20 @@ fi
 step "Typechecking"
 npm run -s typecheck
 
-if [ ! -d ios ] || [ app.json -nt ios ] || [ app.config.ts -nt ios ] || [ package.json -nt ios ]; then
+workspace=ios/Trucker.xcworkspace
+# A missing workspace means CocoaPods didn't finish on the last prebuild.
+if [ ! -d "$workspace" ] || [ app.json -nt ios ] || [ app.config.ts -nt ios ] || [ package.json -nt ios ]; then
   prebuild=true
 fi
 if [ "$prebuild" = true ]; then
   step "Regenerating ios/"
   npx expo prebuild -p ios --clean
+  # expo prebuild only warns when `pod install` fails, so check for its output
+  # before marking ios/ as up to date.
+  if [ ! -d "$workspace" ]; then
+    echo "pod install failed; fix it and run: (cd ios && pod install)" >&2
+    exit 1
+  fi
   touch ios
 fi
 
@@ -79,7 +87,7 @@ step "Building (Release)"
 # provisioning profiles (they expire after 7 days) for the app and its widget
 # extension.
 xcodebuild \
-  -workspace ios/Trucker.xcworkspace \
+  -workspace "$workspace" \
   -scheme Trucker \
   -configuration Release \
   -destination "id=$device" \

@@ -38,3 +38,13 @@ resources:
   limits:
     cpu: 250m
     memory: 128Mi
+
+# Daily SQLite backup to a directory on the node (hostPath). Uses the app
+# image, which ships the sqlite3 CLI. Backups older than retentionDays are
+# deleted on each run.
+backup:
+  enabled: true
+  schedule: "0 3 * * *"
+  timeZone: "Europe/Warsaw"
+  hostPath: /data/trucker-backups
+  retentionDays: 30

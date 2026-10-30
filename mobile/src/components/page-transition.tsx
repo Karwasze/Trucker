@@ -1,69 +1,85 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { StyleSheet, useWindowDimensions } from 'react-native';
-import Animated, {
-  FadeOut,
-  SlideInLeft,
-  SlideInRight,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  type SharedValue,
-} from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring, type SharedValue } from 'react-native-reanimated';
 
-import { itemDistance, ringDistance } from '@/components/carousel-model';
-import { Spacing } from '@/constants/theme';
+import { ringDistance } from '@/components/carousel-model';
 
 /** Pages glide into place without overshooting, so no empty edge shows. */
 const PAGE_SPRING = { damping: 22, stiffness: 160, mass: 0.9, overshootClamping: true };
 /** Pages sink back this much mid-swap, and rise again as they land. */
 const PAGE_DIP = 0.06;
 
-export type Pager = {
-  /** Where the pages are, in pages; counts on past the ends of a ring. */
+/** A page of a pager: its key, what it shows, and where it sits, in pages. */
+type Placed<T> = { key: string; value: T; slot: number };
+
+export type Pager<T> = {
+  /** Where the pages are scrolled to, in pages. */
   position: SharedValue<number>;
-  count: number;
-  ring: boolean;
   /** The page shown, and the one it took over from, which slides out. */
-  current: number;
-  previous: number;
+  current: Placed<T>;
+  previous: Placed<T> | null;
 };
 
 /**
- * Pages side by side, like locations in Apple Weather: when `index` changes,
- * the old page slides out as the new one slides in beside it, the shorter way
- * round a ring.
+ * Pages side by side, like locations in Apple Weather. When `key` changes, the
+ * new page slides in beside the old one as it slides out: from the right when
+ * `direction` says the move went onwards (positive), from the left when back.
+ * However far the move, the pages are always one page apart.
  */
-export function usePager(index: number, count: number, ring: boolean): Pager {
-  const position = useSharedValue(index);
-  const target = useSharedValue(index);
-  const [pages, setPages] = useState({ current: index, previous: index });
-  if (index !== pages.current) setPages({ current: index, previous: pages.current });
+export function usePager<T>(key: string, value: T, direction: (from: T, to: T) => number): Pager<T> {
+  const position = useSharedValue(0);
+  const [pages, setPages] = useState<{ current: Placed<T>; previous: Placed<T> | null }>({
+    current: { key, value, slot: 0 },
+    previous: null,
+  });
+  if (key !== pages.current.key) {
+    const step = direction(pages.current.value, value) < 0 ? -1 : 1;
+    setPages({ current: { key, value, slot: pages.current.slot + step }, previous: pages.current });
+  }
 
+  const slot = pages.current.slot;
   useEffect(() => {
-    const from = target.get();
-    const to = ring ? from + ringDistance(from, index, count) : index;
-    if (to === from) return;
-    target.set(to);
-    position.set(withSpring(to, PAGE_SPRING));
-  }, [index, count, ring, position, target]);
+    position.set(withSpring(slot, PAGE_SPRING));
+  }, [slot, position]);
 
-  return { position, count, ring, ...pages };
+  // The page shown always reflects the latest value; the one leaving keeps its last.
+  return { position, current: { ...pages.current, value }, previous: pages.previous };
+}
+
+/** Which way to slide between two pages on a ring of `count`: the shorter way round. */
+export const ringDirection = (count: number) => (from: number, to: number) => ringDistance(from, to, count);
+
+/** One level of a nested choice, e.g. a category and then a series within it. */
+export type Level = { index: number; count: number; ring: boolean };
+
+/**
+ * Which way content moved between two nested choices: judged by the
+ * outermost level that changed, the shorter way round a ring. Positive is
+ * onwards, negative back.
+ */
+export function slideDirection(from: Level[], to: Level[]) {
+  const changed = to.findIndex((l, i) => l.index !== from[i]?.index);
+  if (changed === -1) return 0;
+  const { index, count, ring } = to[changed];
+  const before = from[changed].index;
+  return ring ? ringDistance(before, index, count) : index - before;
 }
 
 /**
  * One page of a pager, filling its container. Only the page shown and the one
  * leaving are drawn; the one leaving can't be touched or read out.
  */
-export function PagerPage({ pager, index, children }: { pager: Pager; index: number; children: ReactNode }) {
+export function PagerPage<T>({ pager, pageKey, children }: { pager: Pager<T>; pageKey: string; children: ReactNode }) {
   const { width } = useWindowDimensions();
-  const { position, count, ring, current, previous } = pager;
-  const shown = index === current;
+  const { position, current, previous } = pager;
+  const shown = pageKey === current.key;
+  const slot = shown ? current.slot : pageKey === previous?.key ? previous.slot : null;
 
   const style = useAnimatedStyle(() => {
-    const distance = itemDistance(position.get(), index, count, ring);
+    if (slot === null) return {};
     const between = Math.min(1, Math.abs(position.get() - Math.round(position.get())) * 2);
     return {
-      transform: [{ translateX: distance * width }, { scale: 1 - PAGE_DIP * between }],
+      transform: [{ translateX: (slot - position.get()) * width }, { scale: 1 - PAGE_DIP * between }],
     };
   });
 
@@ -72,39 +88,7 @@ export function PagerPage({ pager, index, children }: { pager: Pager; index: num
       pointerEvents={shown ? 'auto' : 'none'}
       accessibilityElementsHidden={!shown}
       importantForAccessibility={shown ? 'auto' : 'no-hide-descendants'}
-      style={[StyleSheet.absoluteFill, !shown && index !== previous && styles.hidden, style]}>
-      {children}
-    </Animated.View>
-  );
-}
-
-type Level = { index: number; count: number; ring: boolean };
-
-/**
- * Which way content moved when one of `levels` (e.g. a category, then a
- * series within it) changed: 1 onwards, -1 back, judged by the outermost level
- * that changed, the shorter way round a ring.
- */
-export function useSlideDirection(levels: Level[]) {
-  const [last, setLast] = useState({ indexes: levels.map((l) => l.index), direction: 1 });
-  const changed = levels.findIndex((l, i) => l.index !== last.indexes[i]);
-  if (changed !== -1) {
-    const { index, count, ring } = levels[changed];
-    const before = last.indexes[changed];
-    const moved = ring ? ringDistance(before, index, count) : index - before;
-    setLast({ indexes: levels.map((l) => l.index), direction: moved < 0 ? -1 : 1 });
-  }
-  return last.direction;
-}
-
-/**
- * Content that slides in from the side it was swiped towards when `pageKey`
- * changes, while what it replaces fades away.
- */
-export function SlideIn({ pageKey, direction, children }: { pageKey: string; direction: number; children: ReactNode }) {
-  const entering = (direction < 0 ? SlideInLeft : SlideInRight).springify().damping(22).stiffness(160);
-  return (
-    <Animated.View key={pageKey} entering={entering} exiting={FadeOut.duration(140)} style={styles.slide}>
+      style={[StyleSheet.absoluteFill, slot === null && styles.hidden, style]}>
       {children}
     </Animated.View>
   );
@@ -113,9 +97,5 @@ export function SlideIn({ pageKey, direction, children }: { pageKey: string; dir
 const styles = StyleSheet.create({
   hidden: {
     display: 'none',
-  },
-  // Spaced like the page around it.
-  slide: {
-    gap: Spacing.three,
   },
 });

@@ -2,13 +2,13 @@ import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { localDate } from '@/api/client';
-import type { CardioActivity, StatisticsData } from '@/api/types';
+import type { CardioActivity, CardioWorkout, StatisticsData, Triathlon } from '@/api/types';
 import { Carousel, TEXT_CAROUSEL_HEIGHT } from '@/components/carousel';
 import { isRing } from '@/components/carousel-model';
 import { AboveTabBar, useTabBarWidth } from '@/components/carousel-tab-bar';
 import { LineChart } from '@/components/line-chart';
+import { PagerPage, slideDirection, usePager, type Level } from '@/components/page-transition';
 import { ThemedText } from '@/components/themed-text';
-import { SlideIn, useSlideDirection } from '@/components/page-transition';
 import { TimespanCarousel, timespanStart, type Timespan } from '@/components/timespan';
 import { Card, Message, Screen, SectionLabel } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
@@ -27,10 +27,14 @@ import { SettingsButton } from '@/settings/settings-button';
 import { useSettings } from '@/settings/settings-context';
 import { formatDate, formatKg } from '@/workout/format';
 
+/** A Progress page: a category, and the series in it shown, if it has any. */
+type Page = { category: Category; series: Series | null; levels: Level[] };
+
 /**
  * Progress: a carousel of categories (strength, cardio, bodyweight), a
  * carousel of the lifts or activities in the chosen one, and that series'
- * charts and sessions.
+ * charts and sessions on a page of its own, sliding in beside the last as the
+ * carousels turn, like the tabs do.
  */
 export default function ProgressScreen() {
   const { api, serverUrl } = useSettings();
@@ -42,6 +46,10 @@ export default function ProgressScreen() {
   // Oldest first, for the charts.
   const cardio = useQuery(`cardio:${serverUrl}`, async () => (await api.listCardio()).reverse());
   const triathlons = useQuery(`triathlons:${serverUrl}`, async () => (await api.listTriathlons()).reverse());
+  // Loaded with the screen, so it's there the moment Bodyweight is picked.
+  useQuery(`bodyweight:${serverUrl}`, async () =>
+    (await api.listBodyweight()).sort((a, b) => a.date.localeCompare(b.date))
+  );
   // Opened on a series from elsewhere, e.g. Insights.
   useOpenedWith((params) => {
     const series: Series = params.exercise
@@ -75,97 +83,54 @@ export default function ProgressScreen() {
     picked[shown ?? 'bodyweight'] ??
     (shown === 'cardio' && latest ? { kind: 'cardio' as const, activity: latest.activity } : undefined);
   const series = choices.find((c) => preferred && seriesKey(c) === seriesKey(preferred)) ?? choices[0] ?? null;
-  const exercise = series?.kind === 'exercise' ? series.name : null;
 
-  const exerciseData = useQuery(exercise === null ? null : `stats:${serverUrl}:${exercise}`, async () =>
-    (await api.statistics(exercise!)).data.sort((a, b) => a.date.localeCompare(b.date))
-  );
-  // Opening bodyweight shows the stored log and syncs it from Apple Health
-  // alongside, so a slow or stalled Health read can't hold the log back. The
-  // log loads with the page, so it's there the moment Bodyweight is picked.
-  const health = useHealthState();
-  const healthConnected = !!health.state.connectedAt && isHealthAvailable();
-  const storedBodyweight = useQuery(`bodyweight:${serverUrl}`, async () =>
-    (await api.listBodyweight()).sort((a, b) => a.date.localeCompare(b.date))
-  );
-  const healthSync = useQuery(
-    series?.kind === 'bodyweight' && health.loaded && healthConnected ? `bodyweight-sync:${serverUrl}` : null,
-    () => syncBodyweight(api)
-  );
-  // Health's log once synced; null means Health had no weigh-ins.
-  const bodyweight = healthSync.data ?? storedBodyweight.data;
-
-  const refresh = () => {
-    names.refresh();
-    cardio.refresh();
-    triathlons.refresh();
-    if (series?.kind === 'exercise') exerciseData.refresh();
-    if (series?.kind === 'bodyweight') {
-      storedBodyweight.refresh();
-      if (healthConnected) healthSync.refresh();
-    }
-  };
-
-  const barWidth = useTabBarWidth();
   const categoryIndex = CATEGORIES.findIndex((c) => c.key === shown);
+  const page: Page | null = shown && {
+    category: shown,
+    series,
+    levels: [
+      { index: categoryIndex, count: CATEGORIES.length, ring: isRing(CATEGORIES.length, 3) },
+      { index: series ? choices.indexOf(series) : 0, count: choices.length, ring: isRing(choices.length, 3) },
+    ],
+  };
+  const pageKey = (p: Page | null) => (p ? `${p.category}:${p.series ? seriesKey(p.series) : ''}` : '');
+  const pager = usePager(pageKey(page), page, (from, to) => (from && to ? slideDirection(from.levels, to.levels) : 0));
 
   // Carousels float above the tab bar: from the bottom up, the timespan,
   // the categories, then the category's series.
+  const barWidth = useTabBarWidth();
   const seriesShown = shown !== null && shown !== 'bodyweight' && !!series;
-  // The charts slide in from the side the category, or else the series, turned towards.
-  const direction = useSlideDirection([
-    { index: categoryIndex, count: CATEGORIES.length, ring: isRing(CATEGORIES.length, 3) },
-    { index: series ? choices.indexOf(series) : 0, count: choices.length, ring: isRing(choices.length, 3) },
-  ]);
   const floating = shown ? (seriesShown ? 3 : 2) : 0;
+
+  const pageProps = {
+    timespan,
+    names,
+    cardio,
+    triathlons: triathlons.data ?? [],
+    bottomInset: floating * (TEXT_CAROUSEL_HEIGHT + Spacing.two),
+    onRefresh: () => {
+      names.refresh();
+      cardio.refresh();
+      triathlons.refresh();
+    },
+  };
 
   return (
     <View style={styles.page}>
-      <Screen
-        title="Progress"
-        bottomInset={floating * (TEXT_CAROUSEL_HEIGHT + Spacing.two)}
-        action={<SettingsButton />}
-        refreshing={names.refreshing || cardio.refreshing}
-        onRefresh={refresh}>
-        {!shown ? (
+      {!page ? (
+        <Screen title="Progress" action={<SettingsButton />}>
           <Message loading />
-        ) : (
-          <SlideIn pageKey={`${shown}:${series ? seriesKey(series) : ''}`} direction={direction}>
-            {!series ? (
-              <Message error={shown === 'strength' ? names.error : cardio.error}>
-                {shown === 'strength'
-                  ? 'No lifts logged yet. Finish a workout to see your progress here.'
-                  : 'No cardio workouts yet. Connect Apple Health in Settings to import them.'}
-              </Message>
-            ) : series.kind === 'bodyweight' ? (
-              !bodyweight ? (
-                <Message loading={!storedBodyweight.error} error={storedBodyweight.error} />
-              ) : (
-                <BodyweightStats
-                  history={bodyweight}
-                  timespan={timespan}
-                  healthConnected={healthConnected}
-                  healthSyncing={healthSync.loading}
-                  healthSyncError={healthSync.error}
-                  onSynced={healthSync.refresh}
-                />
-              )
-            ) : series.kind === 'triathlon' ? (
-              <TriathlonStats triathlons={triathlons.data ?? []} timespan={timespan} />
-            ) : series.kind === 'cardio' ? (
-              <CardioStats
-                activity={series.activity}
-                workouts={workouts.filter((w) => w.activity === series.activity)}
-                timespan={timespan}
-              />
-            ) : !exerciseData.data || exerciseData.data.length === 0 ? (
-              <Message loading={!exerciseData.error} error={exerciseData.error} />
-            ) : (
-              <ExerciseStats data={exerciseData.data} timespan={timespan} />
-            )}
-          </SlideIn>
-        )}
-      </Screen>
+        </Screen>
+      ) : (
+        [pager.previous, pager.current].map(
+          (p) =>
+            p?.value && (
+              <PagerPage key={p.key} pager={pager} pageKey={p.key}>
+                <ProgressPage page={p.value} {...pageProps} />
+              </PagerPage>
+            )
+        )
+      )}
       {shown && (
         <AboveTabBar>
           {shown !== 'bodyweight' && series && (
@@ -196,6 +161,98 @@ export default function ProgressScreen() {
         </AboveTabBar>
       )}
     </View>
+  );
+}
+
+type Query<T> = { data?: T | null; error?: string | null; refreshing?: boolean };
+
+/** One series' page: its charts and sessions, loading what it needs itself. */
+function ProgressPage({
+  page: { category, series },
+  timespan,
+  names,
+  cardio,
+  triathlons,
+  bottomInset,
+  onRefresh,
+}: {
+  page: Page;
+  timespan: Timespan;
+  names: Query<string[]>;
+  cardio: Query<CardioWorkout[]>;
+  triathlons: Triathlon[];
+  bottomInset: number;
+  onRefresh: () => void;
+}) {
+  const { api, serverUrl } = useSettings();
+  const exercise = series?.kind === 'exercise' ? series.name : null;
+  const exerciseData = useQuery(exercise === null ? null : `stats:${serverUrl}:${exercise}`, async () =>
+    (await api.statistics(exercise!)).data.sort((a, b) => a.date.localeCompare(b.date))
+  );
+  // Bodyweight shows the stored log and syncs it from Apple Health alongside,
+  // so a slow or stalled Health read can't hold the log back.
+  const health = useHealthState();
+  const healthConnected = !!health.state.connectedAt && isHealthAvailable();
+  const isBodyweight = series?.kind === 'bodyweight';
+  const storedBodyweight = useQuery(isBodyweight ? `bodyweight:${serverUrl}` : null, async () =>
+    (await api.listBodyweight()).sort((a, b) => a.date.localeCompare(b.date))
+  );
+  const healthSync = useQuery(
+    isBodyweight && health.loaded && healthConnected ? `bodyweight-sync:${serverUrl}` : null,
+    () => syncBodyweight(api)
+  );
+  // Health's log once synced; null means Health had no weigh-ins.
+  const bodyweight = healthSync.data ?? storedBodyweight.data;
+
+  const refresh = () => {
+    onRefresh();
+    if (exercise !== null) exerciseData.refresh();
+    if (isBodyweight) {
+      storedBodyweight.refresh();
+      if (healthConnected) healthSync.refresh();
+    }
+  };
+
+  return (
+    <Screen
+      title="Progress"
+      bottomInset={bottomInset}
+      action={<SettingsButton />}
+      refreshing={!!(names.refreshing || cardio.refreshing)}
+      onRefresh={refresh}>
+      {!series ? (
+        <Message error={category === 'strength' ? names.error : cardio.error}>
+          {category === 'strength'
+            ? 'No lifts logged yet. Finish a workout to see your progress here.'
+            : 'No cardio workouts yet. Connect Apple Health in Settings to import them.'}
+        </Message>
+      ) : series.kind === 'bodyweight' ? (
+        !bodyweight ? (
+          <Message loading={!storedBodyweight.error} error={storedBodyweight.error} />
+        ) : (
+          <BodyweightStats
+            history={bodyweight}
+            timespan={timespan}
+            healthConnected={healthConnected}
+            healthSyncing={healthSync.loading}
+            healthSyncError={healthSync.error}
+            onSynced={healthSync.refresh}
+          />
+        )
+      ) : series.kind === 'triathlon' ? (
+        <TriathlonStats triathlons={triathlons} timespan={timespan} />
+      ) : series.kind === 'cardio' ? (
+        <CardioStats
+          activity={series.activity}
+          workouts={(cardio.data ?? []).filter((w) => w.activity === series.activity)}
+          timespan={timespan}
+        />
+      ) : !exerciseData.data || exerciseData.data.length === 0 ? (
+        <Message loading={!exerciseData.error} error={exerciseData.error} />
+      ) : (
+        <ExerciseStats data={exerciseData.data} timespan={timespan} />
+      )}
+    </Screen>
   );
 }
 

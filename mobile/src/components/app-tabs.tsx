@@ -2,7 +2,7 @@ import { router, usePathname, type Href } from 'expo-router';
 import { TabList, TabSlot, TabTrigger, Tabs, useTabTrigger } from 'expo-router/ui';
 
 import { CarouselTabBar, type CarouselTab } from '@/components/carousel-tab-bar';
-import { PagerPage, usePager } from '@/components/page-transition';
+import { PagerPage, ringDirection, usePager } from '@/components/page-transition';
 
 type AppTab = CarouselTab & {
   href: Extract<Href, string>;
@@ -88,7 +88,7 @@ function TabPages() {
     0,
     TABS.findIndex((tab) => getTrigger(tab.name)?.isFocused)
   );
-  const pager = usePager(index, TABS.length, true);
+  const pager = usePager(TABS[index].name, index, ringDirection(TABS.length));
 
   return (
     <TabSlot
@@ -98,9 +98,10 @@ function TabPages() {
         // Screens only load once first opened.
         if (!loaded && !isFocused) return null;
         // A tab's route can be named after its first screen, e.g. "(today)/index".
-        const page = TABS.findIndex((tab) => getTrigger(tab.name)?.route.key === descriptor.route.key);
+        const tab = TABS.find((t) => getTrigger(t.name)?.route.key === descriptor.route.key);
+        if (!tab) return null;
         return (
-          <PagerPage key={descriptor.route.key} pager={pager} index={page}>
+          <PagerPage key={descriptor.route.key} pager={pager} pageKey={tab.name}>
             {descriptor.render()}
           </PagerPage>
         );

@@ -253,6 +253,19 @@ describe('category and series carousels', () => {
     expect(within(page).queryByRole('adjustable', { name: 'Exercise' })).toBeNull();
   });
 
+  test('a new category’s page slides in beside the last, like a tab, which stays drawn but hidden', async () => {
+    server();
+    await renderProgress();
+    await screen.findByText('Since 9 Oct');
+    await turnCarousel('Category', 'Cardio');
+    expect(screen.getByText('Weekly distance')).toBeOnTheScreen();
+    // Strength's page slides away: still drawn, but out of reach of screen readers.
+    expect(screen.queryByText('Since 9 Oct')).toBeNull();
+    expect(screen.getByText('Since 9 Oct', { includeHiddenElements: true })).toBeOnTheScreen();
+    // Each page scrolls on its own.
+    expect(allOfType('RCTScrollView')).toHaveLength(2);
+  });
+
   test('Cardio lists only cardio, opening on the latest activity', async () => {
     server();
     await renderProgress();

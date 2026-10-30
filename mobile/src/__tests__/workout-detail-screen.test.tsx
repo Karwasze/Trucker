@@ -3,7 +3,7 @@ import { screen, userEvent } from '@testing-library/react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 
 import type { Workout } from '@/api/types';
-import WorkoutDetailScreen from '@/app/(tabs)/(training)/history/[id]';
+import WorkoutDetailScreen from '@/app/(tabs)/history/[id]';
 import { mockAlerts, mockServer, renderInApp, selectPlan, type Request } from '@/test-utils';
 
 const workout: Workout = {

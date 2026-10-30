@@ -131,3 +131,25 @@ export const allOfType = (type: string) => screen.container.queryAll((node) => n
 export function setNow(iso: string) {
   jest.useFakeTimers({ now: new Date(iso), advanceTimers: true });
 }
+
+/** What a carousel, found by its accessibility label, has selected, e.g. "Squat, 1 of 3". */
+export const carouselValue = (name: string) =>
+  screen.getByRole('adjustable', { name }).props.accessibilityValue.text as string;
+
+/**
+ * Turns a carousel to the item labelled `label`, as a screen reader would, one
+ * item at a time: onwards, then back if it stops at an end first.
+ */
+export async function turnCarousel(name: string, label: string) {
+  const at = () => carouselValue(name).startsWith(`${label},`);
+  for (const actionName of ['increment', 'decrement']) {
+    for (let i = 0; i < 20 && !at(); i++) {
+      const before = carouselValue(name);
+      await fireEvent(screen.getByRole('adjustable', { name }), 'accessibilityAction', { nativeEvent: { actionName } });
+      // The carousel ticks over in a microtask, held by the animation library's fake timers.
+      await act(async () => jest.runAllTicks());
+      if (carouselValue(name) === before) break;
+    }
+  }
+  if (!at()) throw new Error(`The ${name} carousel has no ${label}`);
+}

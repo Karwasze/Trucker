@@ -7,7 +7,7 @@ import { WeeklyBarChart } from '@/components/bar-chart';
 import { mondayOf } from '@/components/chart-scale';
 import { LineChart } from '@/components/line-chart';
 import { ThemedText } from '@/components/themed-text';
-import { TimespanControl, timespanStart, type Timespan } from '@/components/timespan';
+import { timespanStart, type Timespan } from '@/components/timespan';
 import { Card, Message, SectionLabel } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { Tile, TileRow } from '@/progress/tile';
@@ -32,12 +32,10 @@ export function CardioStats({
   activity,
   workouts: all,
   timespan,
-  onTimespanChange,
 }: {
   activity: CardioActivity;
   workouts: CardioWorkout[];
   timespan: Timespan;
-  onTimespanChange: (timespan: Timespan) => void;
 }) {
   const start = timespanStart(timespan);
   const workouts = start ? all.filter((w) => w.date >= start) : all;
@@ -63,7 +61,6 @@ export function CardioStats({
   if (workouts.length === 0) {
     return (
       <Card>
-        <TimespanControl value={timespan} onChange={onTimespanChange} />
         <Message>No sessions in the last {timespan.label}.</Message>
       </Card>
     );
@@ -82,7 +79,6 @@ export function CardioStats({
 
       <Card>
         <ThemedText type="smallBold">Weekly distance</ThemedText>
-        <TimespanControl value={timespan} onChange={onTimespanChange} />
         <WeeklyBarChart weeks={weeklyTotals} from={from} to={localDate()} unit={swim ? 'm' : 'km'} />
       </Card>
 

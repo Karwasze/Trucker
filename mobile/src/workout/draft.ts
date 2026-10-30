@@ -31,6 +31,8 @@ export type Draft = {
   exercises: DraftExercise[];
   /** Set once the workout has been posted to the server. */
   logged?: CreatedWorkout;
+  /** For "start another", the workout logged before it, to go back to when it's cancelled or discarded. */
+  after?: CreatedWorkout;
 };
 
 let keyCounter = 0;

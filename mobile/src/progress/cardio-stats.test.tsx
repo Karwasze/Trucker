@@ -1,10 +1,10 @@
-import { render, screen, userEvent } from '@testing-library/react-native';
+import { render, screen } from '@testing-library/react-native';
 import { useState } from 'react';
 
 import type { CardioWorkout } from '@/api/types';
-import { TIMESPANS, type Timespan } from '@/components/timespan';
+import { TIMESPANS, TimespanCarousel, type Timespan } from '@/components/timespan';
 import { CardioStats } from '@/progress/cardio-stats';
-import { allOfType, layout, setNow } from '@/test-utils';
+import { allOfType, layout, setNow, turnCarousel } from '@/test-utils';
 
 const ride = (id: number, date: string, km: number, minutes: number): CardioWorkout => ({
   id,
@@ -18,7 +18,12 @@ const ride = (id: number, date: string, km: number, minutes: number): CardioWork
 /** CardioStats as the Progress tab uses it, with the timespan switchable. */
 function Harness({ workouts, initial = TIMESPANS[0] }: { workouts: CardioWorkout[]; initial?: Timespan }) {
   const [timespan, setTimespan] = useState<Timespan>(initial);
-  return <CardioStats activity="cycling" workouts={workouts} timespan={timespan} onTimespanChange={setTimespan} />;
+  return (
+    <>
+      <CardioStats activity="cycling" workouts={workouts} timespan={timespan} />
+      <TimespanCarousel value={timespan} onChange={setTimespan} />
+    </>
+  );
 }
 
 // Sunday 18 Oct 2026, the day the weekly chart bug was reported.
@@ -35,10 +40,9 @@ test('totals cover the sessions in the timespan', async () => {
 
 // Regression: a ride on Saturday read out as "Mon, 12 Oct 2026" under every timespan but All.
 test('weekly distance names the ride’s week under every timespan, never a single day', async () => {
-  const user = userEvent.setup();
   await render(<Harness workouts={[ride(1, '2026-10-17', 45.2, 136.3)]} />);
   for (const span of TIMESPANS) {
-    await user.press(screen.getByRole('tab', { name: span.label }));
+    await turnCarousel('Timespan', span.key === 'all' ? 'All time' : span.label);
     expect(screen.getByText('Latest · Week of 12 Oct – 18 Oct')).toBeOnTheScreen();
     expect(screen.queryByText(/Mon, 12 Oct/)).not.toBeOnTheScreen();
   }

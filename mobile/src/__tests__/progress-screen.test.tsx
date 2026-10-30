@@ -1,12 +1,21 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { screen, userEvent } from '@testing-library/react-native';
+import { fireEvent, screen, userEvent, within } from '@testing-library/react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 
-import CardioProgressScreen from '@/app/(tabs)/stats/cardio';
-import StrengthProgressScreen from '@/app/(tabs)/stats/index';
+import ProgressScreen from '@/app/(tabs)/stats/index';
 import { healthBodyweight, isHealthAvailable } from '@/health/healthkit';
 import { ProgressProvider } from '@/progress/progress-context';
-import { mockAlerts, mockServer, renderInApp, selectPlan, setNow, type Request } from '@/test-utils';
+import {
+  allOfType,
+  carouselValue,
+  mockAlerts,
+  mockServer,
+  renderInApp,
+  selectPlan,
+  setNow,
+  turnCarousel,
+  type Request,
+} from '@/test-utils';
 
 jest.mock('@/health/healthkit', () => ({
   isHealthAvailable: jest.fn(() => true),
@@ -14,17 +23,11 @@ jest.mock('@/health/healthkit', () => ({
   healthBodyweight: jest.fn(async () => []),
 }));
 
-// The Progress layout provides the timespan both pages share.
-const renderStrength = () =>
+// The Progress layout provides the timespan.
+const renderProgress = () =>
   renderInApp(
     <ProgressProvider>
-      <StrengthProgressScreen />
-    </ProgressProvider>
-  );
-const renderCardio = () =>
-  renderInApp(
-    <ProgressProvider>
-      <CardioProgressScreen />
+      <ProgressScreen />
     </ProgressProvider>
   );
 
@@ -36,7 +39,7 @@ async function connectHealth() {
   await AsyncStorage.setItem(`trucker.health:${url}`, JSON.stringify({ connectedAt: '2026-10-01T08:00:00.000Z' }));
 }
 
-function server({ exercises = ['Squat'] } = {}) {
+function server({ exercises = ['Squat'], rides = true } = {}) {
   return mockServer({
     'GET /api/statistics': ({ query }: Request) =>
       query.get('exercise') === 'Squat'
@@ -48,16 +51,18 @@ function server({ exercises = ['Squat'] } = {}) {
             ],
           }
         : { exercises, data: [] },
-    'GET /api/cardio': [
-      {
-        id: 1,
-        date: '2026-10-17',
-        started_at: '2026-10-17T10:00:00+02:00',
-        activity: 'cycling',
-        duration_seconds: 8178,
-        distance_m: 45200,
-      },
-    ],
+    'GET /api/cardio': rides
+      ? [
+          {
+            id: 1,
+            date: '2026-10-17',
+            started_at: '2026-10-17T10:00:00+02:00',
+            activity: 'cycling',
+            duration_seconds: 8178,
+            distance_m: 45200,
+          },
+        ]
+      : [],
     'GET /api/bodyweight': [{ date: '2026-10-18', weight: 82.4 }],
     'PUT /api/bodyweight': ({ body }: Request) => body,
   });
@@ -76,7 +81,7 @@ afterEach(() => jest.useRealTimers());
 
 test('opens on the first exercise’s estimated 1RM, oldest to newest', async () => {
   server();
-  await renderStrength();
+  await renderProgress();
   expect(await screen.findByText('Since 9 Oct')).toBeOnTheScreen();
   // The tile, and the PR the latest session set.
   expect(screen.getAllByText('+3.4 kg')).toHaveLength(2);
@@ -99,15 +104,15 @@ test('personal records list the sessions that beat every earlier one, within the
         : { exercises: ['Squat'], data: [] },
     'GET /api/cardio': [],
   });
-  const user = userEvent.setup();
-  await renderStrength();
+  await renderProgress();
+  await screen.findByText('Personal records');
+  await turnCarousel('Timespan', 'All time');
 
-  expect(await screen.findByText('Personal records')).toBeOnTheScreen();
   expect(screen.getByLabelText('PR on Fri, 16 Oct 2026: 122.5 kg, up 2.5 kg')).toBeOnTheScreen();
   expect(screen.getByLabelText('PR on Thu, 2 Apr 2020: 120.0 kg, up 20.0 kg')).toBeOnTheScreen();
 
   // The 2020 PR is outside the last month; the record it set still shows.
-  await user.press(screen.getByRole('tab', { name: '1 month' }));
+  await turnCarousel('Timespan', '1 month');
   expect(screen.getByLabelText('PR on Fri, 16 Oct 2026: 122.5 kg, up 2.5 kg')).toBeOnTheScreen();
   expect(screen.queryByLabelText(/PR on Thu, 2 Apr 2020/)).not.toBeOnTheScreen();
 });
@@ -127,17 +132,16 @@ test('with no PR in the timespan it names the standing record', async () => {
         : { exercises: ['Squat'], data: [] },
     'GET /api/cardio': [],
   });
-  const user = userEvent.setup();
-  await renderStrength();
+  await renderProgress();
   await screen.findByText('Personal records');
-  await user.press(screen.getByRole('tab', { name: '1 month' }));
+  await turnCarousel('Timespan', '1 month');
   expect(screen.getByText('No PRs in the last 1 month. The record is 120.0 kg from 2 Apr 2020.')).toBeOnTheScreen();
 });
 
 test('with nothing lifted it falls back to bodyweight, which can’t be entered by hand', async () => {
-  const requests = server({ exercises: [] });
+  const requests = server({ exercises: [], rides: false });
   const user = userEvent.setup();
-  await renderStrength();
+  await renderProgress();
   expect(await screen.findByText('Connect Apple Health in Settings to import your weigh-ins.')).toBeOnTheScreen();
   expect(screen.getAllByText('82.4 kg')[0]).toBeOnTheScreen();
   expect(screen.queryByLabelText("Today's bodyweight in kilograms")).toBeNull();
@@ -149,8 +153,8 @@ test('with nothing lifted it falls back to bodyweight, which can’t be entered 
 
 test('without Apple Health, bodyweight is read-only', async () => {
   jest.mocked(isHealthAvailable).mockReturnValue(false);
-  server({ exercises: [] });
-  await renderStrength();
+  server({ exercises: [], rides: false });
+  await renderProgress();
   expect(await screen.findByText('Bodyweight is imported from Apple Health in the iPhone app.')).toBeOnTheScreen();
   expect(screen.queryByRole('button', { name: 'Sync from Apple Health' })).toBeNull();
 });
@@ -161,8 +165,8 @@ test('with Health connected, opening bodyweight replaces the log with Health’s
     { date: '2026-10-11', weight: 83.1 },
     { date: '2026-10-17', weight: 82.2 },
   ]);
-  const requests = server({ exercises: [] });
-  await renderStrength();
+  const requests = server({ exercises: [], rides: false });
+  await renderProgress();
   expect((await screen.findAllByText('82.2 kg'))[0]).toBeOnTheScreen();
   expect(screen.getByText('-0.9 kg')).toBeOnTheScreen();
   expect(requests.find((r) => r.method === 'PUT')?.body).toEqual([
@@ -174,9 +178,9 @@ test('with Health connected, opening bodyweight replaces the log with Health’s
 test('syncing pulls Health’s weigh-ins again, overwriting the log', async () => {
   await connectHealth();
   jest.mocked(healthBodyweight).mockResolvedValue([{ date: '2026-10-17', weight: 82.2 }]);
-  const requests = server({ exercises: [] });
+  const requests = server({ exercises: [], rides: false });
   const user = userEvent.setup();
-  await renderStrength();
+  await renderProgress();
   expect((await screen.findAllByText('82.2 kg'))[0]).toBeOnTheScreen();
 
   jest.mocked(healthBodyweight).mockResolvedValue([
@@ -192,10 +196,10 @@ test('syncing pulls Health’s weigh-ins again, overwriting the log', async () =
 
 test('syncing with no weigh-ins in Health says so and keeps the log', async () => {
   await connectHealth();
-  const requests = server({ exercises: [] });
+  const requests = server({ exercises: [], rides: false });
   const alerts = mockAlerts();
   const user = userEvent.setup();
-  await renderStrength();
+  await renderProgress();
   await user.press(await screen.findByRole('button', { name: 'Sync from Apple Health' }));
   expect(alerts.latest().title).toBe('No weigh-ins in Apple Health');
   expect(screen.getAllByText('82.4 kg')[0]).toBeOnTheScreen();
@@ -206,16 +210,16 @@ test('syncing with no weigh-ins in Health says so and keeps the log', async () =
 test('opened on cycling from elsewhere, the weekly distance names the ride’s week', async () => {
   jest.mocked(useLocalSearchParams).mockReturnValue({ activity: 'cycling', span: '1y' });
   server();
-  await renderCardio();
+  await renderProgress();
   expect(await screen.findByText('Latest · Week of 12 Oct – 18 Oct')).toBeOnTheScreen();
-  expect(screen.getByRole('tab', { name: '1 year' })).toBeSelected();
+  expect(carouselValue('Timespan')).toBe('1 year, 2 of 5');
 });
 
 test('while Health is still reading, the stored log shows with a syncing note', async () => {
   await connectHealth();
   jest.mocked(healthBodyweight).mockReturnValue(new Promise(() => {}));
-  const requests = server({ exercises: [] });
-  await renderStrength();
+  const requests = server({ exercises: [], rides: false });
+  await renderProgress();
   expect(await screen.findByText('Syncing with Apple Health…')).toBeOnTheScreen();
   expect(screen.getAllByText('82.4 kg')[0]).toBeOnTheScreen();
   expect(requests.some((r) => r.method === 'PUT')).toBe(false);
@@ -224,52 +228,116 @@ test('while Health is still reading, the stored log shows with a syncing note', 
 test('a failed Health sync keeps the stored log and says why', async () => {
   await connectHealth();
   jest.mocked(healthBodyweight).mockRejectedValue(new Error('Authorization not determined'));
-  server({ exercises: [] });
-  await renderStrength();
+  server({ exercises: [], rides: false });
+  await renderProgress();
   expect(await screen.findByText('Couldn’t sync with Apple Health: Authorization not determined')).toBeOnTheScreen();
   expect(screen.getAllByText('82.4 kg')[0]).toBeOnTheScreen();
 });
 
-describe('Strength and Cardio pages', () => {
-  test('Strength lists lifts and bodyweight, not cardio', async () => {
-    server();
-    const user = userEvent.setup();
-    await renderStrength();
-    await user.press(await screen.findByRole('button', { name: 'Squat, change exercise' }));
-    expect(screen.getByText('Bodyweight')).toBeOnTheScreen();
-    expect(screen.queryByText('Cycling')).not.toBeOnTheScreen();
+describe('category and series carousels', () => {
+  test('open on Strength and its first lift', async () => {
+    server({ exercises: ['Squat', 'Bench'] });
+    await renderProgress();
+    expect(await screen.findByText('Since 9 Oct')).toBeOnTheScreen();
+    expect(carouselValue('Category')).toBe('Strength, 1 of 3');
+    expect(carouselValue('Exercise')).toBe('Squat, 1 of 2');
   });
 
-  test('Cardio opens on the latest activity and lists only cardio', async () => {
+  test('float above the tab bar, outside the scrolling page', async () => {
+    server({ exercises: ['Squat', 'Bench'] });
+    await renderProgress();
+    await screen.findByText('Since 9 Oct');
+    const page = allOfType('RCTScrollView')[0];
+    expect(within(page).getByText('Since 9 Oct')).toBeOnTheScreen();
+    expect(within(page).queryByRole('adjustable', { name: 'Category' })).toBeNull();
+    expect(within(page).queryByRole('adjustable', { name: 'Exercise' })).toBeNull();
+  });
+
+  test('Cardio lists only cardio, opening on the latest activity', async () => {
     server();
-    const user = userEvent.setup();
-    await renderCardio();
-    await user.press(await screen.findByRole('button', { name: 'Cycling, change exercise' }));
-    expect(screen.queryByText('Bodyweight')).not.toBeOnTheScreen();
-    expect(screen.queryByText('Squat')).not.toBeOnTheScreen();
+    await renderProgress();
+    await screen.findByText('Since 9 Oct');
+    await turnCarousel('Category', 'Cardio');
+    expect(carouselValue('Activity')).toBe('Cycling, 1 of 1');
+    expect(screen.getByText('Weekly distance')).toBeOnTheScreen();
+  });
+
+  // Regression: a spinner showed for a moment before the log, while it loaded.
+  test('Bodyweight shows its log the moment it is picked', async () => {
+    await connectHealth();
+    jest.mocked(healthBodyweight).mockReturnValue(new Promise(() => {}));
+    server();
+    await renderProgress();
+    await screen.findByText('Since 9 Oct');
+    await turnCarousel('Category', 'Bodyweight');
+    expect(screen.getAllByText('82.4 kg')[0]).toBeOnTheScreen();
+    expect(screen.getByText('Syncing with Apple Health…')).toBeOnTheScreen();
+  });
+
+  test('Bodyweight has no second carousel', async () => {
+    server();
+    await renderProgress();
+    await screen.findByText('Since 9 Oct');
+    await turnCarousel('Category', 'Bodyweight');
+    expect(screen.getAllByText('82.4 kg')[0]).toBeOnTheScreen();
+    expect(screen.queryByRole('adjustable', { name: 'Exercise' })).not.toBeOnTheScreen();
+    expect(screen.queryByRole('adjustable', { name: 'Activity' })).not.toBeOnTheScreen();
+  });
+
+  test('the categories are Strength, Cardio, then Bodyweight', async () => {
+    server();
+    await renderProgress();
+    await screen.findByText('Since 9 Oct');
+    await turnCarousel('Category', 'Cardio');
+    expect(carouselValue('Category')).toBe('Cardio, 2 of 3');
+    await turnCarousel('Category', 'Bodyweight');
+    expect(carouselValue('Category')).toBe('Bodyweight, 3 of 3');
+  });
+
+  test('each category comes back to the series picked in it', async () => {
+    server({ exercises: ['Squat', 'Bench'] });
+    await renderProgress();
+    await screen.findByText('Since 9 Oct');
+    await turnCarousel('Exercise', 'Bench');
+    await turnCarousel('Category', 'Cardio');
+    await turnCarousel('Category', 'Strength');
+    expect(carouselValue('Exercise')).toBe('Bench, 2 of 2');
   });
 
   test('Cardio without workouts says how to get them', async () => {
-    mockServer({ 'GET /api/cardio': [], 'GET /api/triathlons': [] });
-    await renderCardio();
+    server({ rides: false });
+    await renderProgress();
+    await screen.findByText('Since 9 Oct');
+    await turnCarousel('Category', 'Cardio');
     expect(
-      await screen.findByText('No cardio workouts yet. Connect Apple Health in Settings to import them.')
+      screen.getByText('No cardio workouts yet. Connect Apple Health in Settings to import them.')
     ).toBeOnTheScreen();
   });
 
-  test('both pages share the timespan', async () => {
+  test('with nothing lifted, it opens on cardio', async () => {
+    server({ exercises: [] });
+    await renderProgress();
+    expect(await screen.findByText('Weekly distance')).toBeOnTheScreen();
+    expect(carouselValue('Category')).toBe('Cardio, 2 of 3');
+  });
+
+  test('the timespan starts at 1 month and goes round in a ring', async () => {
     server();
-    const user = userEvent.setup();
-    await renderInApp(
-      <ProgressProvider>
-        <StrengthProgressScreen />
-        <CardioProgressScreen />
-      </ProgressProvider>
-    );
-    await screen.findByRole('button', { name: 'Cycling, change exercise' });
-    const yearTabs = await screen.findAllByRole('tab', { name: '1 year' });
-    expect(yearTabs).toHaveLength(2);
-    await user.press(yearTabs[0]);
-    screen.getAllByRole('tab', { name: '1 year' }).forEach((tab) => expect(tab).toBeSelected());
+    await renderProgress();
+    await screen.findByText('Since 9 Oct');
+    expect(carouselValue('Timespan')).toBe('1 month, 5 of 5');
+    await fireEvent(screen.getByRole('adjustable', { name: 'Timespan' }), 'accessibilityAction', {
+      nativeEvent: { actionName: 'increment' },
+    });
+    expect(carouselValue('Timespan')).toBe('All time, 1 of 5');
+  });
+
+  test('the timespan carries across categories', async () => {
+    server();
+    await renderProgress();
+    await screen.findByText('Since 9 Oct');
+    await turnCarousel('Timespan', '1 year');
+    await turnCarousel('Category', 'Cardio');
+    expect(carouselValue('Timespan')).toBe('1 year, 2 of 5');
   });
 });

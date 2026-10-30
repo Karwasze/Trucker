@@ -15,8 +15,10 @@ import type {
   Tonnage,
 } from '@/api/types';
 import { WeeklyBarChart } from '@/components/bar-chart';
+import { TEXT_CAROUSEL_HEIGHT } from '@/components/carousel';
+import { AboveTabBar } from '@/components/carousel-tab-bar';
 import { ThemedText } from '@/components/themed-text';
-import { TIMESPANS, TimespanControl, timespanStart, type Timespan } from '@/components/timespan';
+import { DEFAULT_TIMESPAN, TimespanCarousel, timespanStart, type Timespan } from '@/components/timespan';
 import { Card, Message, Screen, SectionLabel } from '@/components/ui';
 import { Spacing, type ThemeColor } from '@/constants/theme';
 import { PHASE_NAMES } from '@/goals/presets';
@@ -62,7 +64,7 @@ const InsightsContext = createContext<InsightsState | null>(null);
 /** Loads insights once for both Insights pages, which share the timespan. */
 export function InsightsProvider({ children }: { children: ReactNode }) {
   const { api, planId, serverUrl } = useSettings();
-  const [timespan, setTimespan] = useState<Timespan>(TIMESPANS[0]);
+  const [timespan, setTimespan] = useState<Timespan>(DEFAULT_TIMESPAN);
   const today = localDate();
   const from = timespanStart(timespan);
   const insights = useQuery(`insights:${serverUrl}:${today}:${from}:${planId}`, () =>
@@ -81,7 +83,17 @@ function useInsights() {
   return state;
 }
 
-/** One Insights page: the shared timespan control above its content once loaded. */
+/** The timespan both Insights pages share, floating above the tab bar. */
+export function InsightsTimespan() {
+  const { timespan, setTimespan } = useInsights();
+  return (
+    <AboveTabBar>
+      <TimespanCarousel value={timespan} onChange={setTimespan} />
+    </AboveTabBar>
+  );
+}
+
+/** One Insights page: its content once loaded, clear of the timespan carousel. */
 function InsightsPage({
   title,
   subtitle,
@@ -91,16 +103,16 @@ function InsightsPage({
   subtitle: string;
   children: (data: Insights, timespan: Timespan, hasPlan: boolean) => ReactNode;
 }) {
-  const { timespan, setTimespan, insights, hasPlan } = useInsights();
+  const { timespan, insights, hasPlan } = useInsights();
   return (
     <Screen
       title={title}
       subtitle={subtitle}
       action={<SettingsButton />}
       hasHeader
+      bottomInset={TEXT_CAROUSEL_HEIGHT + Spacing.two}
       refreshing={insights.refreshing}
       onRefresh={insights.refresh}>
-      <TimespanControl value={timespan} onChange={setTimespan} />
       {!insights.data ? (
         <Message loading={!insights.error} error={insights.error} />
       ) : (
@@ -401,9 +413,7 @@ function GoalSection({ summary: g }: { summary: GoalSummary }) {
 function CardioRow({ summary: c, timespan }: { summary: CardioSummary; timespan: Timespan }) {
   return (
     <Pressable
-      onPress={() =>
-        router.navigate({ pathname: '/stats/cardio', params: { activity: c.activity, span: timespan.key } })
-      }
+      onPress={() => router.navigate({ pathname: '/stats', params: { activity: c.activity, span: timespan.key } })}
       accessibilityRole="button"
       accessibilityHint={`Opens the ${ACTIVITY_NAMES[c.activity]} chart`}
       style={({ pressed }) => [{ gap: Spacing.one }, pressed && { opacity: 0.5 }]}>

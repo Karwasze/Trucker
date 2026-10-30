@@ -21,9 +21,8 @@ export default function PlansScreen() {
 
   return (
     <Screen
-      title="Training plans"
+      title="Training Plan"
       action={<SettingsButton />}
-      hasHeader
       refreshing={plans.refreshing || goals.refreshing}
       onRefresh={() => {
         plans.refresh();
@@ -61,9 +60,6 @@ export default function PlansScreen() {
               onActivate={() => update({ planId: plan.id })}
             />
           ))}
-          {planId !== null && plans.data.length > 0 && (
-            <Button title="Train without a plan" variant="secondary" compact onPress={() => update({ planId: null })} />
-          )}
         </>
       )}
       <Button title="+ New plan" onPress={() => router.push({ pathname: '/plans/[id]', params: { id: 'new' } })} />

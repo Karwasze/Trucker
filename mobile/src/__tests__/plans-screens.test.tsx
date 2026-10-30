@@ -3,8 +3,8 @@ import { screen, userEvent } from '@testing-library/react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 
 import type { TrainingPlan } from '@/api/types';
-import PlanEditorScreen from '@/app/(tabs)/(training)/plans/[id]';
-import PlansScreen from '@/app/(tabs)/(training)/(lists)/plans';
+import PlanEditorScreen from '@/app/(tabs)/plans/[id]';
+import PlansScreen from '@/app/(tabs)/plans/index';
 import { mockAlerts, mockServer, renderInApp, selectPlan, setNow, type Request } from '@/test-utils';
 
 const strength: TrainingPlan = {
@@ -40,16 +40,21 @@ describe('plan list', () => {
     expect(screen.getByText('✓ Active')).toBeOnTheScreen();
   });
 
-  test('switching plans, and training without one, is remembered', async () => {
+  test('switching plans is remembered', async () => {
     server();
     await selectPlan(1);
     const user = userEvent.setup();
     await renderInApp(<PlansScreen />);
     await user.press(await screen.findByRole('button', { name: 'Use this plan' }));
     expect(await activePlan()).toBe(2);
-    await user.press(screen.getByRole('button', { name: 'Train without a plan' }));
-    expect(await activePlan()).toBeNull();
-    expect(screen.queryByText('✓ Active')).not.toBeOnTheScreen();
+  });
+
+  test('there is no option to train without a plan', async () => {
+    server();
+    await selectPlan(1);
+    await renderInApp(<PlansScreen />);
+    await screen.findByText('✓ Active');
+    expect(screen.queryByRole('button', { name: 'Train without a plan' })).not.toBeOnTheScreen();
   });
 
   test('an active goal shows its countdown and legs', async () => {

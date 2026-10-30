@@ -73,5 +73,6 @@ export const Spacing = {
   six: 64,
 } as const;
 
-export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
+/** Room for the floating tab bar (CAROUSEL_BAR_HEIGHT), which sits over the screens. */
+export const BottomTabInset = 64;
 export const MaxContentWidth = 800;

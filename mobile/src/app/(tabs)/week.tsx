@@ -13,19 +13,19 @@ import { SettingsButton } from '@/settings/settings-button';
 import { useSettings } from '@/settings/settings-context';
 import { describeSets } from '@/workout/draft';
 import { formatDate } from '@/workout/format';
-import { upcomingWeek } from '@/workout/week';
+import { currentWeek, weekProgress } from '@/workout/week';
 
 const formatDay = (date: string) => formatDate(date, { weekday: 'long', month: 'short', day: 'numeric' });
 const formatShort = (date: string) => formatDate(date, { month: 'short', day: 'numeric' });
 
 /**
- * The week's lifting from the selected plan and sessions from the active
- * goal, day by day: this week, or next week on a Sunday.
+ * This week's lifting from the selected plan and sessions from the active
+ * goal, day by day, and how many of them are done.
  */
 export default function WeekScreen() {
   const { api, planId, serverUrl } = useSettings();
   const { today, recheck: recheckToday } = useToday();
-  const dates = upcomingWeek(today);
+  const dates = currentWeek(today);
 
   const plans = useQuery(`plans:${serverUrl}`, api.listPlans);
   const week = useQuery(`week:${serverUrl}:${planId}:${today}`, async () => {
@@ -53,10 +53,9 @@ export default function WeekScreen() {
 
   return (
     <Screen
-      title="Upcoming Week"
+      title="Current week"
       subtitle={subtitle}
       action={<SettingsButton />}
-      hasHeader
       refreshing={week.refreshing}
       onRefresh={refresh}>
       {!week.data ? (
@@ -76,17 +75,45 @@ export default function WeekScreen() {
           )}
         </Card>
       ) : (
-        dates.map((date) => (
-          <DayCard
-            key={date}
-            date={date}
-            today={today}
-            day={days.find((d) => d.date === date)}
-            sessions={sessions.filter((s) => s.date === date)}
-          />
-        ))
+        <>
+          <WeekProgress {...weekProgress(days, sessions)} />
+          {dates.map((date) => (
+            <DayCard
+              key={date}
+              date={date}
+              today={today}
+              day={days.find((d) => d.date === date)}
+              sessions={sessions.filter((s) => s.date === date)}
+            />
+          ))}
+        </>
       )}
     </Screen>
+  );
+}
+
+function WeekProgress({ done, planned }: { done: number; planned: number }) {
+  const theme = useTheme();
+  if (planned === 0) return null;
+  const label = `${done} of ${planned} ${planned === 1 ? 'training' : 'trainings'} done`;
+  const complete = done >= planned;
+  return (
+    <Card>
+      <ThemedText type="smallBold">{label}</ThemedText>
+      <View
+        accessible
+        accessibilityRole="progressbar"
+        accessibilityLabel={label}
+        accessibilityValue={{ min: 0, max: planned, now: done }}
+        style={[styles.track, { backgroundColor: theme.backgroundSelected }]}>
+        <View
+          style={[
+            styles.fill,
+            { width: `${(done / planned) * 100}%`, backgroundColor: complete ? theme.success : theme.accent },
+          ]}
+        />
+      </View>
+    </Card>
   );
 }
 
@@ -170,5 +197,14 @@ const styles = StyleSheet.create({
   },
   name: {
     flex: 1,
+  },
+  track: {
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  fill: {
+    height: '100%',
+    borderRadius: 4,
   },
 });

@@ -6,7 +6,7 @@ import { localDate } from '@/api/client';
 import type { BodyweightEntry } from '@/api/types';
 import { LineChart } from '@/components/line-chart';
 import { ThemedText } from '@/components/themed-text';
-import { TimespanControl, timespanStart, type Timespan } from '@/components/timespan';
+import { timespanStart, type Timespan } from '@/components/timespan';
 import { Button, Card, Message } from '@/components/ui';
 import { syncBodyweight } from '@/health/bodyweight';
 import { isHealthAvailable } from '@/health/healthkit';
@@ -20,7 +20,6 @@ const formatNumber = (n: number) => String(Math.round(n * 10) / 10);
 export function BodyweightStats({
   history: all,
   timespan,
-  onTimespanChange,
   healthConnected,
   healthSyncing = false,
   healthSyncError = null,
@@ -28,7 +27,6 @@ export function BodyweightStats({
 }: {
   history: BodyweightEntry[];
   timespan: Timespan;
-  onTimespanChange: (timespan: Timespan) => void;
   healthConnected: boolean;
   /** Whether the sync on opening is still reading Health. */
   healthSyncing?: boolean;
@@ -64,7 +62,6 @@ export function BodyweightStats({
           )}
           <Card>
             <ThemedText type="smallBold">Bodyweight</ThemedText>
-            <TimespanControl value={timespan} onChange={onTimespanChange} />
             {!latest ? (
               <Message>No weigh-ins in the last {timespan.label}.</Message>
             ) : (

@@ -28,9 +28,7 @@ export function TriathlonInsights({ summary: s, timespan }: { summary: Triathlon
     <>
       <SectionLabel>Triathlon</SectionLabel>
       <Pressable
-        onPress={() =>
-          router.navigate({ pathname: '/stats/cardio', params: { series: 'triathlon', span: timespan.key } })
-        }
+        onPress={() => router.navigate({ pathname: '/stats', params: { series: 'triathlon', span: timespan.key } })}
         style={({ pressed }) => pressed && { opacity: 0.6 }}
         accessibilityRole="button"
         accessibilityHint="Opens the triathlon chart">

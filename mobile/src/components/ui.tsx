@@ -26,10 +26,21 @@ type ScreenProps = {
   onRefresh?: () => void;
   /** Set when a native stack header already handles the top inset. */
   hasHeader?: boolean;
+  /** Room for controls floating above the tab bar, so the content scrolls clear of them. */
+  bottomInset?: number;
 };
 
 /** Scrollable tab screen with a large title and safe-area padding. */
-export function Screen({ title, subtitle, action, children, refreshing, onRefresh, hasHeader }: ScreenProps) {
+export function Screen({
+  title,
+  subtitle,
+  action,
+  children,
+  refreshing,
+  onRefresh,
+  hasHeader,
+  bottomInset = 0,
+}: ScreenProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -45,7 +56,7 @@ export function Screen({ title, subtitle, action, children, refreshing, onRefres
         styles.content,
         {
           paddingTop: hasHeader ? Spacing.three : insets.top + Spacing.three,
-          paddingBottom: insets.bottom + BottomTabInset + Spacing.four,
+          paddingBottom: insets.bottom + BottomTabInset + bottomInset + Spacing.four,
         },
       ]}>
       {title && (

@@ -3,7 +3,7 @@ import { screen, userEvent } from '@testing-library/react-native';
 import { router } from 'expo-router';
 
 import type { CardioWorkout, Workout } from '@/api/types';
-import HistoryScreen from '@/app/(tabs)/(training)/(lists)/history';
+import HistoryScreen from '@/app/(tabs)/history/index';
 import { mockAlerts, mockServer, renderInApp, selectPlan, SERVER, type Request } from '@/test-utils';
 
 const lift: Workout = {

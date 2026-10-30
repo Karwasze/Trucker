@@ -92,7 +92,6 @@ export default function HistoryScreen() {
     <Screen
       title="History"
       action={<SettingsButton />}
-      hasHeader
       refreshing={workouts.refreshing || cardio.refreshing}
       onRefresh={() => {
         workouts.refresh();

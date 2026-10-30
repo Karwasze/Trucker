@@ -1,15 +1,15 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
-import { TIMESPANS, type Timespan } from '@/components/timespan';
+import { DEFAULT_TIMESPAN, TIMESPANS, type Timespan } from '@/components/timespan';
 
 type ProgressState = { timespan: Timespan; setTimespan: (timespan: Timespan) => void };
 
 const ProgressContext = createContext<ProgressState | null>(null);
 
-/** Holds the timespan both Progress pages share. */
+/** Holds the Progress timespan, kept while switching between series. */
 export function ProgressProvider({ children }: { children: ReactNode }) {
-  const [timespan, setTimespan] = useState<Timespan>(TIMESPANS[0]);
+  const [timespan, setTimespan] = useState<Timespan>(DEFAULT_TIMESPAN);
   return <ProgressContext.Provider value={{ timespan, setTimespan }}>{children}</ProgressContext.Provider>;
 }
 
@@ -26,8 +26,8 @@ export type ProgressParams = { exercise?: string; activity?: string; series?: st
  * Calls `open` with the params a Progress page was opened with, applying
  * their timespan too. The series is applied while rendering whenever the
  * params change, then they're cleared, so opening the same series again
- * applies them again. The timespan is shared with the other page, so it's
- * set after rendering.
+ * applies them again. The timespan lives in the Progress layout, so it's set
+ * after rendering.
  */
 export function useOpenedWith(open: (params: ProgressParams) => void) {
   const { setTimespan } = useProgressTimespan();

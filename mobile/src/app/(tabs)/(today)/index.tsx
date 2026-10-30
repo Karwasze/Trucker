@@ -140,7 +140,14 @@ export default function TodayScreen() {
     }
   };
 
-  const resetToPlan = () => setDraft(draftFromPlan(today, planId, planDay.data?.exercises ?? []));
+  // "Start another" goes back to the workout logged before it, rather than
+  // offering the plan's again.
+  const resetToPlan = () =>
+    setDraft(
+      draft?.after
+        ? { date: draft.date, planId, basedOn: planId, exercises: [], logged: draft.after }
+        : draftFromPlan(today, planId, planDay.data?.exercises ?? [])
+    );
 
   const confirmReset = () =>
     Alert.alert('Discard this workout?', 'Your entered sets will be cleared.', [
@@ -213,7 +220,7 @@ export default function TodayScreen() {
 
   if (draft?.logged) {
     return (
-      <Screen title="Today" subtitle={subtitle} action={<SettingsButton />} hasHeader>
+      <Screen title="Today" subtitle={subtitle} action={<SettingsButton />}>
         <HealthImportBanner count={imports.candidates.length} error={imports.error} />
         <LoggedSummary progression={draft.logged.progression ?? []} exercises={draft.logged.exercises} />
         <EnduranceToday date={today} waiting={waitingToday} />
@@ -226,6 +233,7 @@ export default function TodayScreen() {
               planId: null,
               basedOn: planId,
               exercises: [],
+              after: draft.logged,
             })
           }
         />
@@ -243,7 +251,6 @@ export default function TodayScreen() {
       title="Today"
       subtitle={subtitle}
       action={<SettingsButton />}
-      hasHeader
       refreshing={planDay.refreshing}
       onRefresh={refresh}>
       <HealthImportBanner count={imports.candidates.length} error={imports.error} />
@@ -296,6 +303,9 @@ export default function TodayScreen() {
           ))}
 
           <Button title="+ Add exercise" variant="secondary" onPress={() => setPickerOpen(true)} />
+          {draft?.after && draft.exercises.length === 0 && (
+            <Button title="Cancel" variant="secondary" compact onPress={resetToPlan} />
+          )}
 
           <EnduranceToday date={today} waiting={waitingToday} />
 

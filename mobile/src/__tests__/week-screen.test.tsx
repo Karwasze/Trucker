@@ -3,7 +3,7 @@ import { screen, userEvent, within } from '@testing-library/react-native';
 import { router } from 'expo-router';
 
 import type { PlannedSession, PlanToday, Workout } from '@/api/types';
-import WeekScreen from '@/app/(tabs)/(workout)/week';
+import WeekScreen from '@/app/(tabs)/week';
 import { mockServer, renderInApp, selectPlan, setNow, type Request } from '@/test-utils';
 
 const plan = { id: 1, name: 'Strength', days: [] };
@@ -80,17 +80,35 @@ test('on a weekday it shows this week, Monday to Sunday', async () => {
   });
 });
 
-test('on Sunday it shows next week with the plan’s targets', async () => {
+test('on Sunday it still shows this week, ending today', async () => {
   setNow('2026-10-18T09:00:00+02:00');
   server();
   await selectPlan(1);
   await renderInApp(<WeekScreen />);
 
-  expect(await screen.findByText('19 Oct – 25 Oct · Strength')).toBeOnTheScreen();
-  expect(screen.queryByText('Sunday 18 Oct')).toBeNull();
-  expect(within(day('Monday 19 Oct')).getByText('Squat')).toBeOnTheScreen();
-  expect(within(day('Monday 19 Oct')).getByText('1 × 5 @ 100 kg')).toBeOnTheScreen();
-  expect(screen.queryByText('Today')).toBeNull();
+  expect(await screen.findByText('12 Oct – 18 Oct · Strength')).toBeOnTheScreen();
+  expect(within(day('Sunday 18 Oct')).getByText('Today')).toBeOnTheScreen();
+  expect(screen.queryByText('Monday 19 Oct')).toBeNull();
+});
+
+test('it counts the week’s trainings done, lifting and goal sessions together', async () => {
+  setNow('2026-10-14T09:00:00+02:00');
+  const done = { ...run, id: 4, date: '2026-10-13', cardio_workout_id: 9 };
+  server([run, done]);
+  await selectPlan(1);
+  await renderInApp(<WeekScreen />);
+
+  // Monday's squats are logged and Tuesday's run is done; Wednesday's run isn't yet.
+  expect(await screen.findByText('2 of 3 trainings done')).toBeOnTheScreen();
+  expect(screen.getByRole('progressbar', { name: '2 of 3 trainings done' })).toBeOnTheScreen();
+});
+
+test('one training reads in the singular', async () => {
+  setNow('2026-10-14T09:00:00+02:00');
+  server();
+  await selectPlan(1);
+  await renderInApp(<WeekScreen />);
+  expect(await screen.findByText('1 of 1 training done')).toBeOnTheScreen();
 });
 
 test('a logged day shows what was done and opens it in History', async () => {

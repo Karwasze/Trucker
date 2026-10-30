@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { screen, userEvent } from '@testing-library/react-native';
 
 import type { NewWorkout, PlanToday, Workout } from '@/api/types';
-import TodayScreen from '@/app/(tabs)/(workout)/index';
+import TodayScreen from '@/app/(tabs)/(today)/index';
 import { syncLiveActivity } from '@/timer/native';
 import { mockAlerts, mockServer, renderInApp, selectPlan, setNow, type Request } from '@/test-utils';
 
@@ -36,6 +36,8 @@ function server(day: PlanToday = squatDay, { saves = true } = {}) {
     'GET /api/plans/today': day,
     'GET /api/goals/today': { goal: null, sessions: [] },
     'GET /api/workouts': () => workouts,
+    'GET /api/exercises': [{ id: 1, name: 'Bench Press', is_default: true, muscles: [] }],
+    'GET /api/latest-exercise': { target: null },
     ...(saves && {
       'POST /api/workouts': ({ body }: Request) => {
         const workout = { id: workouts.length + 1, ...(body as NewWorkout) };
@@ -165,6 +167,43 @@ test('discarding resets the workout to the plan', async () => {
   await user.press(screen.getByRole('button', { name: 'Discard' }));
   await alerts.press('Discard');
   expect(screen.getByRole('checkbox', { name: 'Set 1 done' })).not.toBeChecked();
+});
+
+/** Ticks a set of today's plan, finishes it, and starts another workout. */
+async function logAndStartAnother(user: ReturnType<typeof userEvent.setup>, alerts: ReturnType<typeof mockAlerts>) {
+  await user.press(await screen.findByRole('checkbox', { name: 'Set 1 done' }));
+  await user.press(screen.getByRole('button', { name: 'Finish workout · 1 sets' }));
+  await alerts.press('Finish');
+  await user.press(await screen.findByRole('button', { name: 'Start another workout' }));
+}
+
+test('another workout started after the plan’s can be cancelled, back to the logged one', async () => {
+  server();
+  await selectPlan(1);
+  const alerts = mockAlerts();
+  const user = userEvent.setup();
+  await renderInApp(<TodayScreen />);
+  await logAndStartAnother(user, alerts);
+
+  await user.press(screen.getByRole('button', { name: 'Cancel' }));
+  expect(screen.getByText('Workout logged ✓')).toBeOnTheScreen();
+  expect(screen.queryByRole('checkbox', { name: 'Set 1 done' })).not.toBeOnTheScreen();
+});
+
+test('discarding another workout goes back to the logged one, not the plan again', async () => {
+  server();
+  await selectPlan(1);
+  const alerts = mockAlerts();
+  const user = userEvent.setup();
+  await renderInApp(<TodayScreen />);
+  await logAndStartAnother(user, alerts);
+
+  await user.press(screen.getByRole('button', { name: '+ Add exercise' }));
+  await user.press(await screen.findByText('Bench Press'));
+  await user.press(await screen.findByRole('button', { name: 'Discard' }));
+  await alerts.press('Discard');
+  expect(await screen.findByText('Workout logged ✓')).toBeOnTheScreen();
+  expect(screen.queryByText('Target 2 × 5 @ 100 kg')).not.toBeOnTheScreen();
 });
 
 test('deleting today’s logged workout elsewhere brings the plan back', async () => {

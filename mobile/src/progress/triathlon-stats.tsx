@@ -6,7 +6,7 @@ import { localDate } from '@/api/client';
 import type { Triathlon, TriathlonClass } from '@/api/types';
 import { LineChart } from '@/components/line-chart';
 import { ThemedText } from '@/components/themed-text';
-import { TimespanControl, timespanStart, type Timespan } from '@/components/timespan';
+import { timespanStart, type Timespan } from '@/components/timespan';
 import { Card, Chip, Message, SectionLabel } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { Tile, TileRow } from '@/progress/tile';
@@ -19,15 +19,7 @@ import { formatDuration } from '@/workout/format';
  * those compare: best and latest total, total time per triathlon and the
  * triathlons themselves. `all` is sorted by date.
  */
-export function TriathlonStats({
-  triathlons: all,
-  timespan,
-  onTimespanChange,
-}: {
-  triathlons: Triathlon[];
-  timespan: Timespan;
-  onTimespanChange: (timespan: Timespan) => void;
-}) {
+export function TriathlonStats({ triathlons: all, timespan }: { triathlons: Triathlon[]; timespan: Timespan }) {
   const classes = TRIATHLON_CLASSES.filter((c) => all.some((t) => t.class === c));
   const [picked, setPicked] = useState<TriathlonClass>();
   // The latest triathlon's class until another is picked.
@@ -60,7 +52,6 @@ export function TriathlonStats({
       )}
       <Card>
         <ThemedText type="smallBold">Total time · {TRIATHLON_CLASS_NAMES[cls]}</ThemedText>
-        <TimespanControl value={timespan} onChange={onTimespanChange} />
         {triathlons.length === 0 ? (
           <Message>
             No {cls === 'custom' ? 'custom-distance' : TRIATHLON_CLASS_NAMES[cls].toLowerCase()} triathlons in the last{' '}

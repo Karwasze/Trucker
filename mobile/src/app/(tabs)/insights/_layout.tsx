@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '@/hooks/use-theme';
-import { InsightsProvider } from '@/insights/insights-view';
+import { InsightsProvider, InsightsTimespan } from '@/insights/insights-view';
 
 export default function InsightsLayout() {
   const theme = useTheme();
@@ -24,6 +24,7 @@ export default function InsightsLayout() {
           <TopTabs.Screen name="index" options={{ title: 'Strength' }} />
           <TopTabs.Screen name="cardio" options={{ title: 'Cardio' }} />
         </TopTabs>
+        <InsightsTimespan />
       </View>
     </InsightsProvider>
   );

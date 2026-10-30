@@ -3,12 +3,12 @@ import { screen, userEvent } from '@testing-library/react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 
 import type { CardioWorkout, Insights, Triathlon } from '@/api/types';
-import HistoryScreen from '@/app/(tabs)/(training)/(lists)/history';
-import TriathlonDetailScreen from '@/app/(tabs)/(training)/history/triathlon/[date]';
-import CardioProgressScreen from '@/app/(tabs)/stats/cardio';
-import { CardioInsights, InsightsProvider } from '@/insights/insights-view';
+import HistoryScreen from '@/app/(tabs)/history/index';
+import TriathlonDetailScreen from '@/app/(tabs)/history/triathlon/[date]';
+import ProgressScreen from '@/app/(tabs)/stats/index';
+import { CardioInsights, InsightsProvider, InsightsTimespan } from '@/insights/insights-view';
 import { ProgressProvider } from '@/progress/progress-context';
-import { mockServer, renderInApp, selectPlan, setNow } from '@/test-utils';
+import { mockServer, renderInApp, selectPlan, setNow, turnCarousel } from '@/test-utils';
 
 const leg = (id: number, activity: CardioWorkout['activity'], distance_m: number, duration_seconds: number) => ({
   id,
@@ -107,11 +107,13 @@ test('Progress lists triathlons, one class at a time, opening on the latest’s'
   const user = userEvent.setup();
   await renderInApp(
     <ProgressProvider>
-      <CardioProgressScreen />
+      <ProgressScreen />
     </ProgressProvider>
   );
-  await user.press(await screen.findByRole('button', { name: /change exercise/ }));
-  await user.press(screen.getByText('Triathlon'));
+  await screen.findByRole('adjustable', { name: 'Category' });
+  await turnCarousel('Category', 'Cardio');
+  await turnCarousel('Activity', 'Triathlon');
+  await turnCarousel('Timespan', 'All time');
   expect(await screen.findByText('Total time · Quarter')).toBeOnTheScreen();
   expect(screen.getByText('Best')).toBeOnTheScreen();
   // In the Best tile and the best triathlon's card.
@@ -139,8 +141,10 @@ test('the Insights Cardio page shows the latest triathlon, the leg costing the m
   await renderInApp(
     <InsightsProvider>
       <CardioInsights />
+      <InsightsTimespan />
     </InsightsProvider>
   );
+  await turnCarousel('Timespan', 'All time');
   expect(await screen.findByText('Latest · Quarter triathlon · 17 Oct')).toBeOnTheScreen();
   expect(screen.getByText('+18:20 off your best')).toBeOnTheScreen();
   expect(screen.getByText('3 triathlons in total')).toBeOnTheScreen();
@@ -157,7 +161,7 @@ test('the Insights Cardio page shows the latest triathlon, the leg costing the m
 
   await user.press(screen.getByText('Latest · Quarter triathlon · 17 Oct'));
   expect(router.navigate).toHaveBeenCalledWith({
-    pathname: '/stats/cardio',
+    pathname: '/stats',
     params: { series: 'triathlon', span: 'all' },
   });
 });
@@ -167,7 +171,7 @@ test('opened from Insights, Progress shows triathlons', async () => {
   server();
   await renderInApp(
     <ProgressProvider>
-      <CardioProgressScreen />
+      <ProgressScreen />
     </ProgressProvider>
   );
   expect(await screen.findByText('Total time · Quarter')).toBeOnTheScreen();
@@ -187,7 +191,7 @@ test('a quarter Ironman is its own class on Progress', async () => {
   ]);
   await renderInApp(
     <ProgressProvider>
-      <CardioProgressScreen />
+      <ProgressScreen />
     </ProgressProvider>
   );
   expect(await screen.findByText('Total time · Quarter')).toBeOnTheScreen();

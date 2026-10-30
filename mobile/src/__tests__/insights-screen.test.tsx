@@ -1,13 +1,14 @@
+import type { ReactElement } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { screen, userEvent } from '@testing-library/react-native';
 import { router } from 'expo-router';
 
 import type { Goal, Insights } from '@/api/types';
-import CardioInsightsScreen from '@/app/(tabs)/(insights)/cardio';
-import StrengthInsightsScreen from '@/app/(tabs)/(insights)/index';
+import CardioInsightsScreen from '@/app/(tabs)/insights/cardio';
+import StrengthInsightsScreen from '@/app/(tabs)/insights/index';
 import { connectHealth, healthHeartRateProfile } from '@/health/healthkit';
-import { InsightsProvider } from '@/insights/insights-view';
-import { mockServer, renderInApp, selectPlan, setNow, TEST_ZONES, type Request } from '@/test-utils';
+import { InsightsProvider, InsightsTimespan } from '@/insights/insights-view';
+import { mockServer, renderInApp, selectPlan, setNow, TEST_ZONES, turnCarousel, type Request } from '@/test-utils';
 
 jest.mock('@/health/healthkit', () => ({
   isHealthAvailable: jest.fn(() => true),
@@ -97,19 +98,21 @@ beforeEach(async () => {
 });
 afterEach(() => jest.useRealTimers());
 
-// The Insights layout provides the timespan and data both pages share.
-const renderStrength = () =>
-  renderInApp(
+/**
+ * A page as the Insights layout shows it, with the timespan and data both
+ * pages share, over all time unless `allTime` is false.
+ */
+async function renderPage(page: ReactElement, { allTime = true } = {}) {
+  await renderInApp(
     <InsightsProvider>
-      <StrengthInsightsScreen />
+      {page}
+      <InsightsTimespan />
     </InsightsProvider>
   );
-const renderCardio = () =>
-  renderInApp(
-    <InsightsProvider>
-      <CardioInsightsScreen />
-    </InsightsProvider>
-  );
+  if (allTime) await turnCarousel('Timespan', 'All time');
+}
+const renderStrength = (options?: { allTime?: boolean }) => renderPage(<StrengthInsightsScreen />, options);
+const renderCardio = (options?: { allTime?: boolean }) => renderPage(<CardioInsightsScreen />, options);
 
 test('with nothing logged each section says what to do', async () => {
   mockServer({ 'GET /api/insights': empty });
@@ -175,16 +178,15 @@ test('the race goal and cardio are summarised on Cardio', async () => {
   expect(screen.getByText('Threshold: 🏃 4:30/km')).toBeOnTheScreen();
 });
 
-test('changing the timespan asks for insights from its start', async () => {
+test('it opens on the last month, then asks for insights from each timespan’s start', async () => {
   const requests = mockServer({ 'GET /api/insights': empty });
   await selectPlan(2);
-  const user = userEvent.setup();
-  await renderStrength();
-  await screen.findAllByText('No workouts.');
-  expect(requests.at(-1)?.query.get('from')).toBeNull();
+  await renderStrength({ allTime: false });
+  await screen.findByText('Nothing lifted in the last 1 month.');
+  expect(requests.at(-1)?.query.get('from')).toBe('2026-09-18');
   expect(requests.at(-1)?.query.get('plan_id')).toBe('2');
 
-  await user.press(screen.getByRole('tab', { name: '3 months' }));
+  await turnCarousel('Timespan', '3 months');
   await screen.findByText('No weighted plan lifts in the last 3 months.');
   expect(screen.getByText('Progression · last 3 months')).toBeOnTheScreen();
   expect(screen.getByText('Nothing lifted in the last 3 months.')).toBeOnTheScreen();
@@ -193,22 +195,23 @@ test('changing the timespan asks for insights from its start', async () => {
 
 test('both pages share the timespan and one request', async () => {
   const requests = mockServer({ 'GET /api/insights': empty });
-  const user = userEvent.setup();
   await renderInApp(
     <InsightsProvider>
       <StrengthInsightsScreen />
       <CardioInsightsScreen />
+      <InsightsTimespan />
     </InsightsProvider>
   );
   // The Cardio page reads the heart rate zones too.
   const insightsRequests = () => requests.filter((r) => r.path === '/api/insights');
-  await screen.findByText('No cardio workouts.');
+  await screen.findByText('No cardio in the last 1 month.');
   expect(insightsRequests()).toHaveLength(1);
 
-  await user.press(screen.getAllByRole('tab', { name: '1 month' })[0]);
-  expect(await screen.findByText('No cardio in the last 1 month.')).toBeOnTheScreen();
-  expect(screen.getByText('Nothing lifted in the last 1 month.')).toBeOnTheScreen();
-  expect(insightsRequests()).toHaveLength(2);
+  await turnCarousel('Timespan', '3 months');
+  expect(await screen.findByText('No cardio in the last 3 months.')).toBeOnTheScreen();
+  expect(screen.getByText('Nothing lifted in the last 3 months.')).toBeOnTheScreen();
+  // One request for the new timespan, however many pages show it.
+  expect(insightsRequests().filter((r) => r.query.get('from') === '2026-07-18')).toHaveLength(1);
 });
 
 test('tapping a lift or an activity opens its chart on Progress with the same timespan', async () => {
@@ -222,7 +225,7 @@ test('tapping a lift or an activity opens its chart on Progress with the same ti
   await renderCardio();
   await user.press(await screen.findByText('🚴 Ride · 1 session'));
   expect(router.navigate).toHaveBeenLastCalledWith({
-    pathname: '/stats/cardio',
+    pathname: '/stats',
     params: { activity: 'cycling', span: 'all' },
   });
 });

@@ -12,7 +12,8 @@ import (
 	"trucker/internal/store"
 )
 
-// CardioAPI lists cardio workouts (GET, optionally ?activity=), returns one
+// CardioAPI lists cardio workouts (GET, optionally ?activity= and from ?from=
+// to ?to=, both inclusive), returns one
 // with its samples (GET ?id=), imports a batch of them (POST, skipping ones
 // already imported, adapting the active goal as of ?date= when they fill
 // planned sessions), sets the distance of one Health had none for (PATCH
@@ -48,7 +49,11 @@ func (h *Handlers) CardioAPI(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Unknown activity", http.StatusBadRequest)
 			return
 		}
-		workouts, err := h.store.ListCardioWorkouts(activity)
+		from, to, ok := dateRange(w, r)
+		if !ok {
+			return
+		}
+		workouts, err := h.store.ListCardioWorkoutsBetween(activity, from, to)
 		if err != nil {
 			http.Error(w, "Database error", http.StatusInternalServerError)
 			log.Printf("Error loading cardio workouts: %v", err)

@@ -105,7 +105,24 @@ func deleteExercises(tx *sql.Tx, workoutID int) error {
 // GetWorkouts returns all workouts with their exercises and sets, newest
 // first. Workouts on the same date are ordered by most recently logged.
 func (s *Store) GetWorkouts() ([]Workout, error) {
-	return s.queryWorkouts("1 = 1")
+	return s.GetWorkoutsBetween("", "")
+}
+
+// GetWorkoutsBetween returns the workouts from from to to (YYYY-MM-DD, both
+// inclusive), ordered like GetWorkouts. An empty bound leaves that end open.
+func (s *Store) GetWorkoutsBetween(from, to string) ([]Workout, error) {
+	return s.queryWorkouts("(? = '' OR w.date >= ?) AND (? = '' OR w.date <= ?)", from, from, to, to)
+}
+
+// OldestWorkoutDate returns the date (YYYY-MM-DD) of the earliest lifting or
+// cardio workout, or "" when none are logged.
+func (s *Store) OldestWorkoutDate() (string, error) {
+	var oldest sql.NullString
+	err := s.db.QueryRow(`SELECT MIN(date) FROM (
+		SELECT MIN(date) AS date FROM workouts
+		UNION ALL SELECT MIN(date) FROM cardio_workouts
+	)`).Scan(&oldest)
+	return oldest.String, err
 }
 
 // GetPlanWorkout returns the most recently logged workout from the plan on

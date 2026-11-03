@@ -1,6 +1,9 @@
 package store
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestSaveAndGetWorkouts(t *testing.T) {
 	s := newTestStore(t)
@@ -233,5 +236,53 @@ func TestUpdateWorkout_NotFound(t *testing.T) {
 	}
 	if found {
 		t.Error("expected missing workout to report not found")
+	}
+}
+
+func TestGetWorkoutsBetween_IncludesBothEnds(t *testing.T) {
+	s := newTestStore(t)
+	for _, date := range []string{"2026-09-30", "2026-10-01", "2026-10-31", "2026-11-01"} {
+		seedWorkout(t, s, date, []Exercise{{Name: "Squat", Sets: []Set{{Weight: 100, Reps: 5}}}})
+	}
+
+	workouts, err := s.GetWorkoutsBetween("2026-10-01", "2026-10-31")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var dates []string
+	for _, w := range workouts {
+		dates = append(dates, w.Date)
+	}
+	if !reflect.DeepEqual(dates, []string{"2026-10-31", "2026-10-01"}) {
+		t.Errorf("expected October's workouts newest first, got %v", dates)
+	}
+	if len(workouts[0].Exercises) != 1 || len(workouts[0].Exercises[0].Sets) != 1 {
+		t.Errorf("expected exercises and sets, got %+v", workouts[0])
+	}
+
+	open, err := s.GetWorkoutsBetween("2026-10-31", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(open) != 2 {
+		t.Errorf("expected an open end to include later workouts, got %+v", open)
+	}
+}
+
+func TestOldestWorkoutDate(t *testing.T) {
+	s := newTestStore(t)
+	if oldest, err := s.OldestWorkoutDate(); err != nil || oldest != "" {
+		t.Fatalf("expected no date without workouts, got %q, %v", oldest, err)
+	}
+
+	seedWorkout(t, s, "2026-05-02", nil)
+	if oldest, _ := s.OldestWorkoutDate(); oldest != "2026-05-02" {
+		t.Errorf("expected the lifting workout's date, got %q", oldest)
+	}
+
+	// Cardio counts too, even with lifting logged.
+	seedCardio(t, s, cardio(ActivityRunning, "2026-04-20", 5000, 1500))
+	if oldest, _ := s.OldestWorkoutDate(); oldest != "2026-04-20" {
+		t.Errorf("expected the run's date, got %q", oldest)
 	}
 }

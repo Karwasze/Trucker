@@ -17,7 +17,7 @@ func (h *Handlers) WorkoutsAPI(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case "GET":
-		h.listWorkouts(w)
+		h.listWorkouts(w, r)
 	case "POST":
 		h.createWorkout(w, r)
 	case "PUT":
@@ -29,8 +29,14 @@ func (h *Handlers) WorkoutsAPI(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *Handlers) listWorkouts(w http.ResponseWriter) {
-	workouts, err := h.store.GetWorkouts()
+// listWorkouts lists workouts newest first, optionally only those from
+// ?from= to ?to= (both inclusive).
+func (h *Handlers) listWorkouts(w http.ResponseWriter, r *http.Request) {
+	from, to, ok := dateRange(w, r)
+	if !ok {
+		return
+	}
+	workouts, err := h.store.GetWorkoutsBetween(from, to)
 	if err != nil {
 		http.Error(w, "Failed to load workouts", http.StatusInternalServerError)
 		log.Printf("Error loading workouts: %v", err)

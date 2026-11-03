@@ -80,12 +80,19 @@ type TriathlonSummary struct {
 
 // ListTriathlons returns every triathlon, newest first.
 func (s *Store) ListTriathlons() ([]Triathlon, error) {
-	cardio, err := s.ListCardioWorkouts("")
+	return s.ListTriathlonsBetween("", "")
+}
+
+// ListTriathlonsBetween returns the triathlons from from to to (YYYY-MM-DD,
+// both inclusive), newest first. An empty bound leaves that end open. PRs
+// are still judged against every earlier triathlon.
+func (s *Store) ListTriathlonsBetween(from, to string) ([]Triathlon, error) {
+	cardio, err := s.ListCardioWorkoutsBetween("", "", to)
 	if err != nil {
 		return nil, err
 	}
 	slices.Reverse(cardio)
-	tris := triathlons(cardio)
+	tris := slices.DeleteFunc(triathlons(cardio), func(t Triathlon) bool { return t.Date < from })
 	slices.Reverse(tris)
 	return tris, nil
 }

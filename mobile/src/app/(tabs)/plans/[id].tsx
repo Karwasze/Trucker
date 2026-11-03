@@ -192,10 +192,11 @@ export default function PlanEditorScreen() {
             </View>
           ))}
 
-          <View style={styles.footer}>
-            <Button title={isNew ? 'Create plan' : 'Save changes'} loading={saving} onPress={save} />
-            {!isNew && <Button title="Delete plan" variant="danger" compact onPress={confirmDelete} />}
-          </View>
+          {!isNew && (
+            <View style={styles.footer}>
+              <Button title="Delete plan" variant="danger" compact onPress={confirmDelete} />
+            </View>
+          )}
         </>
       )}
 

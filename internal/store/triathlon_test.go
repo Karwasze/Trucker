@@ -202,3 +202,19 @@ func TestGetInsights_Triathlon(t *testing.T) {
 		t.Errorf("expected the 2026-03-01 triathlon, got %+v", insights.Triathlon)
 	}
 }
+
+func TestListTriathlonsBetween_JudgesPRsAgainstEarlierOnes(t *testing.T) {
+	s := newTestStore(t)
+	seedCardio(t, s, quarter("2026-09-06", 1800, 4800, 3000)...)
+	seedCardio(t, s, quarter("2026-10-04", 1900, 4800, 3000)...)
+	seedCardio(t, s, quarter("2026-11-01", 1700, 4800, 3000)...)
+
+	tris, err := s.ListTriathlonsBetween("2026-10-01", "2026-10-31")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Slower than September's, so not a PR though it's October's only one.
+	if len(tris) != 1 || tris[0].Date != "2026-10-04" || tris[0].PR {
+		t.Errorf("expected October's triathlon without a PR, got %+v", tris)
+	}
+}

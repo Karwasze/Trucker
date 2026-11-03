@@ -19,6 +19,9 @@ export type Workout = {
 
 export type NewWorkout = Omit<Workout, 'id'>;
 
+/** Dates from `from` to `to` (YYYY-MM-DD), both inclusive. */
+export type DateRange = { from: string; to: string };
+
 export type ProgressionResult = {
   exercise: string;
   result: 'progressed' | 'missed' | 'deloaded';

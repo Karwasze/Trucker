@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 
 import type { CardioWorkout, Workout } from '@/api/types';
 import HistoryScreen from '@/app/(tabs)/history/index';
-import { mockAlerts, mockServer, renderInApp, selectPlan, SERVER, type Request } from '@/test-utils';
+import { mockAlerts, mockServer, renderInApp, selectPlan, SERVER, setNow, type Request } from '@/test-utils';
 
 const lift: Workout = {
   id: 1,
@@ -30,11 +30,18 @@ const run: CardioWorkout = {
   source_uuid: 'health-run',
 };
 
+/** Those of `list` within the request's from and to, or all of them. */
+const within = <T extends { date: string }>(list: T[], { query }: Request) =>
+  list.filter((w) => w.date >= (query.get('from') ?? '') && w.date <= (query.get('to') ?? '9999'));
+
 /** A server holding `workouts` and `cardio`, deleting from them as asked. */
 function server(workouts: Workout[] = [lift], cardio: CardioWorkout[] = [run]) {
   return mockServer({
-    'GET /api/workouts': () => workouts,
-    'GET /api/cardio': () => cardio,
+    'GET /api/workouts': (req: Request) => within(workouts, req),
+    'GET /api/cardio': (req: Request) => within(cardio, req),
+    'GET /api/history': () => ({
+      oldest: [...workouts, ...cardio].map((w) => w.date).sort()[0] ?? null,
+    }),
     'GET /api/plans': [{ id: 2, name: 'Strength', days: [] }],
     'DELETE /api/workouts': ({ query }: Request) => {
       workouts = workouts.filter((w) => w.id !== Number(query.get('id')));
@@ -49,6 +56,7 @@ function server(workouts: Workout[] = [lift], cardio: CardioWorkout[] = [run]) {
 
 beforeEach(async () => {
   jest.clearAllMocks();
+  setNow('2026-10-20T12:00:00+02:00');
   await AsyncStorage.clear();
   await selectPlan(null);
 });
@@ -118,7 +126,12 @@ test('a deleted Health workout isn’t offered for import again', async () => {
 });
 
 test('a failed delete says why and keeps the workout', async () => {
-  mockServer({ 'GET /api/workouts': [lift], 'GET /api/cardio': [], 'GET /api/plans': [] });
+  mockServer({
+    'GET /api/workouts': [lift],
+    'GET /api/cardio': [],
+    'GET /api/history': { oldest: lift.date },
+    'GET /api/plans': [],
+  });
   const alerts = mockAlerts();
   const user = userEvent.setup();
   await renderInApp(<HistoryScreen />);
@@ -126,4 +139,72 @@ test('a failed delete says why and keeps the workout', async () => {
   await alerts.press('Delete');
   expect(alerts.latest().title).toBe("Couldn't delete workout");
   expect(screen.getByText('Squat')).toBeOnTheScreen();
+});
+
+afterEach(() => jest.useRealTimers());
+
+const september: Workout = { ...lift, id: 2, date: '2026-09-03', exercises: [{ name: 'Deadlift', sets: [] }] };
+
+test('only this month is loaded', async () => {
+  const requests = server([lift, september]);
+  await renderInApp(<HistoryScreen />);
+  expect(await screen.findByText('Squat')).toBeOnTheScreen();
+  expect(screen.getByText('October 2026')).toBeOnTheScreen();
+  expect(screen.queryByText('Deadlift')).not.toBeOnTheScreen();
+  for (const path of ['/api/workouts', '/api/cardio']) {
+    const query = requests.find((r) => r.path === path)!.query;
+    expect([query.get('from'), query.get('to')]).toEqual(['2026-10-01', '2026-10-31']);
+  }
+});
+
+test('earlier months go back as far as the oldest workout', async () => {
+  server([lift, september], []);
+  const user = userEvent.setup();
+  await renderInApp(<HistoryScreen />);
+  await screen.findByText('Squat');
+  expect(screen.getByRole('button', { name: 'Next month' })).toBeDisabled();
+
+  await user.press(screen.getByRole('button', { name: 'Previous month' }));
+  expect(await screen.findByText('Deadlift')).toBeOnTheScreen();
+  expect(screen.getByText('September 2026')).toBeOnTheScreen();
+  expect(screen.queryByText('Squat')).not.toBeOnTheScreen();
+  expect(screen.getByRole('button', { name: 'Previous month' })).toBeDisabled();
+
+  await user.press(screen.getByRole('button', { name: 'Next month' }));
+  expect(await screen.findByText('Squat')).toBeOnTheScreen();
+});
+
+test('a month without workouts says so', async () => {
+  server([september], []);
+  await renderInApp(<HistoryScreen />);
+  expect(await screen.findByText('No workouts in October 2026.')).toBeOnTheScreen();
+  expect(screen.getByRole('button', { name: 'Previous month' })).toBeEnabled();
+});
+
+test('picking a day on the calendar shows only its workouts', async () => {
+  server();
+  const user = userEvent.setup();
+  await renderInApp(<HistoryScreen />);
+  await screen.findByText('Squat');
+  // Days without workouts can't be picked.
+  expect(screen.getByRole('button', { name: 'Sun, 18 Oct 2026' })).toBeDisabled();
+
+  await user.press(screen.getByRole('button', { name: 'Fri, 16 Oct 2026' }));
+  expect(screen.queryByText('🏃 Run')).not.toBeOnTheScreen();
+  expect(screen.getByText('Squat')).toBeOnTheScreen();
+
+  // Pressed again, the whole month is back.
+  await user.press(screen.getByRole('button', { name: 'Fri, 16 Oct 2026' }));
+  expect(screen.getByText('🏃 Run')).toBeOnTheScreen();
+});
+
+test('deleting the last workout of a picked day shows the rest of the month', async () => {
+  server();
+  const alerts = mockAlerts();
+  const user = userEvent.setup();
+  await renderInApp(<HistoryScreen />);
+  await user.press(await screen.findByRole('button', { name: 'Fri, 16 Oct 2026' }));
+  await user.longPress(screen.getByText('Squat'));
+  await alerts.press('Delete');
+  expect(await screen.findByText('🏃 Run')).toBeOnTheScreen();
 });

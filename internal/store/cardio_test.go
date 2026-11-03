@@ -228,3 +228,35 @@ func TestKilometreLaps_KeepsLapsMarkedByHand(t *testing.T) {
 		t.Errorf("got %+v, want %+v", got, laps)
 	}
 }
+
+func TestListCardioWorkoutsBetween(t *testing.T) {
+	s := newTestStore(t)
+	seedCardio(t, s,
+		cardioRun("a", "2026-09-30", 5),
+		cardioRun("b", "2026-10-01", 5),
+		cardioRun("c", "2026-10-31", 5),
+		cardioRun("d", "2026-11-01", 5),
+	)
+	ride := cardio(ActivityCycling, "2026-10-15", 20000, 2400)
+	seedCardio(t, s, ride)
+
+	got, err := s.ListCardioWorkoutsBetween("", "2026-10-01", "2026-10-31")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var dates []string
+	for _, w := range got {
+		dates = append(dates, w.Date)
+	}
+	if !reflect.DeepEqual(dates, []string{"2026-10-31", "2026-10-15", "2026-10-01"}) {
+		t.Errorf("expected October's workouts newest first, got %v", dates)
+	}
+
+	runs, err := s.ListCardioWorkoutsBetween(ActivityRunning, "2026-10-01", "2026-10-31")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) != 2 {
+		t.Errorf("expected October's two runs, got %+v", runs)
+	}
+}

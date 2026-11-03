@@ -4,6 +4,7 @@ import type {
   CardioActivity,
   CardioWorkout,
   CreatedWorkout,
+  DateRange,
   Goal,
   GoalToday,
   ExerciseDB,
@@ -55,10 +56,14 @@ export function createApi(baseUrl: string) {
   }
 
   const q = encodeURIComponent;
+  /** A query string limiting a list to `range`, joined to the path with `sep`. */
+  const within = (range: DateRange | undefined, sep: '?' | '&' = '?') =>
+    range ? `${sep}from=${q(range.from)}&to=${q(range.to)}` : '';
 
   return {
-    listWorkouts: async () =>
-      ((await request<Workout[] | null>('/api/workouts')) ?? []).map((w) => ({
+    /** Lifting workouts, newest first, all of them or those within `range`. */
+    listWorkouts: async (range?: DateRange) =>
+      ((await request<Workout[] | null>(`/api/workouts${within(range)}`)) ?? []).map((w) => ({
         ...w,
         exercises: w.exercises ?? [],
       })),
@@ -105,12 +110,17 @@ export function createApi(baseUrl: string) {
     /** Every achievement with the tiers earned so far. */
     listAchievements: async () => (await request<Achievement[] | null>('/api/achievements')) ?? [],
 
-    /** Days with a swim, ride and run, newest first. */
-    listTriathlons: async () => (await request<Triathlon[] | null>('/api/triathlons')) ?? [],
+    /** Days with a swim, ride and run, newest first, all of them or those within `range`. */
+    listTriathlons: async (range?: DateRange) =>
+      (await request<Triathlon[] | null>(`/api/triathlons${within(range)}`)) ?? [],
+    /** The date of the oldest lifting or cardio workout, or null before any are logged. */
+    oldestWorkoutDate: async () => (await request<{ oldest: string | null }>('/api/history')).oldest,
 
-    /** Cardio workouts, newest first, without their samples. */
-    listCardio: async (activity?: CardioActivity) =>
-      (await request<CardioWorkout[] | null>(activity ? `/api/cardio?activity=${q(activity)}` : '/api/cardio')) ?? [],
+    /** Cardio workouts, newest first, without their samples, optionally of one activity within `range`. */
+    listCardio: async (activity?: CardioActivity, range?: DateRange) =>
+      (await request<CardioWorkout[] | null>(
+        activity ? `/api/cardio?activity=${q(activity)}${within(range, '&')}` : `/api/cardio${within(range)}`
+      )) ?? [],
     /** A cardio workout with its samples and laps. */
     getCardio: (id: number) => request<CardioWorkout>(`/api/cardio?id=${id}`),
     /**

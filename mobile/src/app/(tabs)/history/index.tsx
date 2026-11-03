@@ -11,12 +11,14 @@ import { CardioSummary } from '@/health/cardio-summary';
 import { useHealthImports, useHealthState } from '@/health/health-state';
 import { HealthImportBanner } from '@/health/import-banner';
 import { useQuery } from '@/hooks/use-query';
+import { useToday } from '@/hooks/use-today';
 import { SettingsButton } from '@/settings/settings-button';
 import { useSettings } from '@/settings/settings-context';
 import { TriathlonOverview } from '@/triathlon/triathlon-overview';
 import { confirmDeleteCardio, confirmDeleteWorkout } from '@/workout/confirm-delete';
 import { describeSets } from '@/workout/draft';
 import { formatDate, formatKg, volumeOf } from '@/workout/format';
+import { formatMonth, MonthCalendar, monthOf, monthRange } from '@/workout/month-calendar';
 
 type Entry =
   | { kind: 'strength'; workout: Workout; date: string }
@@ -41,11 +43,22 @@ function timeline(workouts: Workout[], cardio: CardioWorkout[], triathlons: Tria
   return entries.sort((a, b) => b.date.localeCompare(a.date));
 }
 
+/**
+ * One month of workouts at a time, this month's unless another is picked on
+ * the calendar, which goes back as far as the oldest workout.
+ */
 export default function HistoryScreen() {
   const { api, serverUrl } = useSettings();
-  const workouts = useQuery(`workouts:${serverUrl}`, api.listWorkouts);
-  const cardio = useQuery(`cardio:${serverUrl}`, () => api.listCardio());
-  const triathlons = useQuery(`triathlons:${serverUrl}`, api.listTriathlons);
+  const { today } = useToday();
+  // Null follows today, so the screen moves on to a new month by itself.
+  const [picked, setPicked] = useState<string | null>(null);
+  const month = picked ?? monthOf(today);
+  const range = monthRange(month);
+  const [day, setDay] = useState<string | null>(null);
+  const oldest = useQuery(`history:${serverUrl}`, api.oldestWorkoutDate);
+  const workouts = useQuery(`workouts:${serverUrl}:${month}`, () => api.listWorkouts(range));
+  const cardio = useQuery(`cardio:${serverUrl}:${month}`, () => api.listCardio(undefined, range));
+  const triathlons = useQuery(`triathlons:${serverUrl}:${month}`, () => api.listTriathlons(range));
   const plans = useQuery(`plans:${serverUrl}`, api.listPlans);
   const imports = useHealthImports();
   const { dismiss } = useHealthState();
@@ -60,12 +73,14 @@ export default function HistoryScreen() {
       if (entry.kind === 'strength') {
         await api.deleteWorkout(entry.workout.id);
         workouts.refresh();
+        oldest.refresh();
       } else {
         await api.deleteCardio(entry.workout.id);
         // Deleted on purpose, so don't offer it for import again.
         if (entry.workout.source_uuid) await dismiss([entry.workout.source_uuid]);
         cardio.refresh();
         triathlons.refresh();
+        oldest.refresh();
       }
     } catch (e) {
       Alert.alert("Couldn't delete workout", (e as Error).message);
@@ -87,6 +102,15 @@ export default function HistoryScreen() {
   // Triathlons only group what's loaded, so a failure to load them leaves the legs apart.
   const loaded = workouts.data && cardio.data;
   const entries = loaded ? timeline(workouts.data!, cardio.data!, triathlons.data) : [];
+  // A day stays picked only while it has workouts, e.g. not after deleting its last.
+  const selected = entries.some((e) => e.date === day) ? day : null;
+  const shown = selected ? entries.filter((e) => e.date === selected) : entries;
+  const thisMonth = monthOf(today);
+
+  const changeMonth = (next: string) => {
+    setPicked(next === thisMonth ? null : next);
+    setDay(null);
+  };
 
   return (
     <Screen
@@ -99,14 +123,30 @@ export default function HistoryScreen() {
         triathlons.refresh();
         plans.refresh();
         imports.refresh();
+        oldest.refresh();
       }}>
       <HealthImportBanner count={imports.candidates.length} error={imports.error} />
+      <MonthCalendar
+        month={month}
+        // Until the oldest workout is known, there's nowhere earlier to go.
+        earliest={oldest.data ? monthOf(oldest.data) : month}
+        latest={thisMonth}
+        today={today}
+        marked={new Set(entries.map((e) => e.date))}
+        selected={selected}
+        onMonthChange={changeMonth}
+        onSelect={setDay}
+      />
       {!loaded ? (
         <Message loading={!workouts.error && !cardio.error} error={workouts.error ?? cardio.error} />
       ) : entries.length === 0 ? (
-        <Message>No workouts yet. Log one from the Today tab.</Message>
+        <Message>
+          {oldest.data === null
+            ? 'No workouts yet. Log one from the Today tab.'
+            : `No workouts in ${formatMonth(month)}.`}
+        </Message>
       ) : (
-        entries.map((entry) => {
+        shown.map((entry) => {
           if (entry.kind === 'triathlon')
             return <TriathlonRow key={`triathlon:${entry.date}`} triathlon={entry.triathlon} />;
           const key = `${entry.kind}:${entry.workout.id}`;

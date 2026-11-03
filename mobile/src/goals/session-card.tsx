@@ -32,6 +32,19 @@ export function VerdictBadge({ status }: { status: VerdictStatus }) {
 }
 
 /**
+ * A session's description split into its name, like "Easy run 8 km", and
+ * the target after it, like " · zone 2", which starts at the first " · ",
+ * ": ", " in zone" or " @ ". Sessions planned before zones were described
+ * as "130–145 bpm", @ before intervals' and tempo's. A description without
+ * a zone or bpm is all name.
+ */
+export function splitDescription(description: string) {
+  const at = description.search(/ · |: | in zone| @ /);
+  if (at < 0 || !/zone|bpm/.test(description.slice(at))) return { name: description, details: '' };
+  return { name: description.slice(0, at), details: description.slice(at) };
+}
+
+/**
  * A planned session: what to do, and once done what was done, how it went
  * and each check against the target, with a warning on one passed by doing
  * more than planned. `compact` leaves out the checks.
@@ -40,11 +53,17 @@ export function SessionDetails({ session: s, compact }: { session: PlannedSessio
   const theme = useTheme();
   const status = s.verdict?.status ?? 'pending';
   const w = s.workout;
+  const { name, details } = splitDescription(s.description);
   return (
     <View style={{ gap: 2 }}>
       <View style={styles.row}>
         <ThemedText style={{ flex: 1, fontWeight: 600 }}>
-          {ACTIVITY_ICONS[s.activity]} {s.description}
+          {ACTIVITY_ICONS[s.activity]} {name}
+          {details && (
+            <ThemedText themeColor="textSecondary" style={{ fontWeight: 400 }}>
+              {details}
+            </ThemedText>
+          )}
         </ThemedText>
         <VerdictBadge status={status} />
       </View>

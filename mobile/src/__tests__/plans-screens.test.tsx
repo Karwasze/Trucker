@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { screen, userEvent } from '@testing-library/react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
+import type { ReactNode } from 'react';
 
 import type { TrainingPlan } from '@/api/types';
 import PlanEditorScreen from '@/app/(tabs)/plans/[id]';
@@ -88,6 +89,17 @@ describe('plan list', () => {
 describe('plan editor', () => {
   const editing = (id: string) => jest.mocked(useLocalSearchParams).mockReturnValue({ id });
 
+  // Saving lives in the header, so render its buttons.
+  beforeEach(() => {
+    jest
+      .spyOn(Stack, 'Screen')
+      .mockImplementation(
+        (({ options }: { options: { headerRight?: () => ReactNode } }) =>
+          options.headerRight?.() ?? null) as typeof Stack.Screen
+      );
+  });
+  afterEach(() => jest.restoreAllMocks());
+
   test('creating a plan saves it, makes it active when none was, and goes back', async () => {
     editing('new');
     const requests = mockServer({
@@ -112,7 +124,7 @@ describe('plan editor', () => {
     expect(await screen.findByLabelText('Bench Press sets')).toHaveDisplayValue('2');
     expect(screen.getByLabelText('Bench Press reps')).toHaveDisplayValue('8');
 
-    await user.press(screen.getByRole('button', { name: 'Create plan' }));
+    await user.press(screen.getByText('Save'));
     expect(requests.find((r) => r.method === 'POST')?.body).toEqual({
       name: 'Push',
       days: [{ weekday: 'tuesday', exercises: [{ name: 'Bench Press', sets: 2, reps: 8 }] }],
@@ -128,7 +140,7 @@ describe('plan editor', () => {
     const alerts = mockAlerts();
     const user = userEvent.setup();
     await renderInApp(<PlanEditorScreen />);
-    await user.press(screen.getByRole('button', { name: 'Create plan' }));
+    await user.press(screen.getByText('Save'));
     expect(alerts.latest()).toMatchObject({ title: "Can't save plan", message: 'Give the plan a name.' });
     expect(requests).toHaveLength(0);
   });
@@ -144,7 +156,7 @@ describe('plan editor', () => {
     await user.clear(reps);
     await user.type(reps, '8');
     await user.press(screen.getByLabelText('Remove Deadlift'));
-    await user.press(screen.getByRole('button', { name: 'Save changes' }));
+    await user.press(screen.getByText('Save'));
 
     expect(requests.at(-1)).toMatchObject({ method: 'PUT', path: '/api/plans' });
     expect(requests.at(-1)?.body).toEqual({
@@ -192,5 +204,14 @@ describe('plan editor', () => {
     await selectPlan(null);
     await renderInApp(<PlanEditorScreen />);
     expect(await screen.findByText('No route for GET /api/plans')).toBeOnTheScreen();
+  });
+
+  test('the only Save is in the header', async () => {
+    editing('1');
+    mockServer({ 'GET /api/plans': strength });
+    await selectPlan(1);
+    await renderInApp(<PlanEditorScreen />);
+    expect(await screen.findByText('Save')).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: 'Save changes' })).not.toBeOnTheScreen();
   });
 });

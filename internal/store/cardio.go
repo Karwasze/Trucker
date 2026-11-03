@@ -86,9 +86,16 @@ const cardioColumns = `id, date, started_at, activity, duration_seconds, distanc
 // ListCardioWorkouts returns the cardio workouts of an activity, or of every
 // activity for "", newest first, without their samples and laps.
 func (s *Store) ListCardioWorkouts(activity string) ([]CardioWorkout, error) {
+	return s.ListCardioWorkoutsBetween(activity, "", "")
+}
+
+// ListCardioWorkoutsBetween is ListCardioWorkouts limited to the workouts
+// from from to to (YYYY-MM-DD, both inclusive). An empty bound leaves that
+// end open.
+func (s *Store) ListCardioWorkoutsBetween(activity, from, to string) ([]CardioWorkout, error) {
 	rows, err := s.db.Query(`SELECT `+cardioColumns+` FROM cardio_workouts
-		WHERE ? = '' OR activity = ?
-		ORDER BY started_at DESC, id DESC`, activity, activity)
+		WHERE (? = '' OR activity = ?) AND (? = '' OR date >= ?) AND (? = '' OR date <= ?)
+		ORDER BY started_at DESC, id DESC`, activity, activity, from, from, to, to)
 	if err != nil {
 		return nil, err
 	}

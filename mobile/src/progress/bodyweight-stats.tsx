@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert } from 'react-native';
 
 import { localDate } from '@/api/client';
@@ -15,6 +15,8 @@ import { useSettings } from '@/settings/settings-context';
 import { formatDate } from '@/workout/format';
 
 const formatNumber = (n: number) => String(Math.round(n * 10) / 10);
+/** How long the sync on opening runs quietly before saying it's still going. */
+const SLOW_SYNC_MS = 500;
 
 /** Bodyweight log, synced from Apple Health, and chart, shown as a series on the Progress tab. `history` is sorted by date. */
 export function BodyweightStats({
@@ -96,6 +98,16 @@ function HealthSync({
 }) {
   const { api } = useSettings();
   const [syncing, setSyncing] = useState(false);
+  // The sync on opening is usually done in a blink; a spinner for it would only flash.
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (!autoSyncing) return;
+    const timer = setTimeout(() => setSlow(true), SLOW_SYNC_MS);
+    return () => {
+      clearTimeout(timer);
+      setSlow(false);
+    };
+  }, [autoSyncing]);
 
   if (!isHealthAvailable()) {
     return (
@@ -112,7 +124,7 @@ function HealthSync({
         <ThemedText type="small" themeColor="textSecondary">
           Connect Apple Health in Settings to import your weigh-ins.
         </ThemedText>
-        <Button title="Open Settings" variant="secondary" onPress={() => router.push('/settings')} />
+        <Button title="Open Settings" variant="secondary" onPress={() => router.navigate('/settings')} />
       </Card>
     );
   }
@@ -138,7 +150,7 @@ function HealthSync({
       <ThemedText type="small" themeColor="textSecondary">
         Weigh-ins are imported from Apple Health, replacing your bodyweight log.
       </ThemedText>
-      {autoSyncing ? (
+      {autoSyncing && slow ? (
         <ThemedText type="small" themeColor="textSecondary">
           Syncing with Apple Health…
         </ThemedText>
@@ -147,7 +159,7 @@ function HealthSync({
           Couldn’t sync with Apple Health: {autoSyncError}
         </ThemedText>
       ) : null}
-      <Button title="Sync from Apple Health" variant="secondary" loading={syncing || autoSyncing} onPress={sync} />
+      <Button title="Sync from Apple Health" variant="secondary" loading={syncing} onPress={sync} />
     </Card>
   );
 }

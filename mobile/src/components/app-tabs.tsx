@@ -57,6 +57,12 @@ export const TABS: AppTab[] = [
     label: 'Achievements',
     icon: { ios: 'trophy', android: 'emoji_events', web: 'emoji_events' },
   },
+  {
+    name: 'settings',
+    href: '/settings',
+    label: 'Settings',
+    icon: { ios: 'gearshape', android: 'settings', web: 'settings' },
+  },
 ];
 
 /** The carousel, switching the tabs it sits in. */

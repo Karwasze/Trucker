@@ -43,6 +43,7 @@ async function renderTabs() {
       '(tabs)/stats/index': page('Progress'),
       '(tabs)/insights/index': page('Insights'),
       '(tabs)/achievements': page('Achievements'),
+      '(tabs)/settings': page('Settings'),
     },
     { initialUrl: '/' }
   );
@@ -72,10 +73,19 @@ async function swipe(dx: number, velocityX = 0) {
   await act(async () => jest.runAllTicks());
 }
 
-test('all seven sections are tabs in the carousel, Today first', async () => {
+test('all eight sections are tabs in the carousel, Today first', async () => {
   await renderTabs();
-  expect(TABS.map((t) => t.name)).toEqual(['(today)', 'week', 'plans', 'history', 'stats', 'insights', 'achievements']);
-  expect(bar().props.accessibilityValue.text).toBe('Today, 1 of 7');
+  expect(TABS.map((t) => t.name)).toEqual([
+    '(today)',
+    'week',
+    'plans',
+    'history',
+    'stats',
+    'insights',
+    'achievements',
+    'settings',
+  ]);
+  expect(bar().props.accessibilityValue.text).toBe('Today, 1 of 8');
   expect(screen.getByText('Today screen')).toBeOnTheScreen();
 });
 
@@ -101,13 +111,13 @@ test('tapping a tab beside the centre opens it', async () => {
   expect(screen.getByText('Current week screen')).toBeOnTheScreen();
 
   await tap(SLOT_CENTRES.farLeft);
-  expect(selectedTab()).toBe('Achievements');
+  expect(selectedTab()).toBe('Settings');
 });
 
 test('tapping the far left tab from Today goes round the ring', async () => {
   await renderTabs();
   await tap(SLOT_CENTRES.farLeft);
-  expect(selectedTab()).toBe('Insights');
+  expect(selectedTab()).toBe('Achievements');
 });
 
 test('tapping the centred tab goes back to its first screen', async () => {
@@ -131,12 +141,12 @@ test('screen readers turn the bar by swiping up or down on it, round the ring', 
   await renderTabs();
   await fireEvent(bar(), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });
   expect(screen.getByText('Current week screen')).toBeOnTheScreen();
-  expect(bar().props.accessibilityValue.text).toBe('Current week, 2 of 7');
+  expect(bar().props.accessibilityValue.text).toBe('Current week, 2 of 8');
 
   await fireEvent(bar(), 'accessibilityAction', { nativeEvent: { actionName: 'decrement' } });
   await fireEvent(bar(), 'accessibilityAction', { nativeEvent: { actionName: 'decrement' } });
-  expect(screen.getByText('Achievements screen')).toBeOnTheScreen();
-  expect(selectedTab()).toBe('Achievements');
+  expect(screen.getByText('Settings screen')).toBeOnTheScreen();
+  expect(selectedTab()).toBe('Settings');
 });
 
 test('swiping left turns to the next tab, and right back again', async () => {
@@ -168,11 +178,11 @@ test('a small drag springs back to the same tab', async () => {
   expect(selectedTab()).toBe('Today');
 });
 
-test('the tabs go round in a ring: right from Today is Achievements, and left from there is Today', async () => {
+test('the tabs go round in a ring: right from Today is Settings, and left from there is Today', async () => {
   await renderTabs();
   await swipe(100);
-  expect(selectedTab()).toBe('Achievements');
-  expect(screen.getByText('Achievements screen')).toBeOnTheScreen();
+  expect(selectedTab()).toBe('Settings');
+  expect(screen.getByText('Settings screen')).toBeOnTheScreen();
 
   await swipe(-100);
   expect(selectedTab()).toBe('Today');
@@ -182,7 +192,7 @@ test('the tabs go round in a ring: right from Today is Achievements, and left fr
 test('swiping keeps going round past the ends', async () => {
   await renderTabs();
   await swipe(250);
-  expect(selectedTab()).toBe('Progress');
+  expect(selectedTab()).toBe('Insights');
 });
 
 test('the app opens on Today, which has "/" to itself', async () => {
@@ -190,7 +200,7 @@ test('the app opens on Today, which has "/" to itself', async () => {
   expect(selectedTab()).toBe('Today');
   expect(screen.getByText('Today screen')).toBeOnTheScreen();
   await swipe(200);
-  expect(selectedTab()).toBe('Insights');
+  expect(selectedTab()).toBe('Achievements');
 });
 
 /** Whether a style on `element` or around it takes it out of the layout. */

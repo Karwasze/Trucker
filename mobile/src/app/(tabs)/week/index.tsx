@@ -10,7 +10,6 @@ import { SessionLink } from '@/goals/session-card';
 import { useQuery } from '@/hooks/use-query';
 import { useTheme } from '@/hooks/use-theme';
 import { useToday } from '@/hooks/use-today';
-import { SettingsButton } from '@/settings/settings-button';
 import { useSettings } from '@/settings/settings-context';
 import { describeSets } from '@/workout/draft';
 import { ACTIVITY_ICONS, formatDate, formatDuration } from '@/workout/format';
@@ -61,12 +60,7 @@ export default function WeekScreen() {
   const empty = days.every((d) => d.exercises.length === 0 && !d.workout) && sessions.length === 0;
 
   return (
-    <Screen
-      title="Current week"
-      subtitle={subtitle}
-      action={<SettingsButton />}
-      refreshing={week.refreshing}
-      onRefresh={refresh}>
+    <Screen title="Current week" subtitle={subtitle} refreshing={week.refreshing} onRefresh={refresh}>
       {!week.data ? (
         <Message loading={!week.error} error={week.error}>
           {null}

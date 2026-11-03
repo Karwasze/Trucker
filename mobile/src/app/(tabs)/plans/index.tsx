@@ -9,7 +9,6 @@ import { useQuery } from '@/hooks/use-query';
 import { useToday } from '@/hooks/use-today';
 import { useTheme } from '@/hooks/use-theme';
 import { scheduleOf } from '@/plans/edit-model';
-import { SettingsButton } from '@/settings/settings-button';
 import { useSettings } from '@/settings/settings-context';
 import { formatDate } from '@/workout/format';
 
@@ -22,7 +21,6 @@ export default function PlansScreen() {
   return (
     <Screen
       title="Training Plan"
-      action={<SettingsButton />}
       refreshing={plans.refreshing || goals.refreshing}
       onRefresh={() => {
         plans.refresh();

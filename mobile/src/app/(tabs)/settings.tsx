@@ -54,7 +54,7 @@ export default function SettingsScreen() {
     );
 
   return (
-    <Screen hasHeader refreshing={exercises.refreshing} onRefresh={exercises.refresh}>
+    <Screen title="Settings" refreshing={exercises.refreshing} onRefresh={exercises.refresh}>
       <SectionLabel>Server</SectionLabel>
       {!serverLocked && (
         <View style={styles.chips}>

@@ -20,7 +20,6 @@ import { personalRecords } from '@/progress/records';
 import { CATEGORIES, categoryOf, seriesKey, seriesLabel, type Category, type Series } from '@/progress/series';
 import { Tile, TileButton, TileRow } from '@/progress/tile';
 import { TriathlonStats } from '@/progress/triathlon-stats';
-import { SettingsButton } from '@/settings/settings-button';
 import { useSettings } from '@/settings/settings-context';
 import { formatDate, formatKg } from '@/workout/format';
 
@@ -80,7 +79,7 @@ export default function ProgressScreen() {
 
   if (!shown) {
     return (
-      <Screen title="Progress" action={<SettingsButton />}>
+      <Screen title="Progress">
         <Message loading />
       </Screen>
     );
@@ -175,11 +174,7 @@ function ProgressPage({
   };
 
   return (
-    <Screen
-      title="Progress"
-      action={<SettingsButton />}
-      refreshing={!!(names.refreshing || cardio.refreshing)}
-      onRefresh={refresh}>
+    <Screen title="Progress" refreshing={!!(names.refreshing || cardio.refreshing)} onRefresh={refresh}>
       {controls}
       {!series ? (
         <Message error={category === 'strength' ? names.error : cardio.error}>

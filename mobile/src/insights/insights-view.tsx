@@ -24,7 +24,6 @@ import { ZoneRanges } from '@/health/heart-rate-zones';
 import { useQuery } from '@/hooks/use-query';
 import { useTheme } from '@/hooks/use-theme';
 import { Tile, TileRow } from '@/progress/tile';
-import { SettingsButton } from '@/settings/settings-button';
 import { TriathlonInsights } from '@/triathlon/triathlon-insights';
 import { useSettings } from '@/settings/settings-context';
 import {
@@ -93,13 +92,7 @@ function InsightsPage({
 }) {
   const { timespan, setTimespan, insights, hasPlan } = useInsights();
   return (
-    <Screen
-      title={title}
-      subtitle={subtitle}
-      action={<SettingsButton />}
-      hasHeader
-      refreshing={insights.refreshing}
-      onRefresh={insights.refresh}>
+    <Screen title={title} subtitle={subtitle} hasHeader refreshing={insights.refreshing} onRefresh={insights.refresh}>
       <TimespanPicker value={timespan} onChange={setTimespan} />
       {!insights.data ? (
         <Message loading={!insights.error} error={insights.error} />

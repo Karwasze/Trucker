@@ -150,7 +150,7 @@ test('with nothing lifted it falls back to bodyweight, which can’t be entered 
   expect(healthBodyweight).not.toHaveBeenCalled();
   expect(requests.some((r) => r.method === 'PUT')).toBe(false);
   await user.press(screen.getByRole('button', { name: 'Open Settings' }));
-  expect(router.push).toHaveBeenCalledWith('/settings');
+  expect(router.navigate).toHaveBeenCalledWith('/settings');
 });
 
 test('without Apple Health, bodyweight is read-only', async () => {
@@ -307,7 +307,22 @@ describe('category buttons and series select', () => {
     );
     await pickCategory('Bodyweight');
     expect(screen.getAllByText('82.4 kg')[0]).toBeOnTheScreen();
-    expect(screen.getByText('Syncing with Apple Health…')).toBeOnTheScreen();
+    expect(screen.queryByText('Syncing with Apple Health…')).toBeNull();
+  });
+
+  // Regression: a spinner flashed in the Sync button while the sync on opening read Health.
+  test('the sync on opening Bodyweight shows no spinner, and a note only once it is slow', async () => {
+    await connectHealth();
+    jest.mocked(healthBodyweight).mockReturnValue(new Promise(() => {}));
+    server();
+    await renderProgress();
+    await screen.findByText('Since 9 Oct');
+    await pickCategory('Bodyweight');
+    // Its title stands in for the spinner it would show.
+    expect(screen.getByRole('button', { name: 'Sync from Apple Health' })).toBeOnTheScreen();
+    expect(screen.queryByText('Syncing with Apple Health…')).toBeNull();
+    expect(await screen.findByText('Syncing with Apple Health…')).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Sync from Apple Health' })).toBeOnTheScreen();
   });
 
   test('Bodyweight has no series select', async () => {

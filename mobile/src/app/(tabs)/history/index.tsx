@@ -12,7 +12,6 @@ import { useHealthImports, useHealthState } from '@/health/health-state';
 import { HealthImportBanner } from '@/health/import-banner';
 import { useQuery } from '@/hooks/use-query';
 import { useToday } from '@/hooks/use-today';
-import { SettingsButton } from '@/settings/settings-button';
 import { useSettings } from '@/settings/settings-context';
 import { TriathlonOverview } from '@/triathlon/triathlon-overview';
 import { confirmDeleteCardio, confirmDeleteWorkout } from '@/workout/confirm-delete';
@@ -115,7 +114,6 @@ export default function HistoryScreen() {
   return (
     <Screen
       title="History"
-      action={<SettingsButton />}
       refreshing={workouts.refreshing || cardio.refreshing}
       onRefresh={() => {
         workouts.refresh();

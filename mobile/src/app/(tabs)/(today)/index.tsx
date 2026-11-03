@@ -6,7 +6,6 @@ import type { Exercise, ProgressionResult } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Message, Screen } from '@/components/ui';
 import { useAchievements } from '@/achievements/achievements-context';
-import { SettingsButton } from '@/settings/settings-button';
 import { Spacing } from '@/constants/theme';
 import { EnduranceToday } from '@/goals/endurance-today';
 import { useHealthImports } from '@/health/health-state';
@@ -220,7 +219,7 @@ export default function TodayScreen() {
 
   if (draft?.logged) {
     return (
-      <Screen title="Today" subtitle={subtitle} action={<SettingsButton />}>
+      <Screen title="Today" subtitle={subtitle}>
         <HealthImportBanner count={imports.candidates.length} error={imports.error} />
         <LoggedSummary progression={draft.logged.progression ?? []} exercises={draft.logged.exercises} />
         <EnduranceToday date={today} waiting={waitingToday} />
@@ -247,12 +246,7 @@ export default function TodayScreen() {
   const isRestDay = planId !== null && planReady && planDay.data?.exercises.length === 0;
 
   return (
-    <Screen
-      title="Today"
-      subtitle={subtitle}
-      action={<SettingsButton />}
-      refreshing={planDay.refreshing}
-      onRefresh={refresh}>
+    <Screen title="Today" subtitle={subtitle} refreshing={planDay.refreshing} onRefresh={refresh}>
       <HealthImportBanner count={imports.candidates.length} error={imports.error} />
       {draft && draft.date !== today && (
         <Card>

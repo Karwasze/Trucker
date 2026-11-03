@@ -2,8 +2,10 @@ package store
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"math"
+	"slices"
 )
 
 // zoneStarts is where zones 2 to 5 start, as shares of the heart rate
@@ -19,13 +21,15 @@ type HeartRateZone struct {
 	Max  *int `json:"max,omitempty"`
 }
 
-// HeartRateZones are the zones worked out from the max and resting heart
-// rate in effect from Date (YYYY-MM-DD).
+// HeartRateZones are the zones in effect from Date (YYYY-MM-DD): as Apple
+// Watch has them in Health, where ZoneStarts gives where zones 2 and up
+// start (bpm), else worked out from MaxHR and RestingHR, which are 0 then.
 type HeartRateZones struct {
-	Date      string          `json:"date"`
-	MaxHR     float64         `json:"max_hr"`
-	RestingHR float64         `json:"resting_hr"`
-	Zones     []HeartRateZone `json:"zones"`
+	Date       string          `json:"date"`
+	MaxHR      float64         `json:"max_hr,omitempty"`
+	RestingHR  float64         `json:"resting_hr,omitempty"`
+	ZoneStarts []float64       `json:"zone_starts,omitempty"`
+	Zones      []HeartRateZone `json:"zones"`
 }
 
 // computeHeartRateZones splits the heart rate reserve into five zones.
@@ -43,23 +47,63 @@ func computeHeartRateZones(maxHR, restingHR float64) []HeartRateZone {
 	return zones
 }
 
+// watchHeartRateZones are the zones Apple Watch has, from where zones 2
+// and up start (bpm, ascending). A heart rate counts in a zone from its
+// start, so a fractional start, e.g. 136.8, begins at the next whole bpm.
+func watchHeartRateZones(starts []float64) []HeartRateZone {
+	zones := make([]HeartRateZone, len(starts)+1)
+	for i := range zones {
+		zones[i].Zone = i + 1
+		if i > 0 {
+			zones[i].Min = ip(int(math.Ceil(starts[i-1])))
+		}
+		if i < len(starts) {
+			zones[i].Max = ip(int(math.Ceil(starts[i])) - 1)
+		}
+	}
+	return zones
+}
+
 func ip(v int) *int { return &v }
 
 // SetHeartRateProfile records the max and resting heart rate as of date
 // and returns the zones in effect then. A profile the same as the one in
 // effect adds nothing, and one on a date with a profile replaces it.
 func (s *Store) SetHeartRateProfile(date string, maxHR, restingHR float64) (*HeartRateZones, error) {
+	return s.setHeartRateZones(date, HeartRateZones{MaxHR: maxHR, RestingHR: restingHR})
+}
+
+// SetHeartRateZones records the zones Apple Watch has as of date, from
+// where zones 2 and up start (bpm, ascending), and returns the zones in
+// effect then, like SetHeartRateProfile.
+func (s *Store) SetHeartRateZones(date string, starts []float64) (*HeartRateZones, error) {
+	return s.setHeartRateZones(date, HeartRateZones{ZoneStarts: starts})
+}
+
+func (s *Store) setHeartRateZones(date string, z HeartRateZones) (*HeartRateZones, error) {
 	current, err := heartRateZones(s.db, date)
 	if err != nil {
 		return nil, err
 	}
-	if current != nil && current.MaxHR == maxHR && current.RestingHR == restingHR {
+	if current != nil && current.MaxHR == z.MaxHR && current.RestingHR == z.RestingHR &&
+		slices.Equal(current.ZoneStarts, z.ZoneStarts) {
 		return current, nil
 	}
+	var maxHR, restingHR, starts any
+	if z.ZoneStarts != nil {
+		encoded, err := json.Marshal(z.ZoneStarts)
+		if err != nil {
+			return nil, err
+		}
+		starts = string(encoded)
+	} else {
+		maxHR, restingHR = z.MaxHR, z.RestingHR
+	}
 	if _, err := s.db.Exec(`
-		INSERT INTO heart_rate_profiles (date, max_hr, resting_hr) VALUES (?, ?, ?)
-		ON CONFLICT(date) DO UPDATE SET max_hr = excluded.max_hr, resting_hr = excluded.resting_hr
-	`, date, maxHR, restingHR); err != nil {
+		INSERT INTO heart_rate_profiles (date, max_hr, resting_hr, zone_starts) VALUES (?, ?, ?, ?)
+		ON CONFLICT(date) DO UPDATE SET max_hr = excluded.max_hr, resting_hr = excluded.resting_hr,
+			zone_starts = excluded.zone_starts
+	`, date, maxHR, restingHR, starts); err != nil {
 		return nil, err
 	}
 	return heartRateZones(s.db, date)
@@ -74,17 +118,27 @@ func (s *Store) HeartRateZones(date string) (*HeartRateZones, error) {
 
 func heartRateZones(q querier, date string) (*HeartRateZones, error) {
 	var z HeartRateZones
+	var maxHR, restingHR sql.NullFloat64
+	var starts sql.NullString
 	err := q.QueryRow(`
-		SELECT date, max_hr, resting_hr FROM heart_rate_profiles
+		SELECT date, max_hr, resting_hr, zone_starts FROM heart_rate_profiles
 		ORDER BY date <= ? DESC, CASE WHEN date <= ? THEN date END DESC, date
 		LIMIT 1
-	`, date, date).Scan(&z.Date, &z.MaxHR, &z.RestingHR)
+	`, date, date).Scan(&z.Date, &maxHR, &restingHR, &starts)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
+	if starts.Valid {
+		if err := json.Unmarshal([]byte(starts.String), &z.ZoneStarts); err != nil {
+			return nil, err
+		}
+		z.Zones = watchHeartRateZones(z.ZoneStarts)
+		return &z, nil
+	}
+	z.MaxHR, z.RestingHR = maxHR.Float64, restingHR.Float64
 	z.Zones = computeHeartRateZones(z.MaxHR, z.RestingHR)
 	return &z, nil
 }

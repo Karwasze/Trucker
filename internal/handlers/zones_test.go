@@ -68,3 +68,34 @@ func TestHeartRateZonesAPI_Invalid(t *testing.T) {
 		t.Errorf("expected 400 without a date, got %d", w.Code)
 	}
 }
+
+func TestHeartRateZonesAPI_FromWatch(t *testing.T) {
+	h, _ := newTestHandlers(t)
+
+	req := httptest.NewRequest("PUT", "/api/heart-rate-zones", strings.NewReader(`{"date":"2026-10-27","zone_starts":[136.8,147.6,158,169.2]}`))
+	w := httptest.NewRecorder()
+	h.HeartRateZonesAPI(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var put store.HeartRateZones
+	json.NewDecoder(w.Body).Decode(&put)
+	if len(put.Zones) != 5 || *put.Zones[1].Min != 137 || len(put.ZoneStarts) != 4 {
+		t.Errorf("expected zone 2 from 137 bpm, got %+v", put)
+	}
+
+	for _, body := range []string{
+		`{"date":"2026-10-27","zone_starts":[]}`,
+		`{"date":"2026-10-27","zone_starts":[150,140]}`,
+		`{"date":"2026-10-27","zone_starts":[0,140]}`,
+		`{"date":"2026-10-27","zone_starts":[140,300]}`,
+		`{"date":"2026-10-27","zone_starts":[1,2,3,4,5,6,7,8,9,10]}`,
+	} {
+		req := httptest.NewRequest("PUT", "/api/heart-rate-zones", strings.NewReader(body))
+		w := httptest.NewRecorder()
+		h.HeartRateZonesAPI(w, req)
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("%s: expected 400, got %d", body, w.Code)
+		}
+	}
+}

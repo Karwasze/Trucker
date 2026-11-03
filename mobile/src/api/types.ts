@@ -225,6 +225,7 @@ export type GoalSummary = {
   planned_m: Partial<Record<CardioActivity, number>>;
   /** Distance of the sessions judged so far, to compare done_m with. */
   due_m: Partial<Record<CardioActivity, number>>;
+  /** Distance of every workout since the plan started, filling a session or not. */
   done_m: Partial<Record<CardioActivity, number>>;
   /** Threshold speed (m/s) the targets come from. */
   threshold: Partial<Record<CardioActivity, number>>;
@@ -320,8 +321,18 @@ export type Verdict = {
 /** A heart rate zone, 1 to 5 as the watch numbers them, in whole bpm. Zone 1 has no min, zone 5 no max. */
 export type HeartRateZone = { zone: number; min?: number; max?: number };
 
-/** The zones worked out from the max and resting heart rate in effect from `date`. */
-export type HeartRateZones = { date: string; max_hr: number; resting_hr: number; zones: HeartRateZone[] };
+/**
+ * The zones in effect from `date`: as Apple Watch has them, where
+ * `zone_starts` gives where zones 2 and up start (bpm), else worked out
+ * from the max and resting heart rate.
+ */
+export type HeartRateZones = {
+  date: string;
+  max_hr?: number;
+  resting_hr?: number;
+  zone_starts?: number[];
+  zones: HeartRateZone[];
+};
 
 /** A session of a goal's plan; speeds are m/s. */
 export type PlannedSession = {

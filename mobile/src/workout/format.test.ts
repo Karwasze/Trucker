@@ -34,10 +34,14 @@ test('formatDuration uses m:ss under an hour and h:mm:ss above', () => {
   expect(formatDuration(3725)).toBe('1:02:05');
 });
 
-test('formatDistance shows km, with more precision under 10 km, and metres for swims', () => {
+test('formatDistance shows km, with less precision the further, and metres for swims', () => {
   expect(formatDistance(5432)).toBe('5.43 km');
   expect(formatDistance(10600)).toBe('10.6 km');
-  expect(formatDistance(1900, 'swimming')).toBe('1,900 m');
+  expect(formatDistance(1340049)).toBe('1340 km');
+  // Grouped by a narrow space whatever the locale, so 2125 m can't read as 2.125 m.
+  expect(formatDistance(1900, 'swimming')).toBe('1\u202F900 m');
+  expect(formatDistance(33600, 'swimming')).toBe('33\u202F600 m');
+  expect(formatDistance(750, 'swimming')).toBe('750 m');
 });
 
 test('formatPace uses each sport’s unit', () => {

@@ -179,15 +179,20 @@ test('the race goal and cardio are summarised on Cardio', async () => {
   expect(await screen.findByText('🚴 Ride · 1 session')).toBeOnTheScreen();
   expect(screen.getByText('Marathon')).toBeOnTheScreen();
   // The whole plan, not just this week.
-  expect(screen.getByText('Base · week 3 of 28 · 25 weeks to race day')).toBeOnTheScreen();
-  expect(screen.getByText('🏃 52.5 km of 60.0 km so far · 820.0 km in the plan')).toBeOnTheScreen();
-  expect(screen.getByText('Threshold: 🏃 4:30/km')).toBeOnTheScreen();
+  expect(screen.getByText('3 of 28')).toBeOnTheScreen();
+  expect(screen.getByText('in 25 weeks')).toBeOnTheScreen();
+  expect(screen.getByText('Base')).toBeOnTheScreen();
+  expect(screen.getByText('Partly')).toBeOnTheScreen();
+  // A bar per discipline: done in the plan's workouts of its total, and where the plan is up to.
+  expect(screen.getByLabelText('Run: 52.5 km of 820 km, 60.0 km planned so far')).toHaveTextContent(
+    '🏃 Run52.5 km of 820 km60.0 km planned so far · threshold 4:30/km'
+  );
 });
 
 test('the race goal isn’t a link', async () => {
   mockServer({ 'GET /api/insights': full });
   await renderCardio();
-  await userEvent.setup().press(await screen.findByText('Base · week 3 of 28 · 25 weeks to race day'));
+  await userEvent.setup().press(await screen.findByText('3 of 28'));
   expect(router.navigate).not.toHaveBeenCalled();
   expect(screen.queryByRole('button', { name: /Marathon|Base/ })).not.toBeOnTheScreen();
 });
@@ -387,6 +392,15 @@ describe('heart rate zones', () => {
     await renderCardio();
     expect(await screen.findByText('146–158 bpm')).toBeOnTheScreen();
     expect(healthHeartRateProfile).not.toHaveBeenCalled();
+  });
+
+  test('say when they’re the Apple Watch’s own', async () => {
+    const { max_hr: _max, resting_hr: _resting, ...zones } = TEST_ZONES;
+    server({ ...zones, zone_starts: [133, 146, 159, 172] } as typeof TEST_ZONES);
+    await renderCardio();
+    expect(await screen.findByText(/^Your Apple Watch zones, from Apple Health\./)).toBeOnTheScreen();
+    expect(screen.getByText('146–158 bpm')).toBeOnTheScreen();
+    expect(screen.queryByText(/max heart rate of/)).not.toBeOnTheScreen();
   });
 
   test('are left out without Health connected or any on the server', async () => {

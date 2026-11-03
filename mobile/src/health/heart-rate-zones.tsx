@@ -94,7 +94,7 @@ function ZoneRangesCard({ data, error }: { data?: ZonesState; error: string | nu
       </Card>
     );
   }
-  const { zones, max_hr, resting_hr } = data.zones;
+  const { zones, max_hr, resting_hr, zone_starts } = data.zones;
   return (
     <Card>
       {zones.map((z, i) => (
@@ -105,9 +105,10 @@ function ZoneRangesCard({ data, error }: { data?: ZonesState; error: string | nu
         </View>
       ))}
       <ThemedText type="small" themeColor="textSecondary">
-        From your max heart rate of {max_hr} bpm (by age) and resting heart rate of {resting_hr} bpm in Apple Health, as
-        Apple Watch works out its zones. The plan suggests a zone for each session; sessions are judged on distance and
-        reps, not heart rate. If you set zones on the watch by hand, they may differ.
+        {zone_starts
+          ? 'Your Apple Watch zones, from Apple Health.'
+          : `Estimated from your max heart rate of ${max_hr} bpm (by age) and resting heart rate of ${resting_hr} bpm in Apple Health, so they may differ from your Apple Watch zones, which are used from iOS 27.`}{' '}
+        The plan suggests a zone for each session; sessions are judged on distance and reps, not heart rate.
       </ThemedText>
     </Card>
   );

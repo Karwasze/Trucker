@@ -1,5 +1,6 @@
 import { createApi } from '@/api/client';
 import { connectHealth, healthHeartRateProfile } from '@/health/healthkit';
+import { watchHeartRateZoneStarts } from '@/health/watch-zones';
 import { syncHeartRateZones } from '@/health/zones-sync';
 import { mockServer, setNow, TEST_ZONES, type Request } from '@/test-utils';
 
@@ -7,6 +8,8 @@ jest.mock('@/health/healthkit', () => ({
   connectHealth: jest.fn(async () => {}),
   healthHeartRateProfile: jest.fn(async () => ({})),
 }));
+// Before iOS 27 unless a test says otherwise.
+jest.mock('@/health/watch-zones', () => ({ watchHeartRateZoneStarts: jest.fn(async () => undefined) }));
 
 const api = createApi('http://zones:8081');
 // Age 35 on Oct 27 2026: a max heart rate of 185.
@@ -21,10 +24,7 @@ afterEach(() => jest.useRealTimers());
 function server(stored: typeof TEST_ZONES | null) {
   return mockServer({
     'GET /api/heart-rate-zones': stored,
-    'PUT /api/heart-rate-zones': ({ body }: Request) => {
-      const { max_hr, resting_hr } = body as { max_hr: number; resting_hr: number };
-      return { ...TEST_ZONES, date: '2026-10-27', max_hr, resting_hr };
-    },
+    'PUT /api/heart-rate-zones': ({ body }: Request) => ({ ...TEST_ZONES, date: '2026-10-27', ...(body as object) }),
   });
 }
 
@@ -63,4 +63,38 @@ test('without Health it only reads the server’s zones', async () => {
   server(TEST_ZONES);
   expect(await syncHeartRateZones(api, false)).toEqual({ zones: TEST_ZONES, missing: [] });
   expect(healthHeartRateProfile).not.toHaveBeenCalled();
+});
+
+describe('from iOS 27', () => {
+  const starts = [136.8, 147.6, 158, 169.2];
+  const watchZones = { date: '2026-10-20', zone_starts: starts, zones: TEST_ZONES.zones };
+
+  test('sends the zones Apple Watch has in place of working them out', async () => {
+    jest.mocked(watchHeartRateZoneStarts).mockResolvedValueOnce(starts);
+    jest.mocked(healthHeartRateProfile).mockResolvedValue({ dateOfBirth: born, restingHeartRate: 55 });
+    const requests = server(TEST_ZONES);
+    const { zones, missing } = await syncHeartRateZones(api, true);
+    expect(requests.find((r) => r.method === 'PUT')?.body).toEqual({ date: '2026-10-27', zone_starts: starts });
+    expect(zones?.zone_starts).toEqual(starts);
+    expect(missing).toEqual([]);
+    // Nothing else from Health is needed for them.
+    expect(healthHeartRateProfile).not.toHaveBeenCalled();
+  });
+
+  test('sends nothing while the watch’s zones match the server’s', async () => {
+    jest.mocked(watchHeartRateZoneStarts).mockResolvedValueOnce([...starts]);
+    const requests = server(watchZones);
+    expect((await syncHeartRateZones(api, true)).zones).toEqual(watchZones);
+    expect(requests.some((r) => r.method === 'PUT')).toBe(false);
+  });
+
+  test('sends the watch’s zones when they changed', async () => {
+    jest.mocked(watchHeartRateZoneStarts).mockResolvedValueOnce([137, 148, 159, 170]);
+    const requests = server(watchZones);
+    await syncHeartRateZones(api, true);
+    expect(requests.find((r) => r.method === 'PUT')?.body).toEqual({
+      date: '2026-10-27',
+      zone_starts: [137, 148, 159, 170],
+    });
+  });
 });

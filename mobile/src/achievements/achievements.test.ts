@@ -26,7 +26,7 @@ describe('achievements', () => {
       activity: 'swimming',
       tiers: [{ target: 1500 }, { target: 3800, name: 'Ironman swim' }],
     };
-    expect(swim.tiers.map((t) => tierLabel(swim, t))).toEqual(['1,500 m', 'Ironman swim']);
+    expect(swim.tiers.map((t) => tierLabel(swim, t))).toEqual(['1\u202F500 m', 'Ironman swim']);
     const run: Achievement = { ...swim, activity: 'running', tiers: [{ target: 10000 }] };
     expect(tierLabel(run, run.tiers[0])).toBe('10 km');
   });

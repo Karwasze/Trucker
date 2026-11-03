@@ -85,3 +85,47 @@ func TestSetHeartRateProfile_OnlyRecordsChanges(t *testing.T) {
 		t.Errorf("got %+v", z)
 	}
 }
+
+func TestWatchHeartRateZones(t *testing.T) {
+	// Where zones 2 to 5 start, as Health has them; a heart rate counts in a
+	// zone from its start, so a fractional start begins at the next whole bpm.
+	got := watchHeartRateZones([]float64{136.8, 147.6, 158, 169.2})
+	want := []HeartRateZone{
+		{Zone: 1, Max: ip(136)},
+		{Zone: 2, Min: ip(137), Max: ip(147)},
+		{Zone: 3, Min: ip(148), Max: ip(157)},
+		{Zone: 4, Min: ip(158), Max: ip(169)},
+		{Zone: 5, Min: ip(170)},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %+v, want %+v", got, want)
+	}
+}
+
+func TestSetHeartRateZones_FromWatch(t *testing.T) {
+	s := newTestStore(t)
+	if _, err := s.SetHeartRateProfile("2026-10-10", 185, 55); err != nil {
+		t.Fatal(err)
+	}
+	starts := []float64{136.8, 147.6, 158, 169.2}
+	z, err := s.SetHeartRateZones("2026-10-20", starts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if z.Date != "2026-10-20" || !reflect.DeepEqual(z.ZoneStarts, starts) || z.MaxHR != 0 || z.RestingHR != 0 ||
+		*z.Zones[1].Min != 137 {
+		t.Errorf("unexpected zones from the watch %+v", z)
+	}
+	// The same zones on a later day add nothing.
+	if z, err := s.SetHeartRateZones("2026-10-25", starts); err != nil || z.Date != "2026-10-20" {
+		t.Errorf("expected the zones from 2026-10-20 to stand, got %+v, %v", z, err)
+	}
+	// Earlier sessions keep the zones of their day.
+	if z, err := s.HeartRateZones("2026-10-15"); err != nil || z.RestingHR != 55 || z.ZoneStarts != nil {
+		t.Errorf("expected the profile from 2026-10-10, got %+v, %v", z, err)
+	}
+	// Going back to a profile, e.g. on an older iOS, replaces the watch's zones.
+	if z, err := s.SetHeartRateProfile("2026-10-30", 185, 55); err != nil || z.Date != "2026-10-30" || z.ZoneStarts != nil {
+		t.Errorf("expected a new profile, got %+v, %v", z, err)
+	}
+}

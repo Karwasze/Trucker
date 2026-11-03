@@ -106,6 +106,12 @@ export function createApi(baseUrl: string) {
         method: 'PUT',
         body: JSON.stringify({ date, max_hr, resting_hr }),
       }),
+    /** Records the zones Apple Watch has as of `date`, from where zones 2 and up start; returns the zones then. */
+    setHeartRateZones: (date: string, zone_starts: number[]) =>
+      request<HeartRateZones>('/api/heart-rate-zones', {
+        method: 'PUT',
+        body: JSON.stringify({ date, zone_starts }),
+      }),
 
     /** Every achievement with the tiers earned so far. */
     listAchievements: async () => (await request<Achievement[] | null>('/api/achievements')) ?? [],

@@ -1,6 +1,7 @@
 import { localDate, type Api } from '@/api/client';
 import type { HeartRateZones } from '@/api/types';
 import { connectHealth, healthHeartRateProfile } from '@/health/healthkit';
+import { watchHeartRateZoneStarts } from '@/health/watch-zones';
 import { maxHeartRate } from '@/health/zones';
 
 /** What Apple Health lacks to work out heart rate zones from. */
@@ -11,11 +12,12 @@ export type ZonesState = { zones: HeartRateZones | null; missing: MissingForZone
 
 /**
  * The server's heart rate zones for today, first updated from Apple Health
- * when `fromHealth`: the max heart rate from the birth date (220 less the
- * age) and the resting heart rate, sent only when either changed, so the
- * server keeps a dated history for judging sessions by the zones of their
- * day. Asks for access first, for lifters who connected before these were
- * read.
+ * when `fromHealth`: the zones Apple Watch has where iOS can read them (27
+ * on), else worked out from the max heart rate from the birth date (220
+ * less the age) and the resting heart rate. Sent only when they changed, so
+ * the server keeps a dated history for judging sessions by the zones of
+ * their day. Asks for access first, for lifters who connected before these
+ * were read.
  */
 export async function syncHeartRateZones(api: Api, fromHealth: boolean): Promise<ZonesState> {
   const today = localDate();
@@ -23,6 +25,11 @@ export async function syncHeartRateZones(api: Api, fromHealth: boolean): Promise
   if (!fromHealth) return { zones: stored, missing: [] };
 
   await connectHealth();
+  const starts = await watchHeartRateZoneStarts();
+  if (starts) {
+    const same = stored?.zone_starts?.length === starts.length && stored.zone_starts.every((s, i) => s === starts[i]);
+    return { zones: same ? stored : await api.setHeartRateZones(today, starts), missing: [] };
+  }
   const { dateOfBirth, restingHeartRate } = await healthHeartRateProfile();
   if (!dateOfBirth || !restingHeartRate) {
     const missing: MissingForZones = [];

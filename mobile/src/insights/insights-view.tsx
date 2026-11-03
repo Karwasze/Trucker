@@ -330,43 +330,84 @@ function ProgressTile({ progress: p, timespan }: { progress: LiftProgress; times
   );
 }
 
-/** Where the active goal stands over its whole plan, and the paces its targets use. */
+/**
+ * Where the active goal stands over its whole plan: the week, how its
+ * sessions went, and per discipline how far its workouts got against the
+ * plan, with the threshold pace its targets use.
+ */
 function GoalSection({ summary: g }: { summary: GoalSummary }) {
   const activities = (Object.keys(g.planned_m) as CardioActivity[]).sort();
-  const thresholds = (Object.keys(g.threshold) as CardioActivity[]).filter((a) => g.threshold[a]);
-  const threshold = (activity: CardioActivity) => {
-    const speed = g.threshold[activity]!;
-    if (activity === 'cycling') return `${(speed * 3.6).toFixed(1)} km/h`;
-    if (activity === 'swimming') return `${formatDuration(100 / speed)}/100 m`;
-    return `${formatDuration(1000 / speed)}/km`;
-  };
   return (
     <>
       <SectionLabel>{g.goal.name}</SectionLabel>
+      <TileRow>
+        <Tile label="Week" value={`${g.week} of ${g.weeks}`} />
+        <Tile label="Race day" value={g.weeks_to_race === 0 ? 'This week' : `in ${plural(g.weeks_to_race, 'week')}`} />
+        <Tile label="Phase" value={PHASE_NAMES[g.phase]} />
+      </TileRow>
       <Card>
-        <ThemedText type="smallBold">
-          {PHASE_NAMES[g.phase]} · week {g.week} of {g.weeks} ·{' '}
-          {g.weeks_to_race === 0 ? 'race week' : `${plural(g.weeks_to_race, 'week')} to race day`}
-        </ThemedText>
         <View style={{ flexDirection: 'row', gap: Spacing.two }}>
           <Stat label="Met" value={String(g.met)} />
           <Stat label="Partly" value={String(g.partial)} />
           <Stat label="Missed" value={String(g.missed)} />
           <Stat label="To do" value={String(g.pending)} />
         </View>
-        {activities.map((a) => (
-          <ThemedText key={a} type="small" themeColor="textSecondary">
-            {ACTIVITY_ICONS[a]} {formatDistance(g.done_m[a] ?? 0, a)} of {formatDistance(g.due_m[a] ?? 0, a)} so far ·{' '}
-            {formatDistance(g.planned_m[a] ?? 0, a)} in the plan
-          </ThemedText>
-        ))}
-        {thresholds.length > 0 && (
-          <ThemedText type="small" themeColor="textSecondary">
-            Threshold: {thresholds.map((a) => `${ACTIVITY_ICONS[a]} ${threshold(a)}`).join(' · ')}
-          </ThemedText>
-        )}
       </Card>
+      {activities.length > 0 && (
+        <Card>
+          {activities.map((a) => (
+            <DisciplineProgress key={a} activity={a} summary={g} />
+          ))}
+        </Card>
+      )}
     </>
+  );
+}
+
+/**
+ * A discipline's distance in the workouts filling the plan against its
+ * total, with a tick where the sessions judged so far put it.
+ */
+function DisciplineProgress({ activity: a, summary: g }: { activity: CardioActivity; summary: GoalSummary }) {
+  const theme = useTheme();
+  const planned = g.planned_m[a] ?? 0;
+  const done = g.done_m[a] ?? 0;
+  const due = g.due_m[a] ?? 0;
+  const share = (m: number) => (planned > 0 ? Math.min(m / planned, 1) : 0);
+  const speed = g.threshold[a];
+  const threshold = !speed
+    ? null
+    : a === 'cycling'
+      ? `${(speed * 3.6).toFixed(1)} km/h`
+      : a === 'swimming'
+        ? `${formatDuration(100 / speed)}/100 m`
+        : `${formatDuration(1000 / speed)}/km`;
+  return (
+    <View
+      style={styles.item}
+      accessible
+      accessibilityLabel={`${ACTIVITY_NAMES[a]}: ${formatDistance(done, a)} of ${formatDistance(planned, a)}, ${formatDistance(due, a)} planned so far`}>
+      <View style={styles.row}>
+        <ThemedText style={{ flex: 1 }}>
+          {ACTIVITY_ICONS[a]} {ACTIVITY_NAMES[a]}
+        </ThemedText>
+        <ThemedText type="smallBold" style={styles.num}>
+          {formatDistance(done, a)} of {formatDistance(planned, a)}
+        </ThemedText>
+      </View>
+      <View style={[styles.bar, { backgroundColor: theme.backgroundSelected }]}>
+        <View
+          style={[
+            styles.fill,
+            { width: `${share(done) * 100}%`, backgroundColor: done >= due ? theme.success : theme.accent },
+          ]}
+        />
+        {due > 0 && <View style={[styles.tick, { left: `${share(due) * 100}%`, backgroundColor: theme.text }]} />}
+      </View>
+      <ThemedText type="small" themeColor="textSecondary">
+        {formatDistance(due, a)} planned so far{threshold ? ` · threshold ${threshold}` : ''}
+      </ThemedText>
+    </View>
   );
 }
 
@@ -500,6 +541,14 @@ const styles = StyleSheet.create({
   fill: {
     height: '100%',
     borderRadius: 4,
+  },
+  // Where the plan is up to on a bar.
+  tick: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 2,
+    marginLeft: -1,
   },
   big: {
     fontSize: 22,

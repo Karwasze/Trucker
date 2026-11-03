@@ -47,8 +47,8 @@ func TestMigrate_IsIdempotent(t *testing.T) {
 	if err := s.db.QueryRow("SELECT COUNT(*) FROM schema_migrations").Scan(&count); err != nil {
 		t.Fatalf("failed to count schema_migrations: %v", err)
 	}
-	if count != 15 {
-		t.Errorf("expected 15 applied migrations, got %d", count)
+	if count != 16 {
+		t.Errorf("expected 16 applied migrations, got %d", count)
 	}
 }
 
@@ -617,5 +617,54 @@ func TestMigrate_UpgradeFromV11KeepsSessionsWithoutTempoBlocks(t *testing.T) {
 	if got := sessions[0]; got.TempoBlock != nil || got.HRMax == nil || *got.HRMax != 126 ||
 		!strings.Contains(got.Description, "in the middle") {
 		t.Errorf("expected the session kept as it was, without a block to check, got %+v", got)
+	}
+}
+
+func TestMigrate_UpgradeFromV15KeepsHeartRateProfiles(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "v15.db")
+
+	db, err := sql.Open("sqlite3", path)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	stmts := []string{"CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)"}
+	for i := 1; i <= 15; i++ {
+		matches, err := fs.Glob(migrationsFS, fmt.Sprintf("migrations/%04d_*.sql", i))
+		if err != nil || len(matches) != 1 {
+			t.Fatalf("failed to find migration %d: %v", i, err)
+		}
+		contents, err := migrationsFS.ReadFile(matches[0])
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", matches[0], err)
+		}
+		stmts = append(stmts, string(contents),
+			fmt.Sprintf("INSERT INTO schema_migrations (version, applied_at) VALUES (%d, '2026-01-01T00:00:00Z')", i))
+	}
+	stmts = append(stmts,
+		`INSERT INTO heart_rate_profiles (date, max_hr, resting_hr) VALUES ('2026-10-10', 185, 55)`,
+		`INSERT INTO heart_rate_profiles (date, max_hr, resting_hr) VALUES ('2026-10-20', 185, 50)`,
+	)
+	for _, stmt := range stmts {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatalf("failed to build v15 database: %v", err)
+		}
+	}
+	db.Close()
+
+	s, err := Open(path)
+	if err != nil {
+		t.Fatalf("failed to open and migrate v15 database: %v", err)
+	}
+	defer s.Close()
+
+	for date, resting := range map[string]float64{"2026-10-15": 55, "2026-10-25": 50} {
+		z, err := s.HeartRateZones(date)
+		if err != nil || z == nil || z.MaxHR != 185 || z.RestingHR != resting || z.ZoneStarts != nil {
+			t.Errorf("%s: expected the profile kept with resting %v, got %+v (%v)", date, resting, z, err)
+		}
+	}
+	// The watch's zones can be stored after it.
+	if z, err := s.SetHeartRateZones("2026-11-01", []float64{137, 148, 158, 169}); err != nil || len(z.ZoneStarts) != 4 {
+		t.Errorf("expected the watch's zones stored, got %+v (%v)", z, err)
 	}
 }

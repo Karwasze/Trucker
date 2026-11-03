@@ -38,10 +38,16 @@ export function formatDuration(seconds: number) {
   return h > 0 ? `${h}:${pad(m)}:${pad(s % 60)}` : `${m}:${pad(s % 60)}`;
 }
 
-/** A distance in km, or in metres for swims. */
+/**
+ * Whole metres, thousands split by a narrow space: the locale's separator
+ * can be a point, reading as decimals next to km, which always use one.
+ */
+export const formatMetres = (metres: number) => `${String(Math.round(metres)).replace(/\B(?=(\d{3})+$)/g, '\u202F')} m`;
+
+/** A distance in km, with less precision the further, or in metres for swims. */
 export function formatDistance(metres: number, activity?: CardioActivity) {
-  if (activity === 'swimming') return `${Math.round(metres).toLocaleString()} m`;
-  return `${(metres / 1000).toFixed(metres < 10000 ? 2 : 1)} km`;
+  if (activity === 'swimming') return formatMetres(metres);
+  return `${(metres / 1000).toFixed(metres < 10000 ? 2 : metres < 100000 ? 1 : 0)} km`;
 }
 
 /**

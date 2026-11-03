@@ -1,5 +1,5 @@
 import type { Achievement, AchievementTier, CardioActivity } from '@/api/types';
-import { formatDistance, formatDuration } from '@/workout/format';
+import { formatDistance, formatDuration, formatMetres } from '@/workout/format';
 
 /** Medals for the tiers of an achievement, easiest first; longer ladders end in a trophy. */
 const MEDALS = ['🥉', '🥈', '🥇', '🏆'];
@@ -14,7 +14,7 @@ export const CATEGORY_NAMES: Record<Achievement['category'], string> = {
 
 /** A race distance, in whole km (or metres for swims) where it is one. */
 function roundDistance(metres: number, activity?: string) {
-  if (activity === 'swimming') return `${Math.round(metres).toLocaleString()} m`;
+  if (activity === 'swimming') return formatMetres(metres);
   return `${Number((metres / 1000).toFixed(1))} km`;
 }
 

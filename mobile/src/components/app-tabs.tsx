@@ -1,8 +1,8 @@
 import { router, usePathname, type Href } from 'expo-router';
 import { TabList, TabSlot, TabTrigger, Tabs, useTabTrigger } from 'expo-router/ui';
+import { StyleSheet, View } from 'react-native';
 
 import { CarouselTabBar, type CarouselTab } from '@/components/carousel-tab-bar';
-import { PagerPage, ringDirection, usePager } from '@/components/page-transition';
 
 type AppTab = CarouselTab & {
   href: Extract<Href, string>;
@@ -81,29 +81,23 @@ function TabBar() {
   );
 }
 
-/** The tab screens, sliding past each other as the carousel turns. */
+/** The tab screens: only the focused one is drawn, switching at once. */
 function TabPages() {
-  const { getTrigger } = useTabTrigger({ name: TABS[0].name });
-  const index = Math.max(
-    0,
-    TABS.findIndex((tab) => getTrigger(tab.name)?.isFocused)
-  );
-  const pager = usePager(TABS[index].name, index, ringDirection(TABS.length));
-
   return (
     <TabSlot
-      // The pages are all laid out; the pager hides the ones out of sight.
+      // Tabs left stay mounted, keeping their state, but aren't drawn.
       detachInactiveScreens={false}
       renderFn={(descriptor, { isFocused, loaded }) => {
         // Screens only load once first opened.
         if (!loaded && !isFocused) return null;
-        // A tab's route can be named after its first screen, e.g. "(today)/index".
-        const tab = TABS.find((t) => getTrigger(t.name)?.route.key === descriptor.route.key);
-        if (!tab) return null;
         return (
-          <PagerPage key={descriptor.route.key} pager={pager} pageKey={tab.name}>
+          <View
+            key={descriptor.route.key}
+            style={[StyleSheet.absoluteFill, !isFocused && styles.hidden]}
+            accessibilityElementsHidden={!isFocused}
+            importantForAccessibility={isFocused ? 'auto' : 'no-hide-descendants'}>
             {descriptor.render()}
-          </PagerPage>
+          </View>
         );
       }}
     />
@@ -127,3 +121,9 @@ export default function AppTabs() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  hidden: {
+    display: 'none',
+  },
+});

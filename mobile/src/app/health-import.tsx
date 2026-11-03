@@ -47,13 +47,13 @@ function defaultMatches(workouts: NewCardioWorkout[], sessions: PlannedSession[]
 /**
  * Reviews the Health workouts not imported yet: ticked ones are imported,
  * filling the planned session they count as, and the rest are dismissed so
- * they aren't offered again.
+ * they aren't offered again, unless restored before the week is over.
  */
 export default function HealthImportScreen() {
   const theme = useTheme();
   const { api, serverUrl } = useSettings();
   const achievements = useAchievements();
-  const { dismiss } = useHealthState();
+  const { dismiss, restore } = useHealthState();
   const imports = useHealthImports();
   // Ticked by default, so only unticked UUIDs are tracked.
   const [unticked, setUnticked] = useState<Set<string>>(new Set());
@@ -112,12 +112,13 @@ export default function HealthImportScreen() {
       ) : imports.candidates.length === 0 ? (
         <>
           <Message>No new workouts in Apple Health.</Message>
+          <Dismissed workouts={imports.dismissedThisWeek} onRestore={restore} />
           <HealthReport />
         </>
       ) : (
         <>
           <ThemedText type="small" themeColor="textSecondary">
-            Untick workouts you don&apos;t want in Trucker. They won&apos;t be offered again.
+            Untick workouts you don&apos;t want in Trucker. You can restore them until the week is over.
           </ThemedText>
           {imports.candidates.map((w, i) => {
             const uuid = uuidOf(i);
@@ -186,9 +187,28 @@ export default function HealthImportScreen() {
               />
             )}
           </View>
+          <Dismissed workouts={imports.dismissedThisWeek} onRestore={restore} />
         </>
       )}
     </Screen>
+  );
+}
+
+/** This week's dismissed workouts, each of which can go back on the list to import. */
+function Dismissed({ workouts, onRestore }: { workouts: NewCardioWorkout[]; onRestore: (uuids: string[]) => void }) {
+  if (workouts.length === 0) return null;
+  return (
+    <>
+      <ThemedText type="smallBold">Dismissed this week</ThemedText>
+      {workouts.map((w) => (
+        <Card key={w.source_uuid}>
+          <View style={styles.row}>
+            <CardioSummary workout={w} />
+            <Button title="Restore" variant="secondary" compact onPress={() => onRestore([w.source_uuid!])} />
+          </View>
+        </Card>
+      ))}
+    </>
   );
 }
 

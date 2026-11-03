@@ -5,7 +5,7 @@ import { router } from 'expo-router';
 import type { NewCardioWorkout, PlannedSession } from '@/api/types';
 import HealthImportScreen from '@/app/health-import';
 import { healthWorkoutReport, healthWorkoutsSince } from '@/health/healthkit';
-import { mockAlerts, mockServer, renderInApp, selectPlan, SERVER, type Request } from '@/test-utils';
+import { mockAlerts, mockServer, renderInApp, selectPlan, SERVER, setNow, type Request } from '@/test-utils';
 
 jest.mock('@/health/healthkit', () => ({
   isHealthAvailable: () => true,
@@ -64,6 +64,8 @@ beforeEach(async () => {
   );
   jest.mocked(healthWorkoutsSince).mockResolvedValue([run, swim]);
 });
+
+afterEach(() => jest.useRealTimers());
 
 test('every new workout is ticked; importing one dismisses the unticked other', async () => {
   const requests = fakeServer();
@@ -177,4 +179,31 @@ test('a workout without a Health UUID keeps the session picked for it', async ()
   await user.press(await screen.findByRole('button', { name: 'Strides' }));
   await user.press(screen.getByRole('button', { name: 'Import 1 workout' }));
   expect(requests.find((r) => r.method === 'POST')?.body).toEqual([{ ...manual, planned_session_id: 12 }]);
+});
+
+test('a workout dismissed this week can be restored and imported', async () => {
+  setNow('2026-10-31T12:00:00+01:00');
+  const thu: NewCardioWorkout = {
+    ...run,
+    date: '2026-10-29',
+    started_at: '2026-10-29T07:00:00+01:00',
+    source_uuid: 'thu',
+  };
+  await AsyncStorage.setItem(
+    `trucker.health:${server}`,
+    JSON.stringify({ connectedAt: '2026-10-15T08:00:00.000Z', dismissed: ['thu'] })
+  );
+  jest.mocked(healthWorkoutsSince).mockImplementation(async (_since, skip) => [thu].filter((w) => !skip.has('thu')));
+  const requests = fakeServer();
+  const user = userEvent.setup();
+  await renderInApp(<HealthImportScreen />);
+  expect(await screen.findByText('No new workouts in Apple Health.')).toBeOnTheScreen();
+  expect(screen.getByText('Dismissed this week')).toBeOnTheScreen();
+
+  await user.press(screen.getByRole('button', { name: 'Restore' }));
+  expect(await screen.findByRole('checkbox')).toBeChecked();
+  expect(screen.queryByText('Dismissed this week')).toBeNull();
+  await user.press(screen.getByRole('button', { name: 'Import 1 workout' }));
+  expect(requests.find((r) => r.method === 'POST')?.body).toEqual([thu]);
+  expect((await health()).dismissed).toEqual([]);
 });

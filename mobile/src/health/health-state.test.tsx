@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { healthWorkoutsSince, isHealthAvailable } from '@/health/healthkit';
 import { importSince, useHealthImports, useHealthState } from '@/health/health-state';
 import { SettingsProvider } from '@/settings/settings-context';
+import { setNow } from '@/test-utils';
 
 jest.mock('@/health/healthkit', () => ({
   isHealthAvailable: jest.fn(() => true),
@@ -20,6 +21,7 @@ const wrapper = ({ children }: { children: ReactNode }) => <SettingsProvider>{ch
 beforeEach(async () => {
   jest.clearAllMocks();
   await AsyncStorage.clear();
+  jest.mocked(isHealthAvailable).mockReturnValue(true);
   fetchMock.mockResolvedValue({ ok: true, json: async () => [] });
 });
 
@@ -61,6 +63,9 @@ test('dismissals are kept without duplicates', async () => {
   await act(() => result.current.dismiss(['x', 'y']));
   await act(() => result.current.dismiss(['y', 'z']));
   expect(result.current.state.dismissed).toEqual(['x', 'y', 'z']);
+
+  await act(() => result.current.restore(['y']));
+  expect(result.current.state.dismissed).toEqual(['x', 'z']);
 });
 
 test('imports skip workouts already imported or dismissed', async () => {
@@ -97,4 +102,40 @@ test('nothing is imported until Health is connected, or where it’s unavailable
   await renderOnServer('http://e', () => useHealthImports());
   await act(async () => {});
   expect(healthWorkoutsSince).not.toHaveBeenCalled();
+});
+
+afterEach(() => jest.useRealTimers());
+
+test('workouts dismissed this week can be restored to the imports', async () => {
+  setNow('2026-10-31T12:00:00+01:00');
+  await AsyncStorage.setItem(
+    'trucker.health:http://f',
+    JSON.stringify({ connectedAt: '2026-10-18T10:00:00.000Z', dismissed: ['thu', 'old'] })
+  );
+  fetchMock.mockResolvedValue({ ok: true, json: async () => [{ id: 1, source_uuid: 'done' }] });
+  const thu = {
+    source_uuid: 'thu',
+    date: '2026-10-29',
+    started_at: '2026-10-29T07:00:00+01:00',
+    activity: 'running' as const,
+    duration_seconds: 2400,
+  };
+  // Health leaves out what it's told to skip; a workout not dismissed isn't restorable.
+  jest
+    .mocked(healthWorkoutsSince)
+    .mockImplementation(async (_since, skip) =>
+      [thu, { ...thu, source_uuid: 'other' }].filter((w) => !skip.has(w.source_uuid))
+    );
+
+  const { result } = await renderOnServer('http://f', () => [useHealthImports(), useHealthState()] as const);
+  await waitFor(() => expect(result.current[0].dismissedThisWeek).toEqual([thu]));
+  expect(result.current[0].candidates.map((w) => w.source_uuid)).toEqual(['other']);
+  // Only from this week's Monday, local time.
+  const [since, skip] = jest.mocked(healthWorkoutsSince).mock.calls[1];
+  expect(since).toEqual(new Date('2026-10-26T00:00:00+01:00'));
+  expect([...skip].sort()).toEqual(['done', 'other']);
+
+  await act(() => result.current[1].restore(['thu']));
+  expect(result.current[0].candidates.map((w) => w.source_uuid)).toEqual(['other', 'thu']);
+  expect(result.current[0].dismissedThisWeek).toEqual([]);
 });

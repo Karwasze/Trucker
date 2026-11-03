@@ -1,6 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useState } from 'react';
 
+import { localDate } from '@/api/client';
+import type { NewCardioWorkout } from '@/api/types';
+import { mondayOf } from '@/components/chart-scale';
 import { useQuery } from '@/hooks/use-query';
 import { healthWorkoutReport, healthWorkoutsSince, isHealthAvailable } from '@/health/healthkit';
 import { syncHeartRateZones } from '@/health/zones-sync';
@@ -79,13 +82,24 @@ export function useHealthState() {
     (uuids: string[]) => save(serverUrl, (s) => ({ ...s, dismissed: [...new Set([...s.dismissed, ...uuids])] })),
     [serverUrl]
   );
+  const restore = useCallback(
+    (uuids: string[]) => save(serverUrl, (s) => ({ ...s, dismissed: s.dismissed.filter((u) => !uuids.includes(u)) })),
+    [serverUrl]
+  );
 
-  return { state: state ?? EMPTY, loaded: state !== undefined, connect, disconnect, dismiss };
+  return { state: state ?? EMPTY, loaded: state !== undefined, connect, disconnect, dismiss, restore };
+}
+
+/** Local midnight on this week's Monday: workouts dismissed since then can be restored. */
+function restorableSince(now = new Date()): Date {
+  const [y, m, d] = mondayOf(localDate(now)).split('-').map(Number);
+  return new Date(y, m - 1, d);
 }
 
 /**
  * Health workouts since importSince that aren't imported or dismissed yet,
- * oldest first. Refreshes when the screen gains focus.
+ * oldest first, and the ones dismissed this week, which can be restored.
+ * Refreshes when the screen gains focus.
  */
 export function useHealthImports() {
   const { api, serverUrl } = useSettings();
@@ -97,15 +111,27 @@ export function useHealthImports() {
       const imported = await api.listCardio();
       const known = new Set(imported.flatMap((w) => (w.source_uuid ? [w.source_uuid] : [])));
       // Dismissals read fresh, so a dismissal made since the last load counts.
-      (await load(serverUrl)).dismissed.forEach((uuid) => known.add(uuid));
+      const dismissed = new Set((await load(serverUrl)).dismissed);
       // Keeps the zones sessions are judged by current, alongside.
       syncHeartRateZones(api, true).catch(() => {});
-      return healthWorkoutsSince(importSince(connectedAt!), known);
+      const since = importSince(connectedAt!);
+      const offered = await healthWorkoutsSince(since, new Set([...known, ...dismissed]));
+      if (dismissed.size === 0) return offered;
+      // This week's dismissed ones, whatever isn't imported or read above.
+      offered.forEach((w) => w.source_uuid && known.add(w.source_uuid));
+      const from = new Date(Math.max(since.getTime(), restorableSince().getTime()));
+      const restorable = (await healthWorkoutsSince(from, known)).filter(
+        (w) => w.source_uuid && dismissed.has(w.source_uuid)
+      );
+      return [...offered, ...restorable].sort((a, b) => Date.parse(a.started_at) - Date.parse(b.started_at));
     }
   );
+  // Filtered by the current state, so dismissing and restoring show at once.
   const dismissed = new Set(state.dismissed);
-  const candidates = (query.data ?? []).filter((w) => !w.source_uuid || !dismissed.has(w.source_uuid));
-  return { ...query, candidates };
+  const isDismissed = (w: NewCardioWorkout) => !!w.source_uuid && dismissed.has(w.source_uuid);
+  const candidates = (query.data ?? []).filter((w) => !isDismissed(w));
+  const dismissedThisWeek = (query.data ?? []).filter(isDismissed);
+  return { ...query, candidates, dismissedThisWeek };
 }
 
 /**

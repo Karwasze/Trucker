@@ -194,19 +194,14 @@ function undrawn(element: { props: { style?: unknown }; parent: unknown }) {
   return false;
 }
 
-test('the page sliding out can’t be read or touched, and others aren’t drawn', async () => {
+test('switching tabs swaps the page at once, keeping the others loaded but not drawn', async () => {
   await renderTabs();
   await tap(SLOT_CENTRES.right);
   expect(screen.getByText('Current week screen')).toBeOnTheScreen();
-  // Today is still drawn, sliding away, but hidden from screen readers.
+  // Today doesn't slide away: it's gone straight off, but keeps its state.
   expect(screen.queryByText('Today screen')).toBeNull();
-  expect(undrawn(screen.getByText('Today screen', { includeHiddenElements: true }))).toBe(false);
-
-  // Two tabs on, Today stays loaded, keeping its state, but isn't drawn.
-  await tap(SLOT_CENTRES.right);
-  expect(screen.getByText('Training Plan screen')).toBeOnTheScreen();
   expect(undrawn(screen.getByText('Today screen', { includeHiddenElements: true }))).toBe(true);
-  expect(undrawn(screen.getByText('Current week screen', { includeHiddenElements: true }))).toBe(false);
+  expect(undrawn(screen.getByText('Current week screen'))).toBe(false);
 });
 
 test('every tab shows its name', async () => {

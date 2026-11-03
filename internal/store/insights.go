@@ -28,7 +28,6 @@ const (
 )
 
 const (
-	volumeWindowDays    = 28
 	bodyweightTrendDays = 30
 	// A plan exercise counts as stalled after this many misses in a row at
 	// the same weight.
@@ -72,9 +71,9 @@ type exerciseHistory struct {
 }
 
 // GetInsights analyses training up to and including today (YYYY-MM-DD).
-// Adherence, deloads, progression, tonnage and strength levels cover the
-// timespan starting on from (YYYY-MM-DD, or "" for all time); muscle volume
-// always covers the last four weeks. Adherence and stalls are judged against
+// Adherence, deloads, progression, tonnage, muscle volume and strength
+// levels cover the timespan starting on from (YYYY-MM-DD, or "" for all
+// time). Adherence and stalls are judged against
 // the plan planID, and left out for 0 or an unknown plan; so is
 // progression, which only covers the plan's exercises.
 func (s *Store) GetInsights(today, from string, planID int) (Insights, error) {
@@ -112,15 +111,16 @@ func (s *Store) GetInsights(today, from string, planID int) (Insights, error) {
 	}
 
 	insights := Insights{
-		Date:        today,
-		From:        from,
-		Bodyweight:  bodyweightTrend(bodyweight),
-		Stalls:      []PlanStall{},
-		Progression: []LiftProgress{},
-		Tonnage:     tonnage(window, now),
-		Untagged:    []string{},
-		Cardio:      cardioSummaries(cardio, from, now),
-		Triathlon:   triathlonSummary(triathlons(cardio), from),
+		Date:              today,
+		From:              from,
+		Bodyweight:        bodyweightTrend(bodyweight),
+		Stalls:            []PlanStall{},
+		Progression:       []LiftProgress{},
+		Tonnage:           tonnage(window, now),
+		Untagged:          []string{},
+		Cardio:            cardioSummaries(cardio, from, now),
+		CardioProgression: cardioProgression(cardio, from),
+		Triathlon:         triathlonSummary(triathlons(cardio), from),
 	}
 
 	if planID != 0 {
@@ -138,15 +138,27 @@ func (s *Store) GetInsights(today, from string, planID int) (Insights, error) {
 		}
 	}
 
-	volumeStart := now.AddDate(0, 0, -volumeWindowDays).Format(dateLayout)
-	weeks := float64(volumeWindowDays) / 7
+	// Weekly averages count weeks from the later of from and the first
+	// workout, so untracked weeks before it don't dilute them.
+	var first string
+	if len(all) > 0 {
+		first = all[0].date
+	}
+	if len(cardio) > 0 && (first == "" || cardio[0].Date < first) {
+		first = cardio[0].Date
+	}
+	weeks := weeksSince(max(from, first), now)
+	liftWeeks := weeks
+	if len(all) > 0 {
+		liftWeeks = weeksSince(max(from, all[0].date), now)
+	}
 	sessions := make(map[string]bool)
 	weighted := make(map[string]float64)
 	muscleDays := make(map[string]map[string]bool)
 	lastTrained := make(map[string]string)
 	for _, set := range all {
 		muscles, tagged := tags[set.exercise]
-		if !tagged && set.date > volumeStart && !slices.Contains(insights.Untagged, set.exercise) {
+		if !tagged && set.date >= from && !slices.Contains(insights.Untagged, set.exercise) {
 			insights.Untagged = append(insights.Untagged, set.exercise)
 		}
 		for _, m := range muscles {
@@ -154,7 +166,7 @@ func (s *Store) GetInsights(today, from string, planID int) (Insights, error) {
 				lastTrained[m.Muscle] = set.date
 			}
 		}
-		if set.date <= volumeStart {
+		if set.date < from {
 			continue
 		}
 		sessions[set.date] = true
@@ -172,18 +184,18 @@ func (s *Store) GetInsights(today, from string, planID int) (Insights, error) {
 	}
 	slices.Sort(insights.Untagged)
 	for _, w := range cardio {
-		if w.Date > volumeStart {
+		if w.Date >= from {
 			sessions[w.Date] = true
 		}
 	}
 
 	insights.SessionsPerWeek = round(float64(len(sessions))/weeks, 1)
 	for _, muscle := range Muscles {
-		weekly := round(weighted[muscle]/weeks, 1)
+		weekly := round(weighted[muscle]/liftWeeks, 1)
 		insights.Muscles = append(insights.Muscles, MuscleVolume{
 			Muscle:      muscle,
 			WeeklySets:  weekly,
-			DaysPerWeek: round(float64(len(muscleDays[muscle]))/weeks, 1),
+			DaysPerWeek: round(float64(len(muscleDays[muscle]))/liftWeeks, 1),
 			LastTrained: lastTrained[muscle],
 			Status:      volumeStatus(weekly),
 		})
@@ -624,6 +636,17 @@ func round(v float64, decimals int) float64 {
 	return math.Round(v*p) / p
 }
 
+// weeksSince is the number of weeks from start (YYYY-MM-DD) to now, both
+// included, and at least one so a short span doesn't inflate weekly
+// averages. An empty or invalid start counts as one week.
+func weeksSince(start string, now time.Time) float64 {
+	first, err := time.Parse(dateLayout, start)
+	if err != nil {
+		return 1
+	}
+	return math.Max((now.Sub(first).Hours()/24+1)/7, 1)
+}
+
 // cardioSummaries totals the cardio workouts (oldest first) from from
 // (YYYY-MM-DD, or "" for all time) up to now per activity, in the order of
 // CardioActivities. Weekly distances count weeks from the later of from and
@@ -634,12 +657,7 @@ func cardioSummaries(cardio []CardioWorkout, from string, now time.Time) []Cardi
 	if len(cardio) == 0 {
 		return summaries
 	}
-	start := max(from, cardio[0].Date)
-	first, err := time.Parse(dateLayout, start)
-	if err != nil {
-		return summaries
-	}
-	weeks := math.Max((now.Sub(first).Hours()/24+1)/7, 1)
+	weeks := weeksSince(max(from, cardio[0].Date), now)
 
 	byActivity := make(map[string]*CardioSummary)
 	for _, w := range cardio {
@@ -665,4 +683,68 @@ func cardioSummaries(cardio []CardioWorkout, from string, now time.Time) []Cardi
 		}
 	}
 	return summaries
+}
+
+// cardioProgressSessions is how many sessions with a distance an activity
+// needs over the timespan for a pace trend.
+const cardioProgressSessions = 3
+
+// cardioProgression fits a pace trend per activity to the cardio workouts
+// (oldest first) from from (YYYY-MM-DD, or "" for all time), in the order of
+// CardioActivities. Activities with fewer than cardioProgressSessions
+// sessions with a distance, or all on one day, are left out.
+func cardioProgression(cardio []CardioWorkout, from string) []CardioProgress {
+	type point struct{ day, speed float64 }
+	points := make(map[string][]point)
+	dates := make(map[string][2]string)
+	for _, w := range cardio {
+		if w.Date < from || w.DistanceM == nil || *w.DistanceM <= 0 || w.DurationSeconds <= 0 {
+			continue
+		}
+		date, err := time.Parse(dateLayout, w.Date)
+		if err != nil {
+			continue
+		}
+		points[w.Activity] = append(points[w.Activity], point{float64(date.Unix() / 86400), *w.DistanceM / w.DurationSeconds})
+		span, ok := dates[w.Activity]
+		if !ok {
+			span[0] = w.Date
+		}
+		span[1] = w.Date
+		dates[w.Activity] = span
+	}
+
+	progress := []CardioProgress{}
+	for _, activity := range CardioActivities {
+		ps := points[activity]
+		if len(ps) < cardioProgressSessions {
+			continue
+		}
+		var meanDay, meanSpeed float64
+		for _, p := range ps {
+			meanDay += p.day
+			meanSpeed += p.speed
+		}
+		n := float64(len(ps))
+		meanDay, meanSpeed = meanDay/n, meanSpeed/n
+		var cov, variance float64
+		for _, p := range ps {
+			cov += (p.day - meanDay) * (p.speed - meanSpeed)
+			variance += (p.day - meanDay) * (p.day - meanDay)
+		}
+		if variance == 0 {
+			continue
+		}
+		slope := cov / variance
+		at := func(day float64) float64 { return round(meanSpeed+slope*(day-meanDay), 3) }
+		progress = append(progress, CardioProgress{
+			Activity:   activity,
+			Sessions:   len(ps),
+			FirstDate:  dates[activity][0],
+			LastDate:   dates[activity][1],
+			StartSpeed: at(ps[0].day),
+			EndSpeed:   at(ps[len(ps)-1].day),
+		})
+	}
+	return progress
 }

@@ -1,29 +1,29 @@
 import { router } from 'expo-router';
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { localDate } from '@/api/client';
 import type {
   Adherence,
   CardioActivity,
+  CardioProgress,
   CardioSummary,
   GoalSummary,
   Insights,
   LiftProgress,
   PlanStall,
   StrengthLevel,
-  Tonnage,
 } from '@/api/types';
-import { WeeklyBarChart } from '@/components/bar-chart';
 import { ThemedText } from '@/components/themed-text';
 import { DEFAULT_TIMESPAN, TimespanPicker, timespanStart, type Timespan } from '@/components/timespan';
 import { Card, Message, Screen, SectionLabel } from '@/components/ui';
 import { Spacing, type ThemeColor } from '@/constants/theme';
 import { PHASE_NAMES } from '@/goals/presets';
+import { BodyMap } from '@/insights/body-map';
 import { ZoneRanges } from '@/health/heart-rate-zones';
 import { useQuery } from '@/hooks/use-query';
 import { useTheme } from '@/hooks/use-theme';
-import { Tile, TileRow } from '@/progress/tile';
+import { Tile, TileButton, TileRow } from '@/progress/tile';
 import { TriathlonInsights } from '@/triathlon/triathlon-insights';
 import { useSettings } from '@/settings/settings-context';
 import {
@@ -32,7 +32,6 @@ import {
   formatDate,
   formatDistance,
   formatDuration,
-  formatKg,
   formatPace,
 } from '@/workout/format';
 
@@ -48,76 +47,51 @@ const shortDate = (date: string) =>
 const plural = (n: number, word: string, words = `${word}s`) => `${n} ${n === 1 ? word : words}`;
 /** Missed days listed before collapsing the rest into a count. */
 const MISSED_SHOWN = 5;
+/** Sessions with a distance an activity needs for a pace trend, as on the server. */
+const CARDIO_PROGRESS_SESSIONS = 3;
 
-type InsightsState = {
-  timespan: Timespan;
-  setTimespan: (timespan: Timespan) => void;
-  insights: ReturnType<typeof useQuery<Insights>>;
-  hasPlan: boolean;
-};
+type Page = 'strength' | 'cardio';
 
-const InsightsContext = createContext<InsightsState | null>(null);
+const PAGES: { key: Page; label: string; subtitle: string }[] = [
+  { key: 'strength', label: 'Strength', subtitle: 'Plan adherence, progression and strength levels' },
+  { key: 'cardio', label: 'Cardio', subtitle: 'Race goal, pace and triathlons' },
+];
 
-/** Loads insights once for both Insights pages, which share the timespan. */
-export function InsightsProvider({ children }: { children: ReactNode }) {
+/**
+ * Insights: buttons for lifting and endurance analysis, the timespan both
+ * share, then the chosen one's content. Charts per lift or activity live on
+ * the Progress tab, a tap away.
+ */
+export function InsightsScreen() {
   const { api, planId, serverUrl } = useSettings();
+  const [page, setPage] = useState<Page>('strength');
   const [timespan, setTimespan] = useState<Timespan>(DEFAULT_TIMESPAN);
   const today = localDate();
   const from = timespanStart(timespan);
+  // One request for both pages.
   const insights = useQuery(`insights:${serverUrl}:${today}:${from}:${planId}`, () =>
     api.insights(today, from, planId)
   );
   return (
-    <InsightsContext.Provider value={{ timespan, setTimespan, insights, hasPlan: planId !== null }}>
-      {children}
-    </InsightsContext.Provider>
-  );
-}
-
-function useInsights() {
-  const state = useContext(InsightsContext);
-  if (!state) throw new Error('useInsights must be used within an InsightsProvider');
-  return state;
-}
-
-/** One Insights page: the timespan both pages share, then its content once loaded. */
-function InsightsPage({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string;
-  subtitle: string;
-  children: (data: Insights, timespan: Timespan, hasPlan: boolean) => ReactNode;
-}) {
-  const { timespan, setTimespan, insights, hasPlan } = useInsights();
-  return (
-    <Screen title={title} subtitle={subtitle} hasHeader refreshing={insights.refreshing} onRefresh={insights.refresh}>
+    <Screen
+      title="Insights"
+      subtitle={PAGES.find((p) => p.key === page)!.subtitle}
+      refreshing={insights.refreshing}
+      onRefresh={insights.refresh}>
+      <View accessibilityRole="tablist" accessibilityLabel="Insights" style={styles.pages}>
+        {PAGES.map((p) => (
+          <TileButton key={p.key} label={p.label} selected={p.key === page} onPress={() => setPage(p.key)} />
+        ))}
+      </View>
       <TimespanPicker value={timespan} onChange={setTimespan} />
       {!insights.data ? (
         <Message loading={!insights.error} error={insights.error} />
+      ) : page === 'strength' ? (
+        <StrengthContent data={insights.data} timespan={timespan} hasPlan={planId !== null} />
       ) : (
-        children(insights.data, timespan, hasPlan)
+        <CardioContent data={insights.data} timespan={timespan} />
       )}
     </Screen>
-  );
-}
-
-/** Lifting analysis, the first Insights page. Charts per lift live on the Progress tab, a tap away. */
-export function StrengthInsights() {
-  return (
-    <InsightsPage title="Strength" subtitle="Plan adherence, progression and strength levels">
-      {(data, timespan, hasPlan) => <StrengthContent data={data} timespan={timespan} hasPlan={hasPlan} />}
-    </InsightsPage>
-  );
-}
-
-/** Endurance analysis, the second Insights page. */
-export function CardioInsights() {
-  return (
-    <InsightsPage title="Cardio" subtitle="Race goal, distances and triathlons">
-      {(data, timespan) => <CardioContent data={data} timespan={timespan} />}
-    </InsightsPage>
   );
 }
 
@@ -170,18 +144,26 @@ function StrengthContent({ data, timespan, hasPlan }: { data: Insights; timespan
           </ThemedText>
         </Card>
       ) : (
-        data.progression.map((p) => <ProgressCard key={p.exercise} progress={p} timespan={timespan} />)
+        pairs(data.progression).map((row) => (
+          <TileRow key={row[0].exercise}>
+            {row.map((p) => (
+              <ProgressTile key={p.exercise} progress={p} timespan={timespan} />
+            ))}
+            {row.length === 1 && <View style={{ flex: 1 }} />}
+          </TileRow>
+        ))
       )}
 
-      <SectionLabel>Tonnage</SectionLabel>
-      {data.tonnage.total === 0 ? (
+      <SectionLabel>Muscles · {allTime ? 'from beginning' : `last ${timespan.label}`}</SectionLabel>
+      {data.muscles.every((m) => m.weekly_sets <= 0) ? (
         <Card>
           <ThemedText type="small" themeColor="textSecondary">
-            {allTime ? 'No workouts.' : `Nothing lifted in ${span}.`}
+            {allTime ? 'No tagged lifts.' : `No tagged lifts in ${span}.`} Tag exercises in Settings → Muscles to see
+            which muscles they work.
           </ThemedText>
         </Card>
       ) : (
-        <TonnageSection tonnage={data.tonnage} today={data.date} />
+        <BodyMap muscles={data.muscles} span={allTime ? null : span} />
       )}
 
       <SectionLabel>Strength levels</SectionLabel>
@@ -216,6 +198,7 @@ function StrengthContent({ data, timespan, hasPlan }: { data: Insights; timespan
 
 function CardioContent({ data, timespan }: { data: Insights; timespan: Timespan }) {
   const allTime = timespan.months === null;
+  const trends = data.cardio_progression;
   return (
     <>
       {data.goal && <GoalSection summary={data.goal} />}
@@ -230,6 +213,30 @@ function CardioContent({ data, timespan }: { data: Insights; timespan: Timespan 
           data.cardio.map((c) => <CardioRow key={c.activity} summary={c} timespan={timespan} />)
         )}
       </Card>
+
+      {data.cardio.length > 0 && (
+        <>
+          <SectionLabel>Progression · {allTime ? 'from beginning' : `last ${timespan.label}`}</SectionLabel>
+          <Card>
+            {!trends ? (
+              <ThemedText type="small" themeColor="textSecondary">
+                Update the server to see whether your pace is improving.
+              </ThemedText>
+            ) : (
+              <>
+                {trends.map((p) => (
+                  <PaceRow key={p.activity} progress={p} timespan={timespan} />
+                ))}
+                {data.cardio
+                  .filter((c) => !trends.some((p) => p.activity === c.activity))
+                  .map((c) => (
+                    <NoPaceRow key={c.activity} summary={c} />
+                  ))}
+              </>
+            )}
+          </Card>
+        </>
+      )}
 
       <ZoneRanges />
 
@@ -285,63 +292,39 @@ function StallRow({ stall: s }: { stall: PlanStall }) {
   );
 }
 
-function ProgressCard({ progress: p, timespan }: { progress: LiftProgress; timespan: Timespan }) {
+/** Splits `items` into rows of two, for a grid of half-width tiles. */
+const pairs = <T,>(items: T[]) =>
+  Array.from({ length: Math.ceil(items.length / 2) }, (_, i) => items.slice(i * 2, i * 2 + 2));
+
+/** A lift's latest est. 1RM against its record; its chart is on Progress, a tap away. */
+function ProgressTile({ progress: p, timespan }: { progress: LiftProgress; timespan: Timespan }) {
   const theme = useTheme();
-  const change = p.latest_1rm - p.first_1rm;
-  const single = p.sessions === 1;
-  const trend: ThemeColor = single || change === 0 ? 'textSecondary' : change > 0 ? 'success' : 'danger';
-  const arrow = change > 0 ? '▲' : change < 0 ? '▼' : '±';
-  const percent = Math.round((Math.abs(change) / p.first_1rm) * 1000) / 10;
   const atRecord = p.latest_1rm >= p.record_1rm;
   const share = Math.min(p.latest_1rm / p.record_1rm, 1);
   return (
     <Pressable
       onPress={() => router.navigate({ pathname: '/stats', params: { exercise: p.exercise, span: timespan.key } })}
-      style={({ pressed }) => pressed && { opacity: 0.6 }}
+      style={({ pressed }) => [{ flex: 1 }, pressed && { opacity: 0.6 }]}
       accessibilityRole="button"
       accessibilityHint={`Opens the ${p.exercise} chart`}>
-      <Card>
-        <View style={styles.row}>
-          <ThemedText type="smallBold" style={{ flex: 1 }}>
-            {p.exercise}
-          </ThemedText>
-          <ThemedText themeColor="textSecondary">›</ThemedText>
+      <Card style={styles.tile}>
+        <ThemedText type="smallBold" numberOfLines={1}>
+          {p.exercise}
+        </ThemedText>
+        <ThemedText style={styles.big} numberOfLines={1} adjustsFontSizeToFit>
+          {formatNumber(p.latest_1rm)} kg
+        </ThemedText>
+        <View style={[styles.bar, { backgroundColor: theme.backgroundSelected }]}>
+          <View
+            style={[
+              styles.fill,
+              { width: `${share * 100}%`, backgroundColor: atRecord ? theme.success : theme.accent },
+            ]}
+          />
         </View>
-        <View style={[styles.row, { alignItems: 'baseline' }]}>
-          <ThemedText style={styles.big}>{formatNumber(p.latest_1rm)} kg</ThemedText>
-          <ThemedText type="small" themeColor="textSecondary" style={{ flex: 1 }}>
-            est. 1RM
-          </ThemedText>
-        </View>
-        <View style={styles.row}>
-          <View style={[styles.bar, { backgroundColor: theme.backgroundSelected }]}>
-            <View
-              style={[
-                styles.fill,
-                { width: `${share * 100}%`, backgroundColor: atRecord ? theme.success : theme.accent },
-              ]}
-            />
-          </View>
-          <ThemedText type="small" themeColor={atRecord ? 'success' : 'textSecondary'} style={styles.num}>
-            {atRecord ? 'Record' : `${Math.round(share * 100)}% of record`}
-          </ThemedText>
-        </View>
-        <View style={styles.row}>
-          <Stat label={`Record · ${shortDate(p.record_date)}`} value={`${formatNumber(p.record_1rm)} kg`} />
-          <View style={{ flex: 1 }}>
-            <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
-              {single ? 'First session' : `Since ${shortDate(p.first_date)}`}
-            </ThemedText>
-            <ThemedText type="smallBold" themeColor={trend} style={{ fontVariant: ['tabular-nums'] }}>
-              {single ? '–' : `${arrow} ${formatNumber(Math.abs(change))} kg (${percent}%)`}
-            </ThemedText>
-            {p.per_month !== undefined && (
-              <ThemedText type="small" themeColor="textSecondary" style={{ fontVariant: ['tabular-nums'] }}>
-                {`${p.per_month >= 0 ? '+' : '−'}${formatNumber(Math.abs(p.per_month))} kg / month`}
-              </ThemedText>
-            )}
-          </View>
-        </View>
+        <ThemedText type="small" themeColor={atRecord ? 'success' : 'textSecondary'} numberOfLines={1}>
+          {atRecord ? 'Record' : `${Math.round(share * 100)}% of record`}
+        </ThemedText>
       </Card>
     </Pressable>
   );
@@ -361,7 +344,11 @@ function GoalSection({ summary: g }: { summary: GoalSummary }) {
     <>
       <SectionLabel>{g.goal.name}</SectionLabel>
       <Pressable
-        onPress={() => router.navigate({ pathname: '/plans/goal-calendar', params: { id: g.goal.id } })}
+        // With the plans list underneath, as the Training Plan tab may not
+        // have been opened yet, so there's a way back.
+        onPress={() =>
+          router.navigate({ pathname: '/plans/goal-calendar', params: { id: g.goal.id } }, { withAnchor: true })
+        }
         accessibilityRole="button">
         <Card>
           <ThemedText type="smallBold">
@@ -414,6 +401,55 @@ function CardioRow({ summary: c, timespan }: { summary: CardioSummary; timespan:
   );
 }
 
+/** Whether an activity's pace improved over the timespan; its chart is on Progress, a tap away. */
+function PaceRow({ progress: p, timespan }: { progress: CardioProgress; timespan: Timespan }) {
+  const change = (p.end_speed - p.start_speed) / p.start_speed;
+  const percent = Math.round(Math.abs(change) * 100);
+  const trend: ThemeColor = percent === 0 ? 'textSecondary' : change > 0 ? 'success' : 'danger';
+  // Speed for rides, pace for the rest, as on Progress.
+  const pace = (speed: number) => formatPace(p.activity, speed, 1);
+  return (
+    <Pressable
+      onPress={() => router.navigate({ pathname: '/stats', params: { activity: p.activity, span: timespan.key } })}
+      accessibilityRole="button"
+      accessibilityHint={`Opens the ${ACTIVITY_NAMES[p.activity]} chart`}
+      style={({ pressed }) => [styles.item, pressed && { opacity: 0.5 }]}>
+      <View style={styles.row}>
+        <ThemedText style={{ flex: 1 }}>
+          {ACTIVITY_ICONS[p.activity]} {ACTIVITY_NAMES[p.activity]}
+        </ThemedText>
+        <ThemedText type="smallBold" themeColor={trend}>
+          {percent === 0 ? 'Steady' : `${change > 0 ? '▲' : '▼'} ${percent}% ${change > 0 ? 'faster' : 'slower'}`}
+        </ThemedText>
+      </View>
+      <ThemedText type="small" themeColor="textSecondary">
+        {pace(p.start_speed)} → {pace(p.end_speed)} · {plural(p.sessions, 'session')} since {shortDate(p.first_date)}
+      </ThemedText>
+    </Pressable>
+  );
+}
+
+/** An activity without a pace trend yet, and what it still needs. */
+function NoPaceRow({ summary: c }: { summary: CardioSummary }) {
+  return (
+    <View style={styles.item}>
+      <View style={styles.row}>
+        <ThemedText style={{ flex: 1 }}>
+          {ACTIVITY_ICONS[c.activity]} {ACTIVITY_NAMES[c.activity]}
+        </ThemedText>
+        <ThemedText type="smallBold" themeColor="textSecondary">
+          No trend yet
+        </ThemedText>
+      </View>
+      <ThemedText type="small" themeColor="textSecondary">
+        {c.sessions < CARDIO_PROGRESS_SESSIONS
+          ? `${c.sessions} of the ${CARDIO_PROGRESS_SESSIONS} sessions needed · any distance counts`
+          : `Needs a recorded distance on ${CARDIO_PROGRESS_SESSIONS} sessions, on more than one day`}
+      </ThemedText>
+    </View>
+  );
+}
+
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <View style={{ flex: 1 }}>
@@ -424,40 +460,6 @@ function Stat({ label, value }: { label: string; value: string }) {
         {value}
       </ThemedText>
     </View>
-  );
-}
-
-function TonnageSection({ tonnage, today }: { tonnage: Tonnage; today: string }) {
-  const best = tonnage.weekly.reduce((a, b) => (b.tonnage > a.tonnage ? b : a));
-  return (
-    <>
-      <TileRow>
-        <Tile label="Total" value={formatKg(tonnage.total)} />
-        <Tile label={`Best week (${shortDate(best.week)})`} value={formatKg(best.tonnage)} />
-      </TileRow>
-      {tonnage.weekly.length > 1 && (
-        <Card>
-          <ThemedText type="smallBold">Weekly tonnage</ThemedText>
-          <WeeklyBarChart
-            weeks={tonnage.weekly.map((w) => ({ week: w.week, value: w.tonnage }))}
-            from={tonnage.weekly[0].week}
-            to={today}
-            unit="kg"
-            formatValue={formatKg}
-          />
-        </Card>
-      )}
-      <Card>
-        {tonnage.by_exercise.map((e) => (
-          <View key={e.exercise} style={styles.row}>
-            <ThemedText style={{ flex: 1 }}>{e.exercise}</ThemedText>
-            <ThemedText themeColor="textSecondary" style={styles.num}>
-              {formatKg(e.tonnage)}
-            </ThemedText>
-          </View>
-        ))}
-      </Card>
-    </>
   );
 }
 
@@ -477,6 +479,10 @@ function StrengthRow({ level }: { level: StrengthLevel }) {
 }
 
 const styles = StyleSheet.create({
+  pages: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -489,9 +495,13 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
     textAlign: 'right',
   },
-  bar: {
+  tile: {
     flex: 1,
-    height: 8,
+    gap: Spacing.one,
+    padding: Spacing.three,
+  },
+  bar: {
+    height: 6,
     borderRadius: 4,
     overflow: 'hidden',
   },

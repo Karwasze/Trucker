@@ -1,5 +1,5 @@
-import { StrengthInsights } from '@/insights/insights-view';
+import { InsightsScreen } from '@/insights/insights-view';
 
-export default function StrengthInsightsScreen() {
-  return <StrengthInsights />;
+export default function InsightsTab() {
+  return <InsightsScreen />;
 }

@@ -143,22 +143,22 @@ type ProgressionResult struct {
 // time) to Date: plan adherence and stalls, progression and tonnage per lift,
 // strength relative to bodyweight, cardio per activity and triathlons.
 // Cardio days count as sessions and towards adherence like lifting days.
-// Muscle volume always covers the last four weeks.
 type Insights struct {
-	Date            string            `json:"date"`
-	From            string            `json:"from,omitempty"`
-	Bodyweight      *BodyweightTrend  `json:"bodyweight"`
-	SessionsPerWeek float64           `json:"sessions_per_week"`
-	Muscles         []MuscleVolume    `json:"muscles"`
-	Adherence       *Adherence        `json:"adherence"`
-	Stalls          []PlanStall       `json:"stalls"`
-	Progression     []LiftProgress    `json:"progression"`
-	Tonnage         Tonnage           `json:"tonnage"`
-	Strength        []StrengthLevel   `json:"strength"`
-	Untagged        []string          `json:"untagged"`
-	Cardio          []CardioSummary   `json:"cardio"`
-	Triathlon       *TriathlonSummary `json:"triathlon"`
-	Goal            *GoalSummary      `json:"goal"`
+	Date              string            `json:"date"`
+	From              string            `json:"from,omitempty"`
+	Bodyweight        *BodyweightTrend  `json:"bodyweight"`
+	SessionsPerWeek   float64           `json:"sessions_per_week"`
+	Muscles           []MuscleVolume    `json:"muscles"`
+	Adherence         *Adherence        `json:"adherence"`
+	Stalls            []PlanStall       `json:"stalls"`
+	Progression       []LiftProgress    `json:"progression"`
+	Tonnage           Tonnage           `json:"tonnage"`
+	Strength          []StrengthLevel   `json:"strength"`
+	Untagged          []string          `json:"untagged"`
+	Cardio            []CardioSummary   `json:"cardio"`
+	CardioProgression []CardioProgress  `json:"cardio_progression"`
+	Triathlon         *TriathlonSummary `json:"triathlon"`
+	Goal              *GoalSummary      `json:"goal"`
 }
 
 // GoalSummary is where the active goal stands: how far off the race is,
@@ -187,6 +187,20 @@ type CardioSummary struct {
 	DistanceM       float64 `json:"distance_m"`
 	DurationSeconds float64 `json:"duration_seconds"`
 	WeeklyDistanceM float64 `json:"weekly_distance_m"`
+}
+
+// CardioProgress is whether an activity's pace improved over the timespan:
+// a straight line fitted through the speed (m/s) of each of its Sessions
+// with a distance, from FirstDate to LastDate, gives StartSpeed and
+// EndSpeed. The fit evens out single slow or fast sessions, e.g. a long
+// easy run.
+type CardioProgress struct {
+	Activity   string  `json:"activity"`
+	Sessions   int     `json:"sessions"`
+	FirstDate  string  `json:"first_date"`
+	LastDate   string  `json:"last_date"`
+	StartSpeed float64 `json:"start_speed"`
+	EndSpeed   float64 `json:"end_speed"`
 }
 
 // Adherence is how many of a plan's scheduled days had a workout from the
@@ -271,8 +285,9 @@ type BodyweightTrend struct {
 	ChangeSince string   `json:"change_since,omitempty"`
 }
 
-// MuscleVolume is the average weekly training a muscle got over the last
-// four weeks.
+// MuscleVolume is the average weekly training a muscle got over the
+// timespan. LastTrained is the latest day it was a primary muscle, at any
+// time.
 type MuscleVolume struct {
 	Muscle      string  `json:"muscle"`
 	WeeklySets  float64 `json:"weekly_sets"`

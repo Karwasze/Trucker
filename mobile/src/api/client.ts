@@ -193,6 +193,8 @@ export function createApi(baseUrl: string) {
         strength: res.strength ?? [],
         untagged: res.untagged ?? [],
         cardio: res.cardio ?? [],
+        // Missing, unlike an empty list, means the server can't work them out.
+        cardio_progression: res.cardio_progression ?? null,
         goal: res.goal ?? null,
         triathlon: res.triathlon ? { ...res.triathlon, records: res.triathlon.records ?? [] } : null,
         adherence: res.adherence && { ...res.adherence, missed: res.adherence.missed ?? [] },

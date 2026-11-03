@@ -2,11 +2,12 @@ import type { CardioActivity } from '@/api/types';
 
 /**
  * What the Progress tab shows: the bodyweight log, one exercise's estimated
- * 1RM, one activity's cardio workouts, or triathlons.
+ * 1RM, the tonnage of all lifts, one activity's cardio workouts, or triathlons.
  */
 export type Series =
   | { kind: 'bodyweight' }
   | { kind: 'exercise'; name: string }
+  | { kind: 'tonnage' }
   | { kind: 'cardio'; activity: CardioActivity }
   | { kind: 'triathlon' };
 
@@ -30,19 +31,21 @@ const CARDIO_NAMES: Record<CardioActivity, string> = {
 export const seriesLabel = (s: Series) =>
   s.kind === 'bodyweight'
     ? 'Bodyweight'
-    : s.kind === 'triathlon'
-      ? 'Triathlon'
-      : s.kind === 'cardio'
-        ? CARDIO_NAMES[s.activity]
-        : s.name;
+    : s.kind === 'tonnage'
+      ? 'Tonnage · all lifts'
+      : s.kind === 'triathlon'
+        ? 'Triathlon'
+        : s.kind === 'cardio'
+          ? CARDIO_NAMES[s.activity]
+          : s.name;
 
 // Exercise names can't start with a colon, so these never clash.
 export const seriesKey = (s: Series) =>
-  s.kind === 'bodyweight' || s.kind === 'triathlon'
+  s.kind === 'bodyweight' || s.kind === 'tonnage' || s.kind === 'triathlon'
     ? `:${s.kind}`
     : s.kind === 'cardio'
       ? `:cardio:${s.activity}`
       : s.name;
 
 export const categoryOf = (s: Series): Category =>
-  s.kind === 'exercise' ? 'strength' : s.kind === 'bodyweight' ? 'bodyweight' : 'cardio';
+  s.kind === 'exercise' || s.kind === 'tonnage' ? 'strength' : s.kind === 'bodyweight' ? 'bodyweight' : 'cardio';

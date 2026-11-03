@@ -197,6 +197,11 @@ export type Insights = {
   untagged: string[];
   /** Cardio per activity over the timespan; cardio days count as sessions. */
   cardio: CardioSummary[];
+  /**
+   * Pace trend per activity with enough sessions over the timespan; null
+   * from a server too old to work them out.
+   */
+  cardio_progression: CardioProgress[] | null;
   /** This week of the active goal; null without one. */
   goal: GoalSummary | null;
   /** Triathlons over the timespan; null without any. */
@@ -223,6 +228,19 @@ export type CardioSummary = {
   distance_m: number;
   duration_seconds: number;
   weekly_distance_m: number;
+};
+
+/**
+ * Whether an activity's pace improved: a line fitted through the speed (m/s)
+ * of its sessions from `first_date` to `last_date` gives the start and end.
+ */
+export type CardioProgress = {
+  activity: CardioActivity;
+  sessions: number;
+  first_date: string;
+  last_date: string;
+  start_speed: number;
+  end_speed: number;
 };
 
 export type CardioActivity = 'running' | 'cycling' | 'swimming' | 'walking' | 'hiking';

@@ -283,6 +283,43 @@ describe('category buttons and series select', () => {
     expect(selectValue('Exercise')).toBe('Bench');
   });
 
+  test('Tonnage sums every lift over the timespan, last in the Strength list', async () => {
+    const requests = mockServer({
+      'GET /api/statistics': ({ query }: Request) => ({
+        exercises: ['Squat', 'Bench'],
+        data:
+          query.get('exercise') === 'Squat' ? [{ date: '2026-10-09', estimated_1rm: 113.3, total_volume: 950 }] : [],
+      }),
+      'GET /api/cardio': [],
+      'GET /api/insights': {
+        date: '2026-10-18',
+        tonnage: {
+          total: 12000,
+          weekly: [
+            { week: '2026-10-05', tonnage: 5000 },
+            { week: '2026-10-12', tonnage: 7000 },
+          ],
+          by_exercise: [
+            { exercise: 'Squat', tonnage: 9000 },
+            { exercise: 'Bench', tonnage: 3000 },
+          ],
+        },
+      },
+    });
+    await renderProgress();
+    await screen.findByText('Since 9 Oct');
+    await selectOption('Exercise', 'Tonnage · all lifts');
+    expect(await screen.findByText('Weekly tonnage')).toBeOnTheScreen();
+    expect(selectValue('Exercise')).toBe('Tonnage · all lifts');
+    // Over the timespan, with no plan: tonnage doesn't depend on one.
+    const insights = requests.find((r) => r.path === '/api/insights')!;
+    expect(insights.query.get('from')).toBe('2026-09-18');
+    expect(insights.query.get('plan_id')).toBeNull();
+    expect(screen.getByText('Total')).toBeOnTheScreen();
+    expect(screen.getByText('Best week (12 Oct)')).toBeOnTheScreen();
+    expect(screen.getByText('By lift')).toBeOnTheScreen();
+  });
+
   test('Cardio lists only cardio, opening on the latest activity', async () => {
     server();
     await renderProgress();

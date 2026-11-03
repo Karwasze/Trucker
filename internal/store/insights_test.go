@@ -3,6 +3,7 @@ package store
 import (
 	"slices"
 	"testing"
+	"time"
 )
 
 // insightsToday is a Tuesday; the Mondays before it in March 2026 are the
@@ -17,6 +18,20 @@ func sets(n int, weight float64, reps int) []Set {
 		out[i] = Set{Weight: weight, Reps: reps}
 	}
 	return out
+}
+
+// lastFourWeeks starts a timespan of exactly four weeks up to insightsToday.
+const lastFourWeeks = "2026-03-04"
+
+// fourWeeksFrom returns insights over the four weeks starting on first, the
+// first workout, so weekly averages divide by exactly four.
+func fourWeeksFrom(t *testing.T, s *Store, first string) Insights {
+	t.Helper()
+	start, err := time.Parse(dateLayout, first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return getInsightsFor(t, s, start.AddDate(0, 0, 27).Format(dateLayout), first, 0)
 }
 
 func getInsights(t *testing.T, s *Store) Insights {
@@ -98,7 +113,7 @@ func TestGetInsights_WeeklySetsWeighting(t *testing.T) {
 		seedWorkout(t, s, date, []Exercise{{Name: "Bench Press", Sets: sets(5, 80, 5)}})
 	}
 
-	insights := getInsights(t, s)
+	insights := fourWeeksFrom(t, s, "2026-03-05")
 
 	chest := muscleVolume(t, insights, "chest")
 	if chest.WeeklySets != 5 {
@@ -133,7 +148,7 @@ func TestGetInsights_VolumeStatusThresholds(t *testing.T) {
 		})
 	}
 
-	insights := getInsights(t, s)
+	insights := fourWeeksFrom(t, s, "2026-03-10")
 	if chest := muscleVolume(t, insights, "chest"); chest.Status != VolumeOptimal || chest.WeeklySets != 12 {
 		t.Errorf("expected chest optimal at 12, got %+v", chest)
 	}
@@ -145,13 +160,40 @@ func TestGetInsights_VolumeStatusThresholds(t *testing.T) {
 func TestGetInsights_IgnoresWorkoutsOutsideWindow(t *testing.T) {
 	s := newTestStore(t)
 
-	seedWorkout(t, s, "2026-03-03", []Exercise{{Name: "Chest Fly", Sets: sets(10, 20, 12)}}) // 28 days before today
+	seedWorkout(t, s, "2026-03-03", []Exercise{{Name: "Chest Fly", Sets: sets(10, 20, 12)}}) // before the timespan
 	seedWorkout(t, s, "2026-04-01", []Exercise{{Name: "Chest Fly", Sets: sets(10, 20, 12)}}) // future
 	seedWorkout(t, s, "2026-03-04", []Exercise{{Name: "Chest Fly", Sets: sets(4, 20, 12)}})  // inside
 
-	insights := getInsights(t, s)
+	insights := getInsightsFor(t, s, insightsToday, lastFourWeeks, 0)
 	if chest := muscleVolume(t, insights, "chest"); chest.WeeklySets != 1 {
 		t.Errorf("expected only the in-window workout counted (1 set/week), got %v", chest.WeeklySets)
+	}
+}
+
+func TestGetInsights_MuscleVolumeFollowsTimespan(t *testing.T) {
+	s := newTestStore(t)
+	// Chest Fly: chest only. 8 sets in February, 4 in March.
+	seedWorkout(t, s, "2026-02-03", []Exercise{{Name: "Chest Fly", Sets: sets(8, 20, 12)}})
+	seedWorkout(t, s, "2026-03-25", []Exercise{{Name: "Chest Fly", Sets: sets(4, 20, 12)}})
+
+	// Four weeks: only March's 4 sets.
+	if chest := muscleVolume(t, getInsightsFor(t, s, insightsToday, lastFourWeeks, 0), "chest"); chest.WeeklySets != 1 {
+		t.Errorf("expected 1 set/week over four weeks, got %v", chest.WeeklySets)
+	}
+	// All time counts weeks from the first workout, Feb 3: 57 days, so 12 sets
+	// over 8.14 weeks.
+	all := getInsights(t, s)
+	if chest := muscleVolume(t, all, "chest"); chest.WeeklySets != 1.5 {
+		t.Errorf("expected 1.5 sets/week over all time, got %v", chest.WeeklySets)
+	}
+	// So does a timespan starting before it.
+	if chest := muscleVolume(t, getInsightsFor(t, s, insightsToday, "2025-03-31", 0), "chest"); chest.WeeklySets != 1.5 {
+		t.Errorf("expected weeks before the first workout not to count, got %v", chest.WeeklySets)
+	}
+	// Last trained is the latest session whatever the timespan.
+	if chest := muscleVolume(t, getInsightsFor(t, s, insightsToday, "2026-03-30", 0), "chest"); chest.WeeklySets != 0 ||
+		chest.Status != VolumeUntrained || chest.LastTrained != "2026-03-25" {
+		t.Errorf("expected chest untrained since Mar 30 but last trained Mar 25, got %+v", chest)
 	}
 }
 
@@ -622,7 +664,7 @@ func TestGetInsights_CardioCountsAsSessions(t *testing.T) {
 		cardio(ActivityCycling, "2026-03-25", 30000, 3600),
 	)
 
-	insights := getInsights(t, s)
+	insights := fourWeeksFrom(t, s, "2026-03-23")
 	if insights.SessionsPerWeek != 0.5 {
 		t.Errorf("expected 0.5 sessions/week from 2 days in 4 weeks, got %v", insights.SessionsPerWeek)
 	}
@@ -687,6 +729,52 @@ func TestGetInsights_CardioSummaries(t *testing.T) {
 
 	if empty := getInsightsFor(t, newTestStore(t), "2026-03-30", "", 0).Cardio; empty == nil || len(empty) != 0 {
 		t.Errorf("expected empty, non-nil summaries, got %#v", empty)
+	}
+}
+
+func TestGetInsights_CardioProgression(t *testing.T) {
+	s := newTestStore(t)
+	seedCardio(t, s,
+		// Before the timespan.
+		cardio(ActivityRunning, "2026-03-01", 5000, 3000),
+		// Speeding up from 3 to 3.5 m/s a week apart, with a slow long run in
+		// the middle that the fit evens out.
+		cardio(ActivityRunning, "2026-03-16", 6000, 2000),
+		cardio(ActivityRunning, "2026-03-23", 10000, 4000),
+		cardio(ActivityRunning, "2026-03-30", 7000, 2000),
+		// Two rides aren't enough for a trend.
+		cardio(ActivityCycling, "2026-03-20", 40000, 4800),
+		cardio(ActivityCycling, "2026-03-27", 40000, 4000),
+		// Swims without a distance are left out.
+		CardioWorkout{Date: "2026-03-17", StartedAt: "2026-03-17T07:00:00Z", Activity: ActivitySwimming, DurationSeconds: 1800},
+		CardioWorkout{Date: "2026-03-24", StartedAt: "2026-03-24T07:00:00Z", Activity: ActivitySwimming, DurationSeconds: 1800},
+		CardioWorkout{Date: "2026-03-31", StartedAt: "2026-03-31T07:00:00Z", Activity: ActivitySwimming, DurationSeconds: 1800},
+	)
+
+	got := getInsightsFor(t, s, "2026-03-31", "2026-03-16", 0).CardioProgression
+	// Speeds 3, 2.5 and 3.5 m/s fit a line from 2.75 to 3.25 m/s.
+	want := []CardioProgress{
+		{Activity: ActivityRunning, Sessions: 3, FirstDate: "2026-03-16", LastDate: "2026-03-30", StartSpeed: 2.75, EndSpeed: 3.25},
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %+v, want %+v", got, want)
+	}
+
+	// All time takes in the slow run on Mar 1.
+	got = getInsightsFor(t, s, "2026-03-31", "", 0).CardioProgression
+	if len(got) != 1 || got[0].Sessions != 4 || got[0].FirstDate != "2026-03-01" || got[0].StartSpeed >= 2.75 {
+		t.Errorf("unexpected all-time progression %+v", got)
+	}
+
+	// Sessions on a single day have no trend.
+	single := newTestStore(t)
+	seedCardio(t, single,
+		cardio(ActivityRunning, "2026-03-30", 5000, 1500),
+		cardio(ActivityRunning, "2026-03-30", 5000, 1600),
+		cardio(ActivityRunning, "2026-03-30", 5000, 1700),
+	)
+	if got := getInsightsFor(t, single, "2026-03-31", "", 0).CardioProgression; got == nil || len(got) != 0 {
+		t.Errorf("expected empty, non-nil progression for one day, got %#v", got)
 	}
 }
 

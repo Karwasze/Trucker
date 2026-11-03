@@ -19,6 +19,7 @@ import { useOpenedWith, useProgressTimespan } from '@/progress/progress-context'
 import { personalRecords } from '@/progress/records';
 import { CATEGORIES, categoryOf, seriesKey, seriesLabel, type Category, type Series } from '@/progress/series';
 import { Tile, TileButton, TileRow } from '@/progress/tile';
+import { TonnageStats } from '@/progress/tonnage-stats';
 import { TriathlonStats } from '@/progress/triathlon-stats';
 import { useSettings } from '@/settings/settings-context';
 import { formatDate, formatKg } from '@/workout/format';
@@ -56,7 +57,10 @@ export default function ProgressScreen() {
 
   const workouts = cardio.data ?? [];
   const options: Record<Category, Series[]> = {
-    strength: (names.data ?? []).map((name) => ({ kind: 'exercise', name })),
+    strength: [
+      ...(names.data ?? []).map((name) => ({ kind: 'exercise' as const, name })),
+      ...((names.data ?? []).length > 0 ? [{ kind: 'tonnage' as const }] : []),
+    ],
     cardio: [
       ...[...new Set(workouts.map((w) => w.activity))].map((activity) => ({ kind: 'cardio' as const, activity })),
       ...((triathlons.data ?? []).length > 0 ? [{ kind: 'triathlon' as const }] : []),
@@ -152,6 +156,14 @@ function ProgressPage({
   const exerciseData = useQuery(exercise === null ? null : `stats:${serverUrl}:${exercise}`, async () =>
     (await api.statistics(exercise!)).data.sort((a, b) => a.date.localeCompare(b.date))
   );
+  // Tonnage comes with insights, over the timespan; no plan, since none of it depends on one.
+  const isTonnage = series?.kind === 'tonnage';
+  const today = localDate();
+  const from = timespanStart(timespan);
+  const tonnage = useQuery(
+    isTonnage ? `tonnage:${serverUrl}:${today}:${from}` : null,
+    async () => (await api.insights(today, from, null)).tonnage
+  );
   // Bodyweight shows the stored log and syncs it from Apple Health alongside,
   // so a slow or stalled Health read can't hold the log back.
   const health = useHealthState();
@@ -167,6 +179,7 @@ function ProgressPage({
   const refresh = () => {
     onRefresh();
     if (exercise !== null) exerciseData.refresh();
+    if (isTonnage) tonnage.refresh();
     if (isBodyweight) {
       storedBodyweight.refresh();
       if (healthConnected) healthSync.refresh();
@@ -194,6 +207,12 @@ function ProgressPage({
             healthSyncError={healthSync.error}
             onSynced={healthSync.refresh}
           />
+        )
+      ) : series.kind === 'tonnage' ? (
+        !tonnage.data ? (
+          <Message loading={!tonnage.error} error={tonnage.error} />
+        ) : (
+          <TonnageStats tonnage={tonnage.data} timespan={timespan} today={today} />
         )
       ) : series.kind === 'triathlon' ? (
         <TriathlonStats triathlons={triathlons} timespan={timespan} />

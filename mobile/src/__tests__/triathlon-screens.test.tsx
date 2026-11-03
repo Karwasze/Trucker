@@ -6,7 +6,7 @@ import type { CardioWorkout, Insights, Triathlon } from '@/api/types';
 import HistoryScreen from '@/app/(tabs)/history/index';
 import TriathlonDetailScreen from '@/app/(tabs)/history/triathlon/[date]';
 import ProgressScreen from '@/app/(tabs)/stats/index';
-import { CardioInsights, InsightsProvider } from '@/insights/insights-view';
+import { InsightsScreen } from '@/insights/insights-view';
 import { ProgressProvider } from '@/progress/progress-context';
 import { mockServer, renderInApp, selectPlan, pickTimespan, selectOption, setNow } from '@/test-utils';
 
@@ -137,11 +137,8 @@ test('the Insights Cardio page shows the latest triathlon, the leg costing the m
     },
   });
   const user = userEvent.setup();
-  await renderInApp(
-    <InsightsProvider>
-      <CardioInsights />
-    </InsightsProvider>
-  );
+  await renderInApp(<InsightsScreen />);
+  await user.press(screen.getByRole('tab', { name: 'Cardio' }));
   await pickTimespan('All time');
   expect(await screen.findByText('Latest · Quarter triathlon · 17 Oct')).toBeOnTheScreen();
   expect(screen.getByText('+18:20 off your best')).toBeOnTheScreen();

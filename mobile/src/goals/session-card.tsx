@@ -71,15 +71,26 @@ export function SessionDetails({ session: s, compact }: { session: PlannedSessio
   );
 }
 
-/** A planned session, opening the workout that filled it once done. */
-export function SessionLink({ session, compact }: { session: PlannedSession; compact?: boolean }) {
+/**
+ * A planned session, opening the workout that filled it once done, at
+ * `pathname` in the tab it is shown in, so going back returns there.
+ */
+export function SessionLink({
+  session,
+  compact,
+  pathname,
+}: {
+  session: PlannedSession;
+  compact?: boolean;
+  pathname: '/cardio/[id]' | '/week/cardio/[id]';
+}) {
   const id = session.cardio_workout_id;
   if (!id) return <SessionDetails session={session} compact={compact} />;
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${session.description}, done`}
-      onPress={() => router.navigate({ pathname: '/history/cardio/[id]', params: { id } }, { withAnchor: true })}
+      onPress={() => router.push({ pathname, params: { id } })}
       style={({ pressed }) => pressed && styles.pressed}>
       <SessionDetails session={session} compact={compact} />
     </Pressable>

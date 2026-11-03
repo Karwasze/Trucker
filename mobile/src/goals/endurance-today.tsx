@@ -27,7 +27,7 @@ export function EnduranceToday({ date, waiting }: { date: string; waiting: boole
       <SectionLabel>{today.data?.goal?.name ?? 'Endurance'}</SectionLabel>
       <Card>
         {sessions.map((s) => (
-          <SessionLink key={s.id} session={s} />
+          <SessionLink key={s.id} session={s} pathname="/cardio/[id]" />
         ))}
         {open.length > 0 &&
           (!state.connectedAt ? (

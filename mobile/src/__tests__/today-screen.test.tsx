@@ -296,7 +296,7 @@ test('a failed save leaves the rest timer running', async () => {
   expect(syncLiveActivity).not.toHaveBeenLastCalledWith(null);
 });
 
-test('a goal session done today opens its workout in History', async () => {
+test('a goal session done today opens its workout on top of Today', async () => {
   const session: PlannedSession = {
     id: 3,
     goal_id: 7,
@@ -329,10 +329,7 @@ test('a goal session done today opens its workout in History', async () => {
   await renderInApp(<TodayScreen />);
 
   await user.press(await screen.findByRole('button', { name: 'Easy run 5 km, done' }));
-  expect(router.navigate).toHaveBeenCalledWith(
-    { pathname: '/history/cardio/[id]', params: { id: 9 } },
-    { withAnchor: true }
-  );
+  expect(router.push).toHaveBeenCalledWith({ pathname: '/cardio/[id]', params: { id: 9 } });
   // One not done yet has nothing to open.
   expect(screen.getByText(/Strides/)).toBeOnTheScreen();
   expect(screen.queryByRole('button', { name: /Strides/ })).toBeNull();

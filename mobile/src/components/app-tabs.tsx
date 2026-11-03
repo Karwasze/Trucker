@@ -14,12 +14,14 @@ export const TABS: AppTab[] = [
   {
     name: '(today)',
     href: '/',
+    stacked: true,
     label: 'Today',
     icon: { ios: 'figure.strengthtraining.traditional', android: 'fitness_center', web: 'fitness_center' },
   },
   {
     name: 'week',
     href: '/week',
+    stacked: true,
     label: 'Current week',
     icon: { ios: 'calendar', android: 'calendar_month', web: 'calendar_month' },
   },
@@ -75,7 +77,8 @@ function TabBar() {
       // deeper in.
       onReselect={(i) => {
         const { href, stacked } = TABS[i];
-        if (stacked && pathname.startsWith(`${href}/`)) router.dismissTo(href);
+        const deeper = href === '/' ? pathname !== '/' : pathname.startsWith(`${href}/`);
+        if (stacked && deeper) router.dismissTo(href);
       }}
     />
   );

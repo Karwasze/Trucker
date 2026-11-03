@@ -3,7 +3,7 @@ import { screen, userEvent, within } from '@testing-library/react-native';
 import { router } from 'expo-router';
 
 import type { PlannedSession, PlanToday, Workout } from '@/api/types';
-import WeekScreen from '@/app/(tabs)/week';
+import WeekScreen from '@/app/(tabs)/week/index';
 import { mockServer, renderInApp, selectPlan, setNow, type Request } from '@/test-utils';
 
 const plan = { id: 1, name: 'Strength', days: [] };
@@ -49,25 +49,24 @@ function server(sessions: PlannedSession[] = []) {
   });
 }
 
-/** The card of a day, found by its heading. */
-const day = (heading: string) => screen.getByLabelText(heading);
-/** A day's dot in the week strip, found by its day and status. */
-const dot = (name: string) => screen.getByRole('button', { name });
-const dotName = (element: ReturnType<typeof dot>) => element.props.accessibilityLabel;
+/** A day's line in the week, found by its day and status. */
+const line = (name: string) => screen.getByRole('button', { name });
+const lineNames = () =>
+  screen.getAllByRole('button', { name: /^\w+day \d+ Oct, / }).map((l) => l.props.accessibilityLabel);
 
 beforeEach(async () => {
   await AsyncStorage.clear();
 });
 afterEach(() => jest.useRealTimers());
 
-test('on a weekday it shows a dot for each day of this week and today’s details', async () => {
+test('on a weekday it shows a line for each day of this week, with what it holds', async () => {
   setNow('2026-10-14T09:00:00+02:00');
   const requests = server([run]);
   await selectPlan(1);
   await renderInApp(<WeekScreen />);
 
   expect(await screen.findByText('12 Oct – 18 Oct · Strength')).toBeOnTheScreen();
-  expect(screen.getAllByRole('button', { name: /^\w+day \d+ Oct, / }).map(dotName)).toEqual([
+  expect(lineNames()).toEqual([
     'Monday 12 Oct, done',
     'Tuesday 13 Oct, rest day',
     'Wednesday 14 Oct, planned',
@@ -76,12 +75,11 @@ test('on a weekday it shows a dot for each day of this week and today’s detail
     'Saturday 17 Oct, rest day',
     'Sunday 18 Oct, rest day',
   ]);
-  expect(dot('Wednesday 14 Oct, planned')).toBeSelected();
-
-  // Only the day picked is shown in full.
-  expect(within(day('Wednesday 14 Oct')).getByText('Today')).toBeOnTheScreen();
-  expect(within(day('Wednesday 14 Oct')).getByText(/Easy run 5 km/)).toBeOnTheScreen();
-  expect(screen.queryByText('Monday 12 Oct')).toBeNull();
+  expect(within(line('Monday 12 Oct, done')).getByText('Squat')).toBeOnTheScreen();
+  expect(within(line('Tuesday 13 Oct, rest day')).getByText('Rest')).toBeOnTheScreen();
+  expect(within(line('Wednesday 14 Oct, planned')).getByText('🏃 Easy run 5 km')).toBeOnTheScreen();
+  // Details only once a day is opened.
+  expect(screen.queryByText('1 × 5 @ 97.5 kg')).toBeNull();
 
   const sessions = requests.find((r) => r.path === '/api/goals/sessions')!;
   expect(Object.fromEntries(sessions.query)).toEqual({
@@ -92,18 +90,42 @@ test('on a weekday it shows a dot for each day of this week and today’s detail
   });
 });
 
-test('pressing a dot shows that day', async () => {
+test('a day with lifting and a session lists both on its line', async () => {
+  setNow('2026-10-14T09:00:00+02:00');
+  server([{ ...run, date: '2026-10-12' }]);
+  await selectPlan(1);
+  await renderInApp(<WeekScreen />);
+
+  expect(await screen.findByText('Squat · 🏃 Easy run 5 km')).toBeOnTheScreen();
+});
+
+test('a long day wraps onto more lines rather than being cut off', async () => {
+  setNow('2026-10-14T09:00:00+02:00');
+  server([{ ...run, date: '2026-10-12' }]);
+  await selectPlan(1);
+  await renderInApp(<WeekScreen />);
+
+  expect((await screen.findByText('Squat · 🏃 Easy run 5 km')).props.numberOfLines).toBeUndefined();
+});
+
+test('pressing a day opens its details, one day at a time', async () => {
   setNow('2026-10-14T09:00:00+02:00');
   server([run]);
   await selectPlan(1);
   const user = userEvent.setup();
   await renderInApp(<WeekScreen />);
 
-  await user.press(await screen.findByRole('button', { name: 'Tuesday 13 Oct, rest day' }));
-  expect(dot('Tuesday 13 Oct, rest day')).toBeSelected();
-  expect(dot('Wednesday 14 Oct, planned')).not.toBeSelected();
-  expect(within(day('Tuesday 13 Oct')).getByText('Rest day')).toBeOnTheScreen();
-  expect(screen.queryByText('Wednesday 14 Oct')).toBeNull();
+  await user.press(await screen.findByRole('button', { name: 'Monday 12 Oct, done' }));
+  expect(line('Monday 12 Oct, done')).toBeExpanded();
+  expect(screen.getByText('1 × 5 @ 97.5 kg')).toBeOnTheScreen();
+
+  await user.press(line('Tuesday 13 Oct, rest day'));
+  expect(line('Monday 12 Oct, done')).toBeCollapsed();
+  expect(screen.queryByText('1 × 5 @ 97.5 kg')).toBeNull();
+  expect(screen.getByText('Nothing planned')).toBeOnTheScreen();
+
+  await user.press(line('Tuesday 13 Oct, rest day'));
+  expect(screen.queryByText('Nothing planned')).toBeNull();
 });
 
 test('on Sunday it still shows this week, ending today', async () => {
@@ -113,8 +135,8 @@ test('on Sunday it still shows this week, ending today', async () => {
   await renderInApp(<WeekScreen />);
 
   expect(await screen.findByText('12 Oct – 18 Oct · Strength')).toBeOnTheScreen();
-  expect(within(day('Sunday 18 Oct')).getByText('Today')).toBeOnTheScreen();
-  expect(screen.queryByText('Monday 19 Oct')).toBeNull();
+  expect(lineNames().at(-1)).toBe('Sunday 18 Oct, rest day');
+  expect(screen.queryByRole('button', { name: /Monday 19 Oct/ })).toBeNull();
 });
 
 test('it counts the week’s trainings done, lifting and goal sessions together', async () => {
@@ -137,7 +159,7 @@ test('one training reads in the singular', async () => {
   expect(await screen.findByText('1 of 1 training done')).toBeOnTheScreen();
 });
 
-test('a logged day shows what was done and opens it in History', async () => {
+test('a logged day shows what was done and opens it on top of the week', async () => {
   setNow('2026-10-14T09:00:00+02:00');
   server();
   await selectPlan(1);
@@ -145,15 +167,15 @@ test('a logged day shows what was done and opens it in History', async () => {
   await renderInApp(<WeekScreen />);
 
   await user.press(await screen.findByRole('button', { name: 'Monday 12 Oct, done' }));
-  const monday = screen.getByRole('button', { name: 'Monday 12 Oct' });
-  expect(within(monday).getByText('Logged ✓')).toBeOnTheScreen();
-  expect(within(monday).getByText('1 × 5 @ 97.5 kg')).toBeOnTheScreen();
+  const workout = screen.getByRole('button', { name: 'Workout on Monday 12 Oct' });
+  expect(within(workout).getByText('Logged ✓')).toBeOnTheScreen();
+  expect(within(workout).getByText('1 × 5 @ 97.5 kg')).toBeOnTheScreen();
 
-  await user.press(monday);
-  expect(router.navigate).toHaveBeenCalledWith({ pathname: '/history/[id]', params: { id: 42 } }, { withAnchor: true });
+  await user.press(workout);
+  expect(router.push).toHaveBeenCalledWith({ pathname: '/week/workout/[id]', params: { id: 42 } });
 });
 
-test('a goal session done opens its workout in History', async () => {
+test('a goal session done shows its time and opens its workout on top of the week', async () => {
   setNow('2026-10-14T09:00:00+02:00');
   // Run on Monday, counting as Tuesday's session.
   const done: PlannedSession = {
@@ -176,18 +198,16 @@ test('a goal session done opens its workout in History', async () => {
   await renderInApp(<WeekScreen />);
 
   await user.press(await screen.findByRole('button', { name: 'Tuesday 13 Oct, done' }));
+  expect(within(line('Tuesday 13 Oct, done')).getByText('🏃 Easy run 5 km · 30:00')).toBeOnTheScreen();
   await user.press(screen.getByRole('button', { name: 'Easy run 5 km, done' }));
-  expect(router.navigate).toHaveBeenCalledWith(
-    { pathname: '/history/cardio/[id]', params: { id: 9 } },
-    { withAnchor: true }
-  );
+  expect(router.push).toHaveBeenCalledWith({ pathname: '/week/cardio/[id]', params: { id: 9 } });
+
   // Wednesday's run isn't done yet, so there's nothing to open.
-  await user.press(screen.getByRole('button', { name: 'Wednesday 14 Oct, planned' }));
-  expect(screen.getByText(/Easy run 5 km/)).toBeOnTheScreen();
-  expect(screen.queryByRole('button', { name: /Easy run/ })).toBeNull();
+  await user.press(line('Wednesday 14 Oct, planned'));
+  expect(screen.queryByRole('button', { name: /Easy run 5 km, done/ })).toBeNull();
 });
 
-test('a past day left undone is marked as not logged', async () => {
+test('a past day left undone is marked as missed', async () => {
   setNow('2026-10-20T09:00:00+02:00');
   mockServer({
     'GET /api/plans': [plan],
@@ -199,8 +219,8 @@ test('a past day left undone is marked as not logged', async () => {
   await renderInApp(<WeekScreen />);
 
   await user.press(await screen.findByRole('button', { name: 'Monday 19 Oct, missed' }));
-  expect(within(day('Monday 19 Oct')).getByText('Not logged')).toBeOnTheScreen();
-  expect(screen.queryByRole('button', { name: 'Monday 19 Oct' })).toBeNull();
+  expect(screen.getByText('Not logged')).toBeOnTheScreen();
+  expect(screen.queryByRole('button', { name: /^Workout on/ })).toBeNull();
 });
 
 test('without a plan or goal it says there is nothing scheduled', async () => {

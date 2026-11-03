@@ -3,8 +3,10 @@ import { StyleSheet, Text } from 'react-native';
 import { State } from 'react-native-gesture-handler';
 import { fireGestureHandler, getByGestureTestId } from 'react-native-gesture-handler/jest-utils';
 
+import TodayLayout from '@/app/(tabs)/(today)/_layout';
 import HistoryLayout from '@/app/(tabs)/history/_layout';
 import PlansLayout from '@/app/(tabs)/plans/_layout';
+import WeekLayout from '@/app/(tabs)/week/_layout';
 import AppTabs, { TABS } from '@/components/app-tabs';
 
 // These tests navigate for real, through the tabs.
@@ -21,8 +23,13 @@ async function renderTabs() {
   await renderRouter(
     {
       '(tabs)/_layout': AppTabs,
+      '(tabs)/(today)/_layout': TodayLayout,
       '(tabs)/(today)/index': page('Today'),
-      '(tabs)/week': page('Current week'),
+      '(tabs)/(today)/cardio/[id]': page('Today cardio'),
+      '(tabs)/week/_layout': WeekLayout,
+      '(tabs)/week/index': page('Current week'),
+      '(tabs)/week/workout/[id]': page('Week workout'),
+      '(tabs)/week/cardio/[id]': page('Week cardio'),
       '(tabs)/plans/_layout': PlansLayout,
       '(tabs)/plans/index': page('Training Plan'),
       '(tabs)/plans/goal': page('Goal'),
@@ -227,4 +234,28 @@ test('a workout opened from elsewhere shows under History, and a goal under Trai
   await act(async () => router.navigate({ pathname: '/plans/goal', params: { id: 'new' } }));
   expect(screen.getByText('Goal screen')).toBeOnTheScreen();
   expect(selectedTab()).toBe('Training Plan');
+});
+
+test('a workout opened from Current week stays under it, and goes back to the week', async () => {
+  const { router } = jest.requireActual('expo-router');
+  await renderTabs();
+  await tap(SLOT_CENTRES.right);
+  await act(async () => router.push('/week/workout/42'));
+  expect(screen.getByText('Week workout screen')).toBeOnTheScreen();
+  expect(selectedTab()).toBe('Current week');
+
+  await act(async () => router.back());
+  expect(screen.getByText('Current week screen')).toBeOnTheScreen();
+  expect(selectedTab()).toBe('Current week');
+});
+
+test('a workout opened from Today stays under it, and tapping Today goes back', async () => {
+  const { router } = jest.requireActual('expo-router');
+  await renderTabs();
+  await act(async () => router.push('/cardio/9'));
+  expect(screen.getByText('Today cardio screen')).toBeOnTheScreen();
+  expect(selectedTab()).toBe('Today');
+
+  await tap(SLOT_CENTRES.centre);
+  expect(screen.getByText('Today screen')).toBeOnTheScreen();
 });

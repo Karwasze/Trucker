@@ -330,7 +330,7 @@ function ProgressTile({ progress: p, timespan }: { progress: LiftProgress; times
   );
 }
 
-/** Where the active goal stands this week, and the paces its targets use. */
+/** Where the active goal stands over its whole plan, and the paces its targets use. */
 function GoalSection({ summary: g }: { summary: GoalSummary }) {
   const activities = (Object.keys(g.planned_m) as CardioActivity[]).sort();
   const thresholds = (Object.keys(g.threshold) as CardioActivity[]).filter((a) => g.threshold[a]);
@@ -343,37 +343,29 @@ function GoalSection({ summary: g }: { summary: GoalSummary }) {
   return (
     <>
       <SectionLabel>{g.goal.name}</SectionLabel>
-      <Pressable
-        // With the plans list underneath, as the Training Plan tab may not
-        // have been opened yet, so there's a way back.
-        onPress={() =>
-          router.navigate({ pathname: '/plans/goal-calendar', params: { id: g.goal.id } }, { withAnchor: true })
-        }
-        accessibilityRole="button">
-        <Card>
-          <ThemedText type="smallBold">
-            {PHASE_NAMES[g.phase]} · {g.weeks_to_race === 0 ? 'race week' : plural(g.weeks_to_race, 'week')}{' '}
-            {g.weeks_to_race === 0 ? '' : 'to race day'}
+      <Card>
+        <ThemedText type="smallBold">
+          {PHASE_NAMES[g.phase]} · week {g.week} of {g.weeks} ·{' '}
+          {g.weeks_to_race === 0 ? 'race week' : `${plural(g.weeks_to_race, 'week')} to race day`}
+        </ThemedText>
+        <View style={{ flexDirection: 'row', gap: Spacing.two }}>
+          <Stat label="Met" value={String(g.met)} />
+          <Stat label="Partly" value={String(g.partial)} />
+          <Stat label="Missed" value={String(g.missed)} />
+          <Stat label="To do" value={String(g.pending)} />
+        </View>
+        {activities.map((a) => (
+          <ThemedText key={a} type="small" themeColor="textSecondary">
+            {ACTIVITY_ICONS[a]} {formatDistance(g.done_m[a] ?? 0, a)} of {formatDistance(g.due_m[a] ?? 0, a)} so far ·{' '}
+            {formatDistance(g.planned_m[a] ?? 0, a)} in the plan
           </ThemedText>
-          <View style={{ flexDirection: 'row', gap: Spacing.two }}>
-            <Stat label="Met" value={String(g.met)} />
-            <Stat label="Partly" value={String(g.partial)} />
-            <Stat label="Missed" value={String(g.missed)} />
-            <Stat label="To do" value={String(g.pending)} />
-          </View>
-          {activities.map((a) => (
-            <ThemedText key={a} type="small" themeColor="textSecondary">
-              {ACTIVITY_ICONS[a]} {formatDistance(g.done_m[a] ?? 0, a)} of {formatDistance(g.planned_m[a] ?? 0, a)} this
-              week
-            </ThemedText>
-          ))}
-          {thresholds.length > 0 && (
-            <ThemedText type="small" themeColor="textSecondary">
-              Threshold: {thresholds.map((a) => `${ACTIVITY_ICONS[a]} ${threshold(a)}`).join(' · ')}
-            </ThemedText>
-          )}
-        </Card>
-      </Pressable>
+        ))}
+        {thresholds.length > 0 && (
+          <ThemedText type="small" themeColor="textSecondary">
+            Threshold: {thresholds.map((a) => `${ACTIVITY_ICONS[a]} ${threshold(a)}`).join(' · ')}
+          </ThemedText>
+        )}
+      </Card>
     </>
   );
 }

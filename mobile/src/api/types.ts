@@ -208,15 +208,23 @@ export type Insights = {
   triathlon: TriathlonSummary | null;
 };
 
+/** Where the active goal stands over its whole plan. */
 export type GoalSummary = {
   goal: Goal;
+  /** This week of the plan, from 1, of `weeks`. */
+  week: number;
+  weeks: number;
   weeks_to_race: number;
   phase: GoalPhase;
   met: number;
   partial: number;
   missed: number;
+  /** Sessions still to come, this week's included until it's over. */
   pending: number;
+  /** Distance planned over the whole plan. */
   planned_m: Partial<Record<CardioActivity, number>>;
+  /** Distance of the sessions judged so far, to compare done_m with. */
+  due_m: Partial<Record<CardioActivity, number>>;
   done_m: Partial<Record<CardioActivity, number>>;
   /** Threshold speed (m/s) the targets come from. */
   threshold: Partial<Record<CardioActivity, number>>;

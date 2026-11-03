@@ -83,14 +83,17 @@ const full: Insights = {
   cardio: [{ activity: 'cycling', sessions: 1, distance_m: 45200, duration_seconds: 8178, weekly_distance_m: 45200 }],
   goal: {
     goal: { id: 3, name: 'Marathon', race_date: '2027-04-11', active: true, run_m: 42195 } as Goal,
+    week: 3,
+    weeks: 28,
     weeks_to_race: 25,
     phase: 'base',
     met: 2,
     partial: 1,
     missed: 0,
     pending: 2,
-    planned_m: { running: 30000 },
-    done_m: { running: 12500 },
+    planned_m: { running: 820000 },
+    due_m: { running: 60000 },
+    done_m: { running: 52500 },
     threshold: { running: 1000 / 270 },
   },
 };
@@ -175,19 +178,18 @@ test('the race goal and cardio are summarised on Cardio', async () => {
 
   expect(await screen.findByText('🚴 Ride · 1 session')).toBeOnTheScreen();
   expect(screen.getByText('Marathon')).toBeOnTheScreen();
-  expect(screen.getByText('Base · 25 weeks to race day')).toBeOnTheScreen();
-  expect(screen.getByText('🏃 12.5 km of 30.0 km this week')).toBeOnTheScreen();
+  // The whole plan, not just this week.
+  expect(screen.getByText('Base · week 3 of 28 · 25 weeks to race day')).toBeOnTheScreen();
+  expect(screen.getByText('🏃 52.5 km of 60.0 km so far · 820.0 km in the plan')).toBeOnTheScreen();
   expect(screen.getByText('Threshold: 🏃 4:30/km')).toBeOnTheScreen();
 });
 
-test('tapping the race goal opens its calendar with the plans list to go back to', async () => {
+test('the race goal isn’t a link', async () => {
   mockServer({ 'GET /api/insights': full });
   await renderCardio();
-  await userEvent.setup().press(await screen.findByText('Base · 25 weeks to race day'));
-  expect(router.navigate).toHaveBeenLastCalledWith(
-    { pathname: '/plans/goal-calendar', params: { id: 3 } },
-    { withAnchor: true }
-  );
+  await userEvent.setup().press(await screen.findByText('Base · week 3 of 28 · 25 weeks to race day'));
+  expect(router.navigate).not.toHaveBeenCalled();
+  expect(screen.queryByRole('button', { name: /Marathon|Base/ })).not.toBeOnTheScreen();
 });
 
 test('cardio progression says whether the pace of each activity improved', async () => {

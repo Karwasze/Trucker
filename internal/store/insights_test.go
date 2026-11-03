@@ -793,16 +793,45 @@ func TestGetInsights_GoalSummary(t *testing.T) {
 	run.PlannedSessionID = &monday[0].ID
 	seedCardio(t, s, run)
 
-	// Wednesday: Monday met, Wednesday to come, Friday and Sunday ahead.
+	all, err := s.GoalSessions(g.ID, "", "", "2026-10-21")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var planned float64
+	for _, session := range all {
+		planned += deref(session.TargetDistanceM)
+	}
+
+	// Wednesday of the first week: Monday met, the rest of the plan to come.
 	got := getInsightsFor(t, s, "2026-10-21", "", 0).Goal
-	if got == nil || got.Goal.ID != g.ID || got.Phase != PhaseBase || got.WeeksToRace != 11 {
+	if got == nil || got.Goal.ID != g.ID || got.Phase != PhaseBase || got.Week != 1 || got.Weeks != 12 ||
+		got.WeeksToRace != 11 {
 		t.Fatalf("unexpected summary %+v", got)
 	}
-	if got.Met != 1 || got.Pending != 3 || got.Missed != 0 {
-		t.Errorf("expected 1 met and 3 to come, got %+v", got)
+	if got.Met != 1 || got.Pending != len(all)-1 || got.Missed != 0 {
+		t.Errorf("expected 1 met and %d to come, got %+v", len(all)-1, got)
 	}
-	if got.DoneM[ActivityRunning] != deref(monday[0].TargetDistanceM) || got.PlannedM[ActivityRunning] <= got.DoneM[ActivityRunning] {
-		t.Errorf("unexpected distances %+v / %+v", got.DoneM, got.PlannedM)
+	done := deref(monday[0].TargetDistanceM)
+	if got.DoneM[ActivityRunning] != done || got.DueM[ActivityRunning] != done ||
+		got.PlannedM[ActivityRunning] != planned {
+		t.Errorf("expected %v done of %v due and %v planned, got %+v / %+v / %+v",
+			done, done, planned, got.DoneM, got.DueM, got.PlannedM)
+	}
+
+	// Two weeks on, the first two weeks' sessions count, not just this
+	// week's, which stay to come until it's over.
+	later := getInsightsFor(t, s, "2026-11-04", "", 0).Goal
+	var missed int
+	var due float64
+	for _, session := range all[1:] {
+		if session.Date < "2026-11-02" {
+			missed++
+			due += deref(session.TargetDistanceM)
+		}
+	}
+	if later.Week != 3 || later.Met != 1 || later.Missed != missed || later.Missed < 4 ||
+		later.DueM[ActivityRunning] != done+due {
+		t.Errorf("expected week 3, 1 met and %d missed, got %+v", missed, later)
 	}
 
 	if after := getInsightsFor(t, s, "2027-01-11", "", 0).Goal; after != nil {

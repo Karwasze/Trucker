@@ -161,12 +161,16 @@ type Insights struct {
 	Goal              *GoalSummary      `json:"goal"`
 }
 
-// GoalSummary is where the active goal stands: how far off the race is,
-// the phase of this week (Monday to Sunday), how this week's sessions went
-// so far, its planned and done distance per discipline, and the threshold
-// speed (m/s) per discipline the plan's targets come from.
+// GoalSummary is where the active goal stands over its whole plan: which
+// Week of Weeks this is and how far off the race, the phase of this week
+// (Monday to Sunday), how its sessions went so far (Pending counts those
+// still to come), the distance per discipline done so far, due so far (the
+// targets of sessions already judged) and planned in total, and the
+// threshold speed (m/s) per discipline the plan's targets come from.
 type GoalSummary struct {
 	Goal        Goal               `json:"goal"`
+	Week        int                `json:"week"`
+	Weeks       int                `json:"weeks"`
 	WeeksToRace int                `json:"weeks_to_race"`
 	Phase       string             `json:"phase"`
 	Met         int                `json:"met"`
@@ -174,6 +178,7 @@ type GoalSummary struct {
 	Missed      int                `json:"missed"`
 	Pending     int                `json:"pending"`
 	PlannedM    map[string]float64 `json:"planned_m"`
+	DueM        map[string]float64 `json:"due_m"`
 	DoneM       map[string]float64 `json:"done_m"`
 	Threshold   map[string]float64 `json:"threshold"`
 }

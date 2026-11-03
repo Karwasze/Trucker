@@ -232,18 +232,21 @@ func (s *Store) goalSummary(cardio []CardioWorkout, now time.Time) (*GoalSummary
 
 	summary := &GoalSummary{
 		Goal:        *goal,
+		Week:        i + 1,
+		Weeks:       len(weeks),
 		WeeksToRace: len(weeks) - 1 - i,
 		Phase:       weeks[i].phase,
 		PlannedM:    map[string]float64{},
+		DueM:        map[string]float64{},
 		DoneM:       map[string]float64{},
 		Threshold:   fitness.Threshold,
 	}
-	monday := mondayOf(now)
-	sessions, err := s.GoalSessions(goal.ID, monday.Format(dateLayout), monday.AddDate(0, 0, 6).Format(dateLayout), today)
+	sessions, err := s.GoalSessions(goal.ID, "", "", today)
 	if err != nil {
 		return nil, err
 	}
 	for _, session := range sessions {
+		target := deref(session.TargetDistanceM)
 		switch session.Verdict.Status {
 		case VerdictMet:
 			summary.Met++
@@ -253,8 +256,10 @@ func (s *Store) goalSummary(cardio []CardioWorkout, now time.Time) (*GoalSummary
 			summary.Missed++
 		default:
 			summary.Pending++
+			target = 0
 		}
 		summary.PlannedM[session.Activity] += deref(session.TargetDistanceM)
+		summary.DueM[session.Activity] += target
 		if session.Workout != nil {
 			summary.DoneM[session.Activity] += deref(session.Workout.DistanceM)
 		}

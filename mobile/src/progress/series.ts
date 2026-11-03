@@ -10,7 +10,7 @@ export type Series =
   | { kind: 'cardio'; activity: CardioActivity }
   | { kind: 'triathlon' };
 
-/** The Progress tab's top carousel, in order: lifts, then cardio, then bodyweight. */
+/** The Progress tab's categories, in order: lifts, then cardio, then bodyweight. */
 export type Category = 'strength' | 'cardio' | 'bodyweight';
 
 export const CATEGORIES: { key: Category; label: string }[] = [

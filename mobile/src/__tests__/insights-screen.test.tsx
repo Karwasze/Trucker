@@ -7,8 +7,8 @@ import type { Goal, Insights } from '@/api/types';
 import CardioInsightsScreen from '@/app/(tabs)/insights/cardio';
 import StrengthInsightsScreen from '@/app/(tabs)/insights/index';
 import { connectHealth, healthHeartRateProfile } from '@/health/healthkit';
-import { InsightsProvider, InsightsTimespan } from '@/insights/insights-view';
-import { mockServer, renderInApp, selectPlan, setNow, TEST_ZONES, turnCarousel, type Request } from '@/test-utils';
+import { InsightsProvider } from '@/insights/insights-view';
+import { mockServer, renderInApp, selectPlan, setNow, TEST_ZONES, pickTimespan, type Request } from '@/test-utils';
 
 jest.mock('@/health/healthkit', () => ({
   isHealthAvailable: jest.fn(() => true),
@@ -103,13 +103,8 @@ afterEach(() => jest.useRealTimers());
  * pages share, over all time unless `allTime` is false.
  */
 async function renderPage(page: ReactElement, { allTime = true } = {}) {
-  await renderInApp(
-    <InsightsProvider>
-      {page}
-      <InsightsTimespan />
-    </InsightsProvider>
-  );
-  if (allTime) await turnCarousel('Timespan', 'All time');
+  await renderInApp(<InsightsProvider>{page}</InsightsProvider>);
+  if (allTime) await pickTimespan('All time');
 }
 const renderStrength = (options?: { allTime?: boolean }) => renderPage(<StrengthInsightsScreen />, options);
 const renderCardio = (options?: { allTime?: boolean }) => renderPage(<CardioInsightsScreen />, options);
@@ -186,7 +181,7 @@ test('it opens on the last month, then asks for insights from each timespan’s 
   expect(requests.at(-1)?.query.get('from')).toBe('2026-09-18');
   expect(requests.at(-1)?.query.get('plan_id')).toBe('2');
 
-  await turnCarousel('Timespan', '3 months');
+  await pickTimespan('3 months');
   await screen.findByText('No weighted plan lifts in the last 3 months.');
   expect(screen.getByText('Progression · last 3 months')).toBeOnTheScreen();
   expect(screen.getByText('Nothing lifted in the last 3 months.')).toBeOnTheScreen();
@@ -199,7 +194,6 @@ test('both pages share the timespan and one request', async () => {
     <InsightsProvider>
       <StrengthInsightsScreen />
       <CardioInsightsScreen />
-      <InsightsTimespan />
     </InsightsProvider>
   );
   // The Cardio page reads the heart rate zones too.
@@ -207,7 +201,7 @@ test('both pages share the timespan and one request', async () => {
   await screen.findByText('No cardio in the last 1 month.');
   expect(insightsRequests()).toHaveLength(1);
 
-  await turnCarousel('Timespan', '3 months');
+  await pickTimespan('3 months');
   expect(await screen.findByText('No cardio in the last 3 months.')).toBeOnTheScreen();
   expect(screen.getByText('Nothing lifted in the last 3 months.')).toBeOnTheScreen();
   // One request for the new timespan, however many pages show it.

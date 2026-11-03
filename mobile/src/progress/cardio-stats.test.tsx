@@ -2,9 +2,9 @@ import { render, screen } from '@testing-library/react-native';
 import { useState } from 'react';
 
 import type { CardioWorkout } from '@/api/types';
-import { TIMESPANS, TimespanCarousel, type Timespan } from '@/components/timespan';
+import { DEFAULT_TIMESPAN, TIMESPANS, TimespanPicker, type Timespan } from '@/components/timespan';
 import { CardioStats } from '@/progress/cardio-stats';
-import { allOfType, layout, setNow, turnCarousel } from '@/test-utils';
+import { allOfType, layout, pickTimespan, setNow } from '@/test-utils';
 
 const ride = (id: number, date: string, km: number, minutes: number): CardioWorkout => ({
   id,
@@ -15,13 +15,15 @@ const ride = (id: number, date: string, km: number, minutes: number): CardioWork
   distance_m: km * 1000,
 });
 
+const ALL_TIME = TIMESPANS.find((t) => t.key === 'all')!;
+
 /** CardioStats as the Progress tab uses it, with the timespan switchable. */
-function Harness({ workouts, initial = TIMESPANS[0] }: { workouts: CardioWorkout[]; initial?: Timespan }) {
+function Harness({ workouts, initial = ALL_TIME }: { workouts: CardioWorkout[]; initial?: Timespan }) {
   const [timespan, setTimespan] = useState<Timespan>(initial);
   return (
     <>
       <CardioStats activity="cycling" workouts={workouts} timespan={timespan} />
-      <TimespanCarousel value={timespan} onChange={setTimespan} />
+      <TimespanPicker value={timespan} onChange={setTimespan} />
     </>
   );
 }
@@ -42,7 +44,7 @@ test('totals cover the sessions in the timespan', async () => {
 test('weekly distance names the ride’s week under every timespan, never a single day', async () => {
   await render(<Harness workouts={[ride(1, '2026-10-17', 45.2, 136.3)]} />);
   for (const span of TIMESPANS) {
-    await turnCarousel('Timespan', span.key === 'all' ? 'All time' : span.label);
+    await pickTimespan(span.key === 'all' ? 'All time' : span.label);
     expect(screen.getByText('Latest · Week of 12 Oct – 18 Oct')).toBeOnTheScreen();
     expect(screen.queryByText(/Mon, 12 Oct/)).not.toBeOnTheScreen();
   }
@@ -71,13 +73,16 @@ test('the speed chart plots each ride on its own day', async () => {
 
 test('sessions older than the timespan are left out', async () => {
   await render(
-    <Harness workouts={[ride(1, '2026-08-01', 30, 90), ride(2, '2026-10-17', 45.2, 136.3)]} initial={TIMESPANS[4]} />
+    <Harness
+      workouts={[ride(1, '2026-08-01', 30, 90), ride(2, '2026-10-17', 45.2, 136.3)]}
+      initial={DEFAULT_TIMESPAN}
+    />
   );
   expect(screen.getByText('1')).toBeOnTheScreen();
   expect(screen.queryByText('1 Aug 2026', { exact: false })).not.toBeOnTheScreen();
 });
 
 test('an empty timespan says so', async () => {
-  await render(<Harness workouts={[ride(1, '2026-08-01', 30, 90)]} initial={TIMESPANS[4]} />);
+  await render(<Harness workouts={[ride(1, '2026-08-01', 30, 90)]} initial={DEFAULT_TIMESPAN} />);
   expect(screen.getByText('No sessions in the last 1 month.')).toBeOnTheScreen();
 });

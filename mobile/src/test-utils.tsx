@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
 import type { ReactElement } from 'react';
 import { Alert, type AlertButton } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -132,24 +132,23 @@ export function setNow(iso: string) {
   jest.useFakeTimers({ now: new Date(iso), advanceTimers: true });
 }
 
-/** What a carousel, found by its accessibility label, has selected, e.g. "Squat, 1 of 3". */
-export const carouselValue = (name: string) =>
-  screen.getByRole('adjustable', { name }).props.accessibilityValue.text as string;
+// With both Insights pages drawn, each has a timespan picker; they share one timespan.
+const timespanPicker = () => screen.getAllByLabelText('Timespan')[0];
 
-/**
- * Turns a carousel to the item labelled `label`, as a screen reader would, one
- * item at a time: onwards, then back if it stops at an end first.
- */
-export async function turnCarousel(name: string, label: string) {
-  const at = () => carouselValue(name).startsWith(`${label},`);
-  for (const actionName of ['increment', 'decrement']) {
-    for (let i = 0; i < 20 && !at(); i++) {
-      const before = carouselValue(name);
-      await fireEvent(screen.getByRole('adjustable', { name }), 'accessibilityAction', { nativeEvent: { actionName } });
-      // The carousel ticks over in a microtask, held by the animation library's fake timers.
-      await act(async () => jest.runAllTicks());
-      if (carouselValue(name) === before) break;
-    }
-  }
-  if (!at()) throw new Error(`The ${name} carousel has no ${label}`);
+/** The timespan picked, e.g. "1 month" or "All time". */
+export const timespanValue = () =>
+  within(timespanPicker()).getByRole('radio', { checked: true }).props.accessibilityLabel as string;
+
+/** Picks a timespan by its full name, e.g. "3 months" or "All time". */
+export const pickTimespan = (label: string) =>
+  fireEvent.press(within(timespanPicker()).getByRole('radio', { name: label }));
+
+/** What a select, found by its label, e.g. "Exercise", shows picked. */
+export const selectValue = (name: string) =>
+  screen.getByRole('button', { name }).props.accessibilityValue.text as string;
+
+/** Opens a select and picks the option labelled `label`. */
+export async function selectOption(name: string, label: string) {
+  await fireEvent.press(screen.getByRole('button', { name }));
+  await fireEvent.press(screen.getByRole('button', { name: label }));
 }

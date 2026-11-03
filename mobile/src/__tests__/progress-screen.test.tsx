@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { fireEvent, screen, userEvent, within } from '@testing-library/react-native';
+import { screen, userEvent, within } from '@testing-library/react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 
 import ProgressScreen from '@/app/(tabs)/stats/index';
@@ -7,13 +7,15 @@ import { healthBodyweight, isHealthAvailable } from '@/health/healthkit';
 import { ProgressProvider } from '@/progress/progress-context';
 import {
   allOfType,
-  carouselValue,
   mockAlerts,
   mockServer,
+  pickTimespan,
   renderInApp,
+  selectOption,
   selectPlan,
+  selectValue,
   setNow,
-  turnCarousel,
+  timespanValue,
   type Request,
 } from '@/test-utils';
 
@@ -106,13 +108,13 @@ test('personal records list the sessions that beat every earlier one, within the
   });
   await renderProgress();
   await screen.findByText('Personal records');
-  await turnCarousel('Timespan', 'All time');
+  await pickTimespan('All time');
 
   expect(screen.getByLabelText('PR on Fri, 16 Oct 2026: 122.5 kg, up 2.5 kg')).toBeOnTheScreen();
   expect(screen.getByLabelText('PR on Thu, 2 Apr 2020: 120.0 kg, up 20.0 kg')).toBeOnTheScreen();
 
   // The 2020 PR is outside the last month; the record it set still shows.
-  await turnCarousel('Timespan', '1 month');
+  await pickTimespan('1 month');
   expect(screen.getByLabelText('PR on Fri, 16 Oct 2026: 122.5 kg, up 2.5 kg')).toBeOnTheScreen();
   expect(screen.queryByLabelText(/PR on Thu, 2 Apr 2020/)).not.toBeOnTheScreen();
 });
@@ -134,7 +136,7 @@ test('with no PR in the timespan it names the standing record', async () => {
   });
   await renderProgress();
   await screen.findByText('Personal records');
-  await turnCarousel('Timespan', '1 month');
+  await pickTimespan('1 month');
   expect(screen.getByText('No PRs in the last 1 month. The record is 120.0 kg from 2 Apr 2020.')).toBeOnTheScreen();
 });
 
@@ -212,7 +214,7 @@ test('opened on cycling from elsewhere, the weekly distance names the ride’s w
   server();
   await renderProgress();
   expect(await screen.findByText('Latest · Week of 12 Oct – 18 Oct')).toBeOnTheScreen();
-  expect(carouselValue('Timespan')).toBe('1 year, 2 of 5');
+  expect(timespanValue()).toBe('1 year');
 });
 
 test('while Health is still reading, the stored log shows with a syncing note', async () => {
@@ -234,45 +236,61 @@ test('a failed Health sync keeps the stored log and says why', async () => {
   expect(screen.getAllByText('82.4 kg')[0]).toBeOnTheScreen();
 });
 
-describe('category and series carousels', () => {
+const pickCategory = (name: string) => userEvent.setup().press(screen.getByRole('tab', { name }));
+
+describe('category buttons and series select', () => {
   test('open on Strength and its first lift', async () => {
     server({ exercises: ['Squat', 'Bench'] });
     await renderProgress();
     expect(await screen.findByText('Since 9 Oct')).toBeOnTheScreen();
-    expect(carouselValue('Category')).toBe('Strength, 1 of 3');
-    expect(carouselValue('Exercise')).toBe('Squat, 1 of 2');
+    expect(screen.getByRole('tab', { name: 'Strength', selected: true })).toBeOnTheScreen();
+    expect(selectValue('Exercise')).toBe('Squat');
   });
 
-  test('float above the tab bar, outside the scrolling page', async () => {
+  test('sit at the top of the page, under the title, with the timespan', async () => {
     server({ exercises: ['Squat', 'Bench'] });
     await renderProgress();
     await screen.findByText('Since 9 Oct');
-    const page = allOfType('RCTScrollView')[0];
-    expect(within(page).getByText('Since 9 Oct')).toBeOnTheScreen();
-    expect(within(page).queryByRole('adjustable', { name: 'Category' })).toBeNull();
-    expect(within(page).queryByRole('adjustable', { name: 'Exercise' })).toBeNull();
+    // One page, scrolling with its controls; nothing floats above the tab bar.
+    const pages = allOfType('RCTScrollView');
+    expect(pages).toHaveLength(1);
+    expect(within(pages[0]).getByLabelText('Category')).toBeOnTheScreen();
+    expect(within(pages[0]).getByRole('button', { name: 'Exercise' })).toBeOnTheScreen();
+    expect(within(pages[0]).getByLabelText('Timespan')).toBeOnTheScreen();
+    expect(screen.queryByRole('adjustable')).toBeNull();
   });
 
-  test('a new category’s page slides in beside the last, like a tab, which stays drawn but hidden', async () => {
-    server();
+  test('picking a lift shows its chart', async () => {
+    mockServer({
+      'GET /api/statistics': ({ query }: Request) => ({
+        exercises: ['Squat', 'Bench'],
+        data:
+          query.get('exercise') === 'Bench'
+            ? [
+                { date: '2026-10-02', estimated_1rm: 80, total_volume: 500 },
+                { date: '2026-10-16', estimated_1rm: 85, total_volume: 600 },
+              ]
+            : query.get('exercise') === 'Squat'
+              ? [{ date: '2026-10-09', estimated_1rm: 113.3, total_volume: 950 }]
+              : [],
+      }),
+      'GET /api/cardio': [],
+    });
     await renderProgress();
     await screen.findByText('Since 9 Oct');
-    await turnCarousel('Category', 'Cardio');
-    expect(screen.getByText('Weekly distance')).toBeOnTheScreen();
-    // Strength's page slides away: still drawn, but out of reach of screen readers.
-    expect(screen.queryByText('Since 9 Oct')).toBeNull();
-    expect(screen.getByText('Since 9 Oct', { includeHiddenElements: true })).toBeOnTheScreen();
-    // Each page scrolls on its own.
-    expect(allOfType('RCTScrollView')).toHaveLength(2);
+    await selectOption('Exercise', 'Bench');
+    expect(await screen.findByText('Since 2 Oct')).toBeOnTheScreen();
+    expect(selectValue('Exercise')).toBe('Bench');
   });
 
   test('Cardio lists only cardio, opening on the latest activity', async () => {
     server();
     await renderProgress();
     await screen.findByText('Since 9 Oct');
-    await turnCarousel('Category', 'Cardio');
-    expect(carouselValue('Activity')).toBe('Cycling, 1 of 1');
+    await pickCategory('Cardio');
+    expect(selectValue('Activity')).toBe('Cycling');
     expect(screen.getByText('Weekly distance')).toBeOnTheScreen();
+    expect(screen.queryByText('Since 9 Oct')).toBeNull();
   });
 
   // Regression: a spinner showed for a moment before the log, while it loaded.
@@ -282,46 +300,52 @@ describe('category and series carousels', () => {
     server();
     await renderProgress();
     await screen.findByText('Since 9 Oct');
-    await turnCarousel('Category', 'Bodyweight');
+    // Loaded with the screen: a fetch on picking it would never answer, leaving a spinner.
+    const fetch = globalThis.fetch;
+    globalThis.fetch = jest.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      new URL(String(input)).pathname === '/api/bodyweight' ? new Promise<Response>(() => {}) : fetch(input, init)
+    );
+    await pickCategory('Bodyweight');
     expect(screen.getAllByText('82.4 kg')[0]).toBeOnTheScreen();
     expect(screen.getByText('Syncing with Apple Health…')).toBeOnTheScreen();
   });
 
-  test('Bodyweight has no second carousel', async () => {
+  test('Bodyweight has no series select', async () => {
     server();
     await renderProgress();
     await screen.findByText('Since 9 Oct');
-    await turnCarousel('Category', 'Bodyweight');
+    await pickCategory('Bodyweight');
     expect(screen.getAllByText('82.4 kg')[0]).toBeOnTheScreen();
-    expect(screen.queryByRole('adjustable', { name: 'Exercise' })).not.toBeOnTheScreen();
-    expect(screen.queryByRole('adjustable', { name: 'Activity' })).not.toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: 'Exercise' })).not.toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: 'Activity' })).not.toBeOnTheScreen();
   });
 
   test('the categories are Strength, Cardio, then Bodyweight', async () => {
     server();
     await renderProgress();
     await screen.findByText('Since 9 Oct');
-    await turnCarousel('Category', 'Cardio');
-    expect(carouselValue('Category')).toBe('Cardio, 2 of 3');
-    await turnCarousel('Category', 'Bodyweight');
-    expect(carouselValue('Category')).toBe('Bodyweight, 3 of 3');
+    const tabs = within(screen.getByLabelText('Category')).getAllByRole('tab');
+    expect(tabs.map((t) => t.props.accessibilityLabel)).toEqual(['Strength', 'Cardio', 'Bodyweight']);
+    await pickCategory('Bodyweight');
+    expect(screen.getByRole('tab', { name: 'Strength', selected: false })).toBeOnTheScreen();
+    expect(screen.getByRole('tab', { name: 'Bodyweight', selected: true })).toBeOnTheScreen();
   });
 
   test('each category comes back to the series picked in it', async () => {
     server({ exercises: ['Squat', 'Bench'] });
     await renderProgress();
     await screen.findByText('Since 9 Oct');
-    await turnCarousel('Exercise', 'Bench');
-    await turnCarousel('Category', 'Cardio');
-    await turnCarousel('Category', 'Strength');
-    expect(carouselValue('Exercise')).toBe('Bench, 2 of 2');
+    await selectOption('Exercise', 'Bench');
+    await pickCategory('Cardio');
+    await pickCategory('Strength');
+    expect(selectValue('Exercise')).toBe('Bench');
   });
 
   test('Cardio without workouts says how to get them', async () => {
     server({ rides: false });
     await renderProgress();
     await screen.findByText('Since 9 Oct');
-    await turnCarousel('Category', 'Cardio');
+    await pickCategory('Cardio');
     expect(
       screen.getByText('No cardio workouts yet. Connect Apple Health in Settings to import them.')
     ).toBeOnTheScreen();
@@ -331,26 +355,30 @@ describe('category and series carousels', () => {
     server({ exercises: [] });
     await renderProgress();
     expect(await screen.findByText('Weekly distance')).toBeOnTheScreen();
-    expect(carouselValue('Category')).toBe('Cardio, 2 of 3');
+    expect(screen.getByRole('tab', { name: 'Cardio', selected: true })).toBeOnTheScreen();
   });
 
-  test('the timespan starts at 1 month and goes round in a ring', async () => {
+  test('the timespan starts at 1 month, shortest first', async () => {
     server();
     await renderProgress();
     await screen.findByText('Since 9 Oct');
-    expect(carouselValue('Timespan')).toBe('1 month, 5 of 5');
-    await fireEvent(screen.getByRole('adjustable', { name: 'Timespan' }), 'accessibilityAction', {
-      nativeEvent: { actionName: 'increment' },
-    });
-    expect(carouselValue('Timespan')).toBe('All time, 1 of 5');
+    expect(timespanValue()).toBe('1 month');
+    const options = within(screen.getByLabelText('Timespan')).getAllByRole('radio');
+    expect(options.map((o) => o.props.accessibilityLabel)).toEqual([
+      '1 month',
+      '3 months',
+      '6 months',
+      '1 year',
+      'All time',
+    ]);
   });
 
   test('the timespan carries across categories', async () => {
     server();
     await renderProgress();
     await screen.findByText('Since 9 Oct');
-    await turnCarousel('Timespan', '1 year');
-    await turnCarousel('Category', 'Cardio');
-    expect(carouselValue('Timespan')).toBe('1 year, 2 of 5');
+    await pickTimespan('1 year');
+    await pickCategory('Cardio');
+    expect(timespanValue()).toBe('1 year');
   });
 });

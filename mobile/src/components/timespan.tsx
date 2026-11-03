@@ -1,19 +1,22 @@
+import { Pressable, StyleSheet, View } from 'react-native';
+
 import { localDate } from '@/api/client';
-import { Carousel } from '@/components/carousel';
-import { useTabBarWidth } from '@/components/carousel-tab-bar';
+import { ThemedText } from '@/components/themed-text';
+import { Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 
 export const TIMESPANS = [
-  { key: 'all', label: 'From beginning', short: 'All', months: null },
-  { key: '1y', label: '1 year', short: '1Y', months: 12 },
-  { key: '6m', label: '6 months', short: '6M', months: 6 },
-  { key: '3m', label: '3 months', short: '3M', months: 3 },
   { key: '1m', label: '1 month', short: '1M', months: 1 },
+  { key: '3m', label: '3 months', short: '3M', months: 3 },
+  { key: '6m', label: '6 months', short: '6M', months: 6 },
+  { key: '1y', label: '1 year', short: '1Y', months: 12 },
+  { key: 'all', label: 'From beginning', short: 'All', months: null },
 ] as const;
 
 export type Timespan = (typeof TIMESPANS)[number];
 
 /** What Progress and Insights open on: the last month. */
-export const DEFAULT_TIMESPAN: Timespan = TIMESPANS[4];
+export const DEFAULT_TIMESPAN: Timespan = TIMESPANS[0];
 
 /** First date (YYYY-MM-DD) inside the timespan, or null for all time. */
 export function timespanStart(span: Timespan) {
@@ -23,18 +26,45 @@ export function timespanStart(span: Timespan) {
   return localDate(d);
 }
 
-/** Floating carousel for picking a timespan, for the stack above the tab bar. */
-export function TimespanCarousel({ value, onChange }: { value: Timespan; onChange: (timespan: Timespan) => void }) {
+/** Segmented control for picking a timespan, shortest first, at the top of a page. */
+export function TimespanPicker({ value, onChange }: { value: Timespan; onChange: (timespan: Timespan) => void }) {
+  const theme = useTheme();
   return (
-    <Carousel
-      items={TIMESPANS.map((t) => ({ key: t.key, label: t.key === 'all' ? 'All time' : t.label }))}
-      index={TIMESPANS.findIndex((t) => t.key === value.key)}
-      onChange={(i) => onChange(TIMESPANS[i])}
-      visible={3}
-      floating
-      width={useTabBarWidth()}
+    <View
+      accessibilityRole="radiogroup"
       accessibilityLabel="Timespan"
-      testID="timespan"
-    />
+      style={[styles.track, { backgroundColor: theme.backgroundElement }]}>
+      {TIMESPANS.map((t) => {
+        const selected = t.key === value.key;
+        return (
+          <Pressable
+            key={t.key}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: selected }}
+            accessibilityLabel={t.key === 'all' ? 'All time' : t.label}
+            onPress={() => onChange(t)}
+            style={[styles.segment, selected && { backgroundColor: theme.backgroundSelected }]}>
+            <ThemedText type="smallBold" themeColor={selected ? 'text' : 'textSecondary'}>
+              {t.short}
+            </ThemedText>
+          </Pressable>
+        );
+      })}
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  track: {
+    flexDirection: 'row',
+    borderRadius: 12,
+    padding: 3,
+    gap: 3,
+  },
+  segment: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: Spacing.two,
+    borderRadius: 9,
+  },
+});

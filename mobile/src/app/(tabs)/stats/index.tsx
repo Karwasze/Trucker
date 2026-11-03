@@ -1,15 +1,12 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { localDate } from '@/api/client';
-import type { CardioActivity, CardioWorkout, StatisticsData, Triathlon } from '@/api/types';
-import { Carousel, TEXT_CAROUSEL_HEIGHT } from '@/components/carousel';
-import { isRing } from '@/components/carousel-model';
-import { AboveTabBar, useTabBarWidth } from '@/components/carousel-tab-bar';
+import type { BodyweightEntry, CardioActivity, CardioWorkout, StatisticsData, Triathlon } from '@/api/types';
 import { LineChart } from '@/components/line-chart';
-import { PagerPage, slideDirection, usePager, type Level } from '@/components/page-transition';
+import { Select } from '@/components/select';
 import { ThemedText } from '@/components/themed-text';
-import { TimespanCarousel, timespanStart, type Timespan } from '@/components/timespan';
+import { TimespanPicker, timespanStart, type Timespan } from '@/components/timespan';
 import { Card, Message, Screen, SectionLabel } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { syncBodyweight } from '@/health/bodyweight';
@@ -21,20 +18,16 @@ import { CardioStats } from '@/progress/cardio-stats';
 import { useOpenedWith, useProgressTimespan } from '@/progress/progress-context';
 import { personalRecords } from '@/progress/records';
 import { CATEGORIES, categoryOf, seriesKey, seriesLabel, type Category, type Series } from '@/progress/series';
-import { Tile, TileRow } from '@/progress/tile';
+import { Tile, TileButton, TileRow } from '@/progress/tile';
 import { TriathlonStats } from '@/progress/triathlon-stats';
 import { SettingsButton } from '@/settings/settings-button';
 import { useSettings } from '@/settings/settings-context';
 import { formatDate, formatKg } from '@/workout/format';
 
-/** A Progress page: a category, and the series in it shown, if it has any. */
-type Page = { category: Category; series: Series | null; levels: Level[] };
-
 /**
- * Progress: a carousel of categories (strength, cardio, bodyweight), a
- * carousel of the lifts or activities in the chosen one, and that series'
- * charts and sessions on a page of its own, sliding in beside the last as the
- * carousels turn, like the tabs do.
+ * Progress: buttons for the categories (strength, cardio, bodyweight), a
+ * select of the lifts or activities in the chosen one, the timespan, and that
+ * series' charts and sessions below.
  */
 export default function ProgressScreen() {
   const { api, serverUrl } = useSettings();
@@ -46,8 +39,9 @@ export default function ProgressScreen() {
   // Oldest first, for the charts.
   const cardio = useQuery(`cardio:${serverUrl}`, async () => (await api.listCardio()).reverse());
   const triathlons = useQuery(`triathlons:${serverUrl}`, async () => (await api.listTriathlons()).reverse());
-  // Loaded with the screen, so it's there the moment Bodyweight is picked.
-  useQuery(`bodyweight:${serverUrl}`, async () =>
+  // Loaded with the screen and handed to the page, so it's there the moment
+  // Bodyweight is picked, with no fetch of its own to wait for.
+  const bodyweight = useQuery(`bodyweight:${serverUrl}`, async () =>
     (await api.listBodyweight()).sort((a, b) => a.date.localeCompare(b.date))
   );
   // Opened on a series from elsewhere, e.g. Insights.
@@ -84,104 +78,74 @@ export default function ProgressScreen() {
     (shown === 'cardio' && latest ? { kind: 'cardio' as const, activity: latest.activity } : undefined);
   const series = choices.find((c) => preferred && seriesKey(c) === seriesKey(preferred)) ?? choices[0] ?? null;
 
-  const categoryIndex = CATEGORIES.findIndex((c) => c.key === shown);
-  const page: Page | null = shown && {
-    category: shown,
-    series,
-    levels: [
-      { index: categoryIndex, count: CATEGORIES.length, ring: isRing(CATEGORIES.length, 3) },
-      { index: series ? choices.indexOf(series) : 0, count: choices.length, ring: isRing(choices.length, 3) },
-    ],
-  };
-  const pageKey = (p: Page | null) => (p ? `${p.category}:${p.series ? seriesKey(p.series) : ''}` : '');
-  const pager = usePager(pageKey(page), page, (from, to) => (from && to ? slideDirection(from.levels, to.levels) : 0));
+  if (!shown) {
+    return (
+      <Screen title="Progress" action={<SettingsButton />}>
+        <Message loading />
+      </Screen>
+    );
+  }
 
-  // Carousels float above the tab bar: from the bottom up, the timespan,
-  // the categories, then the category's series.
-  const barWidth = useTabBarWidth();
-  const seriesShown = shown !== null && shown !== 'bodyweight' && !!series;
-  const floating = shown ? (seriesShown ? 3 : 2) : 0;
-
-  const pageProps = {
-    timespan,
-    names,
-    cardio,
-    triathlons: triathlons.data ?? [],
-    bottomInset: floating * (TEXT_CAROUSEL_HEIGHT + Spacing.two),
-    onRefresh: () => {
-      names.refresh();
-      cardio.refresh();
-      triathlons.refresh();
-    },
-  };
+  const controls = (
+    <>
+      <View accessibilityRole="tablist" accessibilityLabel="Category" style={styles.categories}>
+        {CATEGORIES.map((c) => (
+          <TileButton key={c.key} label={c.label} selected={c.key === shown} onPress={() => setCategory(c.key)} />
+        ))}
+      </View>
+      {shown !== 'bodyweight' && series && (
+        <Select
+          label={shown === 'strength' ? 'Exercise' : 'Activity'}
+          options={choices.map((c) => ({ key: seriesKey(c), label: seriesLabel(c) }))}
+          value={seriesKey(series)}
+          onChange={(key) => setPicked((p) => ({ ...p, [shown]: choices.find((c) => seriesKey(c) === key) }))}
+        />
+      )}
+      <TimespanPicker value={timespan} onChange={setTimespan} />
+    </>
+  );
 
   return (
-    <View style={styles.page}>
-      {!page ? (
-        <Screen title="Progress" action={<SettingsButton />}>
-          <Message loading />
-        </Screen>
-      ) : (
-        [pager.previous, pager.current].map(
-          (p) =>
-            p?.value && (
-              <PagerPage key={p.key} pager={pager} pageKey={p.key}>
-                <ProgressPage page={p.value} {...pageProps} />
-              </PagerPage>
-            )
-        )
-      )}
-      {shown && (
-        <AboveTabBar>
-          {shown !== 'bodyweight' && series && (
-            <Carousel
-              // A fresh carousel for each category's list.
-              key={shown}
-              items={choices.map((c) => ({ key: seriesKey(c), label: seriesLabel(c) }))}
-              index={choices.indexOf(series)}
-              onChange={(i) => setPicked((p) => ({ ...p, [shown]: choices[i] }))}
-              visible={3}
-              accessibilityLabel={shown === 'strength' ? 'Exercise' : 'Activity'}
-              testID="series"
-              width={barWidth}
-              floating
-            />
-          )}
-          <Carousel
-            items={CATEGORIES}
-            index={categoryIndex}
-            onChange={(i) => setCategory(CATEGORIES[i].key)}
-            visible={3}
-            accessibilityLabel="Category"
-            testID="category"
-            width={barWidth}
-            floating
-          />
-          <TimespanCarousel value={timespan} onChange={setTimespan} />
-        </AboveTabBar>
-      )}
-    </View>
+    <ProgressPage
+      category={shown}
+      series={series}
+      controls={controls}
+      timespan={timespan}
+      names={names}
+      cardio={cardio}
+      triathlons={triathlons.data ?? []}
+      storedBodyweight={bodyweight}
+      onRefresh={() => {
+        names.refresh();
+        cardio.refresh();
+        triathlons.refresh();
+      }}
+    />
   );
 }
 
 type Query<T> = { data?: T | null; error?: string | null; refreshing?: boolean };
 
-/** One series' page: its charts and sessions, loading what it needs itself. */
+/** One series' page under the controls: its charts and sessions, loading what it needs itself. */
 function ProgressPage({
-  page: { category, series },
+  category,
+  series,
+  controls,
   timespan,
   names,
   cardio,
   triathlons,
-  bottomInset,
+  storedBodyweight,
   onRefresh,
 }: {
-  page: Page;
+  category: Category;
+  series: Series | null;
+  controls: ReactNode;
   timespan: Timespan;
   names: Query<string[]>;
   cardio: Query<CardioWorkout[]>;
   triathlons: Triathlon[];
-  bottomInset: number;
+  storedBodyweight: Query<BodyweightEntry[]> & { refresh: () => void };
   onRefresh: () => void;
 }) {
   const { api, serverUrl } = useSettings();
@@ -194,9 +158,6 @@ function ProgressPage({
   const health = useHealthState();
   const healthConnected = !!health.state.connectedAt && isHealthAvailable();
   const isBodyweight = series?.kind === 'bodyweight';
-  const storedBodyweight = useQuery(isBodyweight ? `bodyweight:${serverUrl}` : null, async () =>
-    (await api.listBodyweight()).sort((a, b) => a.date.localeCompare(b.date))
-  );
   const healthSync = useQuery(
     isBodyweight && health.loaded && healthConnected ? `bodyweight-sync:${serverUrl}` : null,
     () => syncBodyweight(api)
@@ -216,10 +177,10 @@ function ProgressPage({
   return (
     <Screen
       title="Progress"
-      bottomInset={bottomInset}
       action={<SettingsButton />}
       refreshing={!!(names.refreshing || cardio.refreshing)}
       onRefresh={refresh}>
+      {controls}
       {!series ? (
         <Message error={category === 'strength' ? names.error : cardio.error}>
           {category === 'strength'
@@ -339,8 +300,9 @@ function ExerciseStats({ data: all, timespan }: { data: StatisticsData[]; timesp
 }
 
 const styles = StyleSheet.create({
-  page: {
-    flex: 1,
+  categories: {
+    flexDirection: 'row',
+    gap: Spacing.two,
   },
   sessionRow: {
     flexDirection: 'row',

@@ -6,9 +6,9 @@ import type { CardioWorkout, Insights, Triathlon } from '@/api/types';
 import HistoryScreen from '@/app/(tabs)/history/index';
 import TriathlonDetailScreen from '@/app/(tabs)/history/triathlon/[date]';
 import ProgressScreen from '@/app/(tabs)/stats/index';
-import { CardioInsights, InsightsProvider, InsightsTimespan } from '@/insights/insights-view';
+import { CardioInsights, InsightsProvider } from '@/insights/insights-view';
 import { ProgressProvider } from '@/progress/progress-context';
-import { mockServer, renderInApp, selectPlan, setNow, turnCarousel } from '@/test-utils';
+import { mockServer, renderInApp, selectPlan, pickTimespan, selectOption, setNow } from '@/test-utils';
 
 const leg = (id: number, activity: CardioWorkout['activity'], distance_m: number, duration_seconds: number) => ({
   id,
@@ -110,10 +110,9 @@ test('Progress lists triathlons, one class at a time, opening on the latest’s'
       <ProgressScreen />
     </ProgressProvider>
   );
-  await screen.findByRole('adjustable', { name: 'Category' });
-  await turnCarousel('Category', 'Cardio');
-  await turnCarousel('Activity', 'Triathlon');
-  await turnCarousel('Timespan', 'All time');
+  await user.press(await screen.findByRole('tab', { name: 'Cardio' }));
+  await selectOption('Activity', 'Triathlon');
+  await pickTimespan('All time');
   expect(await screen.findByText('Total time · Quarter')).toBeOnTheScreen();
   expect(screen.getByText('Best')).toBeOnTheScreen();
   // In the Best tile and the best triathlon's card.
@@ -141,10 +140,9 @@ test('the Insights Cardio page shows the latest triathlon, the leg costing the m
   await renderInApp(
     <InsightsProvider>
       <CardioInsights />
-      <InsightsTimespan />
     </InsightsProvider>
   );
-  await turnCarousel('Timespan', 'All time');
+  await pickTimespan('All time');
   expect(await screen.findByText('Latest · Quarter triathlon · 17 Oct')).toBeOnTheScreen();
   expect(screen.getByText('+18:20 off your best')).toBeOnTheScreen();
   expect(screen.getByText('3 triathlons in total')).toBeOnTheScreen();

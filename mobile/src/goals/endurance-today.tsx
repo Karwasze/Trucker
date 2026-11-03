@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Card, SectionLabel } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
-import { SessionDetails } from '@/goals/session-card';
+import { SessionLink } from '@/goals/session-card';
 import { useHealthState } from '@/health/health-state';
 import { useQuery } from '@/hooks/use-query';
 import { useSettings } from '@/settings/settings-context';
@@ -27,7 +27,7 @@ export function EnduranceToday({ date, waiting }: { date: string; waiting: boole
       <SectionLabel>{today.data?.goal?.name ?? 'Endurance'}</SectionLabel>
       <Card>
         {sessions.map((s) => (
-          <SessionDetails key={s.id} session={s} />
+          <SessionLink key={s.id} session={s} />
         ))}
         {open.length > 0 &&
           (!state.connectedAt ? (

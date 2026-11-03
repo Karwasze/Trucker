@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { screen, userEvent } from '@testing-library/react-native';
+import { router } from 'expo-router';
 
-import type { NewWorkout, PlanToday, Workout } from '@/api/types';
+import type { NewWorkout, PlannedSession, PlanToday, Workout } from '@/api/types';
 import TodayScreen from '@/app/(tabs)/(today)/index';
 import { syncLiveActivity } from '@/timer/native';
 import { mockAlerts, mockServer, renderInApp, selectPlan, setNow, type Request } from '@/test-utils';
@@ -29,12 +30,12 @@ const squatDay: PlanToday = {
  * The server, keeping workouts logged through it: Today checks the list to
  * notice a logged workout being deleted in History.
  */
-function server(day: PlanToday = squatDay, { saves = true } = {}) {
+function server(day: PlanToday = squatDay, { saves = true, sessions = [] as PlannedSession[] } = {}) {
   const workouts: Workout[] = day.workout ? [day.workout] : [];
   return mockServer({
     'GET /api/plans': [plan],
     'GET /api/plans/today': day,
-    'GET /api/goals/today': { goal: null, sessions: [] },
+    'GET /api/goals/today': { goal: null, sessions },
     'GET /api/workouts': () => workouts,
     'GET /api/exercises': [{ id: 1, name: 'Bench Press', is_default: true, muscles: [] }],
     'GET /api/latest-exercise': { target: null },
@@ -293,4 +294,46 @@ test('a failed save leaves the rest timer running', async () => {
   await alerts.press('Finish');
   expect(alerts.latest().title).toBe("Couldn't save workout");
   expect(syncLiveActivity).not.toHaveBeenLastCalledWith(null);
+});
+
+test('a goal session done today opens its workout in History', async () => {
+  const session: PlannedSession = {
+    id: 3,
+    goal_id: 7,
+    date: TODAY,
+    activity: 'running',
+    kind: 'easy',
+    phase: 'base',
+    intensity: 'easy',
+    description: 'Easy run 5 km',
+  };
+  server(squatDay, {
+    sessions: [
+      {
+        ...session,
+        cardio_workout_id: 9,
+        workout: {
+          id: 9,
+          date: TODAY,
+          started_at: `${TODAY}T07:00:00+02:00`,
+          activity: 'running',
+          distance_m: 5000,
+          duration_seconds: 1800,
+        },
+      },
+      { ...session, id: 4, description: 'Strides 6 × 20 s' },
+    ],
+  });
+  await selectPlan(1);
+  const user = userEvent.setup();
+  await renderInApp(<TodayScreen />);
+
+  await user.press(await screen.findByRole('button', { name: 'Easy run 5 km, done' }));
+  expect(router.navigate).toHaveBeenCalledWith(
+    { pathname: '/history/cardio/[id]', params: { id: 9 } },
+    { withAnchor: true }
+  );
+  // One not done yet has nothing to open.
+  expect(screen.getByText(/Strides/)).toBeOnTheScreen();
+  expect(screen.queryByRole('button', { name: /Strides/ })).toBeNull();
 });

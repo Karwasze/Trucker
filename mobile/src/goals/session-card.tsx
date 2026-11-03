@@ -1,4 +1,5 @@
-import { StyleSheet, View } from 'react-native';
+import { router } from 'expo-router';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import type { PlannedSession, VerdictStatus } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
@@ -70,10 +71,28 @@ export function SessionDetails({ session: s, compact }: { session: PlannedSessio
   );
 }
 
+/** A planned session, opening the workout that filled it once done. */
+export function SessionLink({ session, compact }: { session: PlannedSession; compact?: boolean }) {
+  const id = session.cardio_workout_id;
+  if (!id) return <SessionDetails session={session} compact={compact} />;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${session.description}, done`}
+      onPress={() => router.navigate({ pathname: '/history/cardio/[id]', params: { id } }, { withAnchor: true })}
+      style={({ pressed }) => pressed && styles.pressed}>
+      <SessionDetails session={session} compact={compact} />
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Spacing.two,
+  },
+  pressed: {
+    opacity: 0.6,
   },
 });

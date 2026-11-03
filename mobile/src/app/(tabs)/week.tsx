@@ -1,11 +1,12 @@
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import type { PlannedSession, PlanToday } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Message, Screen } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
-import { SessionDetails } from '@/goals/session-card';
+import { SessionLink } from '@/goals/session-card';
 import { useQuery } from '@/hooks/use-query';
 import { useTheme } from '@/hooks/use-theme';
 import { useToday } from '@/hooks/use-today';
@@ -13,19 +14,31 @@ import { SettingsButton } from '@/settings/settings-button';
 import { useSettings } from '@/settings/settings-context';
 import { describeSets } from '@/workout/draft';
 import { formatDate } from '@/workout/format';
-import { currentWeek, weekProgress } from '@/workout/week';
+import { currentWeek, dayStatus, type DayStatus, weekProgress } from '@/workout/week';
 
 const formatDay = (date: string) => formatDate(date, { weekday: 'long', month: 'short', day: 'numeric' });
 const formatShort = (date: string) => formatDate(date, { month: 'short', day: 'numeric' });
+const formatLetter = (date: string) => formatDate(date, { weekday: 'narrow' });
+
+const statusLabels: Record<DayStatus, string> = {
+  done: 'done',
+  missed: 'missed',
+  planned: 'planned',
+  rest: 'rest day',
+};
 
 /**
  * This week's lifting from the selected plan and sessions from the active
- * goal, day by day, and how many of them are done.
+ * goal: how many of them are done, a dot for each day, and the details of
+ * the day picked (today to begin with).
  */
 export default function WeekScreen() {
   const { api, planId, serverUrl } = useSettings();
   const { today, recheck: recheckToday } = useToday();
   const dates = currentWeek(today);
+  const [picked, setPicked] = useState(today);
+  // Back to today once the week rolls over.
+  const selected = dates.includes(picked) ? picked : today;
 
   const plans = useQuery(`plans:${serverUrl}`, api.listPlans);
   const week = useQuery(`week:${serverUrl}:${planId}:${today}`, async () => {
@@ -77,15 +90,21 @@ export default function WeekScreen() {
       ) : (
         <>
           <WeekProgress {...weekProgress(days, sessions)} />
-          {dates.map((date) => (
-            <DayCard
-              key={date}
-              date={date}
-              today={today}
-              day={days.find((d) => d.date === date)}
-              sessions={sessions.filter((s) => s.date === date)}
-            />
-          ))}
+          <WeekStrip
+            dates={dates}
+            today={today}
+            selected={selected}
+            onSelect={setPicked}
+            days={days}
+            sessions={sessions}
+          />
+          <DayCard
+            key={selected}
+            date={selected}
+            today={today}
+            day={days.find((d) => d.date === selected)}
+            sessions={sessions.filter((s) => s.date === selected)}
+          />
         </>
       )}
     </Screen>
@@ -113,6 +132,61 @@ function WeekProgress({ done, planned }: { done: number; planned: number }) {
           ]}
         />
       </View>
+    </Card>
+  );
+}
+
+/** A dot for each day, coloured by how it went; pressing one picks that day. */
+function WeekStrip({
+  dates,
+  today,
+  selected,
+  onSelect,
+  days,
+  sessions,
+}: {
+  dates: string[];
+  today: string;
+  selected: string;
+  onSelect: (date: string) => void;
+  days: PlanToday[];
+  sessions: PlannedSession[];
+}) {
+  const theme = useTheme();
+  const dots: Record<DayStatus, object> = {
+    done: { backgroundColor: theme.success },
+    missed: { backgroundColor: theme.danger },
+    planned: { borderWidth: 2, borderColor: theme.textSecondary },
+    rest: [styles.restDot, { backgroundColor: theme.backgroundSelected }],
+  };
+  return (
+    <Card style={styles.strip}>
+      {dates.map((date) => {
+        const status = dayStatus(
+          date,
+          today,
+          days.find((d) => d.date === date),
+          sessions.filter((s) => s.date === date)
+        );
+        const isSelected = date === selected;
+        return (
+          <Pressable
+            key={date}
+            accessibilityRole="button"
+            accessibilityLabel={`${formatDay(date)}, ${statusLabels[status]}`}
+            accessibilityState={{ selected: isSelected }}
+            onPress={() => onSelect(date)}
+            style={[styles.stripDay, isSelected && { backgroundColor: theme.backgroundSelected }]}>
+            <ThemedText
+              type="smallBold"
+              themeColor={date === today ? undefined : 'textSecondary'}
+              style={date === today && { color: theme.accent }}>
+              {formatLetter(date)}
+            </ThemedText>
+            <View style={[styles.dot, dots[status]]} />
+          </Pressable>
+        );
+      })}
     </Card>
   );
 }
@@ -185,7 +259,7 @@ function DayCard({
         lifting
       )}
       {sessions.map((s) => (
-        <SessionLink key={s.id} session={s} />
+        <SessionLink key={s.id} session={s} compact />
       ))}
     </Card>
   );
@@ -196,21 +270,6 @@ function DayCard({
     <View accessible={!sessions.some((s) => s.cardio_workout_id)} accessibilityLabel={heading}>
       {card}
     </View>
-  );
-}
-
-/** A goal session, opening the workout that filled it once done. */
-function SessionLink({ session }: { session: PlannedSession }) {
-  const id = session.cardio_workout_id;
-  if (!id) return <SessionDetails session={session} compact />;
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${session.description}, done`}
-      onPress={() => router.navigate({ pathname: '/history/cardio/[id]', params: { id } }, { withAnchor: true })}
-      style={({ pressed }) => pressed && styles.pressed}>
-      <SessionDetails session={session} compact />
-    </Pressable>
   );
 }
 
@@ -228,6 +287,28 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.6,
+  },
+  strip: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  stripDay: {
+    flex: 1,
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingVertical: Spacing.two,
+    borderRadius: 12,
+  },
+  dot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  restDot: {
+    width: 6,
+    height: 6,
+    marginVertical: 3,
+    borderRadius: 3,
   },
   track: {
     height: 8,

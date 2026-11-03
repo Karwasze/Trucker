@@ -1,5 +1,5 @@
 import type { PlannedSession, PlanToday } from '@/api/types';
-import { currentWeek, weekProgress } from '@/workout/week';
+import { currentWeek, dayStatus, weekProgress } from '@/workout/week';
 
 test('a weekday gives this week, Monday to Sunday', () => {
   expect(currentWeek('2026-10-14')).toEqual([
@@ -61,5 +61,42 @@ describe('weekProgress', () => {
       done: 1,
       planned: 1,
     });
+  });
+});
+
+describe('dayStatus', () => {
+  const squat = { name: 'Squat', sets: [{ weight: 100, reps: 5 }] };
+  const lifting: PlanToday = { plan_id: 1, date: '2026-10-13', weekday: 'tuesday', exercises: [squat] };
+  const logged: PlanToday = { ...lifting, workout: { id: 1, date: '2026-10-13', exercises: [squat] } };
+  const rest: PlanToday = { ...lifting, exercises: [] };
+  const run: PlannedSession = {
+    id: 3,
+    goal_id: 7,
+    date: '2026-10-13',
+    activity: 'running',
+    kind: 'easy',
+    phase: 'base',
+    intensity: 'easy',
+    description: 'Easy run 5 km',
+  };
+  const ran = { ...run, cardio_workout_id: 9 };
+
+  test('a day with nothing planned is a rest day', () => {
+    expect(dayStatus('2026-10-13', '2026-10-14', rest, [])).toBe('rest');
+    expect(dayStatus('2026-10-13', '2026-10-14', undefined, [])).toBe('rest');
+  });
+
+  test('it is done once the lifting is logged and every session is done', () => {
+    expect(dayStatus('2026-10-13', '2026-10-14', logged, [ran])).toBe('done');
+    expect(dayStatus('2026-10-13', '2026-10-14', rest, [ran])).toBe('done');
+    // A workout logged on a rest day counts too.
+    expect(dayStatus('2026-10-13', '2026-10-14', { ...logged, exercises: [] }, [])).toBe('done');
+  });
+
+  test('a past day left partly undone is missed, today and later are planned', () => {
+    expect(dayStatus('2026-10-13', '2026-10-14', logged, [run])).toBe('missed');
+    expect(dayStatus('2026-10-13', '2026-10-14', lifting, [ran])).toBe('missed');
+    expect(dayStatus('2026-10-13', '2026-10-13', lifting, [])).toBe('planned');
+    expect(dayStatus('2026-10-13', '2026-10-12', rest, [run])).toBe('planned');
   });
 });

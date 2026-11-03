@@ -21,3 +21,22 @@ export function weekProgress(days: PlanToday[], sessions: PlannedSession[]) {
     planned: lifting.length + sessions.length,
   };
 }
+
+export type DayStatus = 'done' | 'missed' | 'planned' | 'rest';
+
+/**
+ * Where a day of the week stands: done once its lifting is logged and its
+ * sessions are done, missed if it has passed without that, rest if nothing
+ * was planned or done.
+ */
+export function dayStatus(
+  date: string,
+  today: string,
+  day: PlanToday | undefined,
+  sessions: PlannedSession[]
+): DayStatus {
+  const lifting = !!day && (day.exercises.length > 0 || !!day.workout);
+  if (!lifting && sessions.length === 0) return 'rest';
+  if ((!lifting || day?.workout) && sessions.every((s) => s.cardio_workout_id)) return 'done';
+  return date < today ? 'missed' : 'planned';
+}

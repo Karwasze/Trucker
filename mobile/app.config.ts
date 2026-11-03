@@ -1,15 +1,68 @@
 import { ConfigContext, ExpoConfig } from 'expo/config';
-import { withEntitlementsPlist, withPodfile, withXcodeProject } from 'expo/config-plugins';
+import {
+  withAppDelegate,
+  withEntitlementsPlist,
+  withInfoPlist,
+  withPodfile,
+  withXcodeProject,
+} from 'expo/config-plugins';
 
 // Static config lives in app.json.
 export default ({ config }: ConfigContext): ExpoConfig =>
-  withQuietIosBuild(
-    withoutPushEntitlement({
-      ...config,
-      name: config.name ?? 'Trucker',
-      slug: config.slug ?? 'trucker',
-    })
+  withSceneLifecycle(
+    withQuietIosBuild(
+      withoutPushEntitlement({
+        ...config,
+        name: config.name ?? 'Trucker',
+        slug: config.slug ?? 'trucker',
+      })
+    )
   );
+
+// iOS 27 stops apps built with its SDK at launch unless they use the scene
+// life cycle, and Expo's app template still starts React Native from the
+// app delegate. Expo ships the scene delegate (ExpoAppSceneDelegate): it
+// creates the window and starts React Native from the factory the app
+// delegate makes, which the app delegate hands over by conforming to
+// ExpoReactNativeFactoryProvider. Throws when the generated app delegate no
+// longer looks as expected, e.g. once the template adopts scenes itself.
+function withSceneLifecycle(config: ExpoConfig): ExpoConfig {
+  config = withInfoPlist(config, (cfg) => {
+    cfg.modResults.UIApplicationSceneManifest = {
+      UIApplicationSupportsMultipleScenes: false,
+      UISceneConfigurations: {
+        UIWindowSceneSessionRoleApplication: [
+          {
+            UISceneConfigurationName: 'Default Configuration',
+            UISceneDelegateClassName: 'EXExpoAppSceneDelegate',
+          },
+        ],
+      },
+    };
+    return cfg;
+  });
+
+  return withAppDelegate(config, (cfg) => {
+    let contents = cfg.modResults.contents;
+    if (contents.includes('ExpoReactNativeFactoryProvider')) return cfg;
+    const replace = (pattern: RegExp, replacement: string, what: string) => {
+      if (!pattern.test(contents)) throw new Error(`withSceneLifecycle: couldn't find ${what} in AppDelegate.swift`);
+      contents = contents.replace(pattern, replacement);
+    };
+    replace(
+      /class AppDelegate: ExpoAppDelegate \{/,
+      'class AppDelegate: ExpoAppDelegate, ExpoReactNativeFactoryProvider {',
+      'the AppDelegate class'
+    );
+    replace(
+      /\n#if os\(iOS\) \|\| os\(tvOS\)\n\s*window = UIWindow\(frame: UIScreen\.main\.bounds\)\n\s*factory\.startReactNative\([^)]*\)\n#endif\n/,
+      '\n    // The scene delegate creates the window and starts React Native (app.config.ts).\n',
+      'where React Native starts'
+    );
+    cfg.modResults.contents = contents;
+    return cfg;
+  });
+}
 
 // expo-notifications adds the Push Notifications entitlement, which personal
 // (free) Apple teams cannot sign. The app only schedules local notifications,

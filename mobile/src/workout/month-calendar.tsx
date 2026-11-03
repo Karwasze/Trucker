@@ -135,7 +135,8 @@ export function MonthCalendar({
   );
 }
 
-function MonthButton({
+/** A chevron stepping the calendar back or on. */
+export function MonthButton({
   label,
   symbol,
   fallback,

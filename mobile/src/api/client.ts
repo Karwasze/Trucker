@@ -5,6 +5,9 @@ import type {
   CardioWorkout,
   CreatedWorkout,
   DateRange,
+  DietDay,
+  DietInsights,
+  DietSettings,
   Goal,
   GoalToday,
   ExerciseDB,
@@ -112,6 +115,18 @@ export function createApi(baseUrl: string) {
         method: 'PUT',
         body: JSON.stringify({ date, zone_starts }),
       }),
+
+    /** Days logged, oldest first, all of them or those within `range`. */
+    listDiet: async (range?: DateRange) => (await request<DietDay[] | null>(`/api/diet${within(range)}`)) ?? [],
+    /** Records a day, replacing what was logged for it. */
+    saveDietDay: (day: DietDay) => request<DietDay>('/api/diet', { method: 'PUT', body: JSON.stringify(day) }),
+    deleteDietDay: (date: string) => request<{ success: boolean }>(`/api/diet?date=${q(date)}`, { method: 'DELETE' }),
+    dietSettings: () => request<DietSettings>('/api/diet/settings'),
+    /** Replaces the protein target; null clears it. Returns the stored settings. */
+    saveDietSettings: (settings: DietSettings) =>
+      request<DietSettings>('/api/diet/settings', { method: 'PUT', body: JSON.stringify(settings) }),
+    /** The diet summed up to `today`. */
+    dietInsights: (today: string) => request<DietInsights>(`/api/diet/insights?date=${q(today)}`),
 
     /** Every achievement with the tiers earned so far. */
     listAchievements: async () => (await request<Achievement[] | null>('/api/achievements')) ?? [],

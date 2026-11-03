@@ -6,6 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import type { TestInstance } from 'test-renderer';
 
 import type { HeartRateZones } from '@/api/types';
+import { DietReminderProvider } from '@/diet/reminder-context';
 import { SettingsProvider } from '@/settings/settings-context';
 import { TimerProvider } from '@/timer/timer-context';
 
@@ -84,7 +85,9 @@ export const renderInApp = (ui: ReactElement, { topInset = 0 } = {}) =>
         insets: { top: topInset, left: 0, right: 0, bottom: 0 },
       }}>
       <SettingsProvider>
-        <TimerProvider>{ui}</TimerProvider>
+        <TimerProvider>
+          <DietReminderProvider>{ui}</DietReminderProvider>
+        </TimerProvider>
       </SettingsProvider>
     </SafeAreaProvider>
   );

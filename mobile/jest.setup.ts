@@ -39,6 +39,14 @@ jest.mock('@/timer/native', () => ({
   vibrate: jest.fn(),
 }));
 
+// The diet check-in's notifications need native code too.
+jest.mock('@/diet/reminder-native', () => ({
+  requestReminderPermission: jest.fn(async () => true),
+  scheduleCheckIns: jest.fn(async () => {}),
+  cancelCheckIns: jest.fn(async () => {}),
+  listenForCheckIns: jest.fn(() => () => {}),
+}));
+
 // Animation and gesture libraries, per their testing guides.
 jest.mock('react-native-worklets', () => require('react-native-worklets/src/mock'));
 require('react-native-reanimated').setUpTests();

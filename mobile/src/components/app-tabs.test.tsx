@@ -40,6 +40,7 @@ async function renderTabs() {
       '(tabs)/history/[id]': page('Workout detail'),
       '(tabs)/history/cardio/[id]': page('Cardio detail'),
       '(tabs)/history/triathlon/[date]': page('Triathlon'),
+      '(tabs)/diet/index': page('Diet'),
       '(tabs)/stats/index': page('Progress'),
       '(tabs)/insights/index': page('Insights'),
       '(tabs)/achievements': page('Achievements'),
@@ -73,19 +74,20 @@ async function swipe(dx: number, velocityX = 0) {
   await act(async () => jest.runAllTicks());
 }
 
-test('all eight sections are tabs in the carousel, Today first', async () => {
+test('all nine sections are tabs in the carousel, Today first', async () => {
   await renderTabs();
   expect(TABS.map((t) => t.name)).toEqual([
     '(today)',
     'week',
     'plans',
     'history',
+    'diet',
     'stats',
     'insights',
     'achievements',
     'settings',
   ]);
-  expect(bar().props.accessibilityValue.text).toBe('Today, 1 of 8');
+  expect(bar().props.accessibilityValue.text).toBe('Today, 1 of 9');
   expect(screen.getByText('Today screen')).toBeOnTheScreen();
 });
 
@@ -141,7 +143,7 @@ test('screen readers turn the bar by swiping up or down on it, round the ring', 
   await renderTabs();
   await fireEvent(bar(), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });
   expect(screen.getByText('Current week screen')).toBeOnTheScreen();
-  expect(bar().props.accessibilityValue.text).toBe('Current week, 2 of 8');
+  expect(bar().props.accessibilityValue.text).toBe('Current week, 2 of 9');
 
   await fireEvent(bar(), 'accessibilityAction', { nativeEvent: { actionName: 'decrement' } });
   await fireEvent(bar(), 'accessibilityAction', { nativeEvent: { actionName: 'decrement' } });
@@ -168,8 +170,8 @@ test('a short flick still turns one tab', async () => {
 test('a hard flick spins past several tabs', async () => {
   await renderTabs();
   await swipe(-40, -2200);
-  expect(selectedTab()).toBe('Insights');
-  expect(screen.getByText('Insights screen')).toBeOnTheScreen();
+  expect(selectedTab()).toBe('Progress');
+  expect(screen.getByText('Progress screen')).toBeOnTheScreen();
 });
 
 test('a small drag springs back to the same tab', async () => {

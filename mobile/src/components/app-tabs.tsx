@@ -40,6 +40,12 @@ export const TABS: AppTab[] = [
     icon: { ios: 'clock.arrow.circlepath', android: 'history', web: 'history' },
   },
   {
+    name: 'diet',
+    href: '/diet',
+    label: 'Diet',
+    icon: { ios: 'fork.knife', android: 'restaurant', web: 'restaurant' },
+  },
+  {
     name: 'stats',
     href: '/stats',
     label: 'Progress',

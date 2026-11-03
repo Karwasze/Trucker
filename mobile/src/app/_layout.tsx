@@ -5,6 +5,7 @@ import { useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AchievementsProvider } from '@/achievements/achievements-context';
+import { DietReminderProvider } from '@/diet/reminder-context';
 import { SettingsProvider, useSettings } from '@/settings/settings-context';
 import { TimerProvider } from '@/timer/timer-context';
 import { TimerIsland } from '@/timer/timer-island';
@@ -27,15 +28,17 @@ export default function RootLayout() {
         <SettingsProvider>
           <TimerProvider>
             <AchievementsProvider>
-              <HideSplashWhenReady />
-              <Stack>
-                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                <Stack.Screen
-                  name="health-import"
-                  options={{ title: 'Import from Apple Health', presentation: 'modal' }}
-                />
-              </Stack>
-              <TimerIsland />
+              <DietReminderProvider>
+                <HideSplashWhenReady />
+                <Stack>
+                  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                  <Stack.Screen
+                    name="health-import"
+                    options={{ title: 'Import from Apple Health', presentation: 'modal' }}
+                  />
+                </Stack>
+                <TimerIsland />
+              </DietReminderProvider>
             </AchievementsProvider>
           </TimerProvider>
         </SettingsProvider>

@@ -126,6 +126,37 @@ test('a logged day shows what was done and opens it in History', async () => {
   expect(router.navigate).toHaveBeenCalledWith({ pathname: '/history/[id]', params: { id: 42 } }, { withAnchor: true });
 });
 
+test('a goal session done opens its workout in History', async () => {
+  setNow('2026-10-14T09:00:00+02:00');
+  // Run on Monday, counting as Tuesday's session.
+  const done: PlannedSession = {
+    ...run,
+    id: 4,
+    date: '2026-10-13',
+    cardio_workout_id: 9,
+    workout: {
+      id: 9,
+      date: '2026-10-12',
+      started_at: '2026-10-12T07:00:00+02:00',
+      activity: 'running',
+      distance_m: 5000,
+      duration_seconds: 1800,
+    },
+  };
+  server([run, done]);
+  await selectPlan(1);
+  const user = userEvent.setup();
+  await renderInApp(<WeekScreen />);
+
+  await user.press(await screen.findByRole('button', { name: 'Easy run 5 km, done' }));
+  expect(router.navigate).toHaveBeenCalledWith(
+    { pathname: '/history/cardio/[id]', params: { id: 9 } },
+    { withAnchor: true }
+  );
+  // Wednesday's run isn't done yet, so there's nothing to open.
+  expect(screen.getAllByRole('button', { name: /Easy run/ })).toHaveLength(1);
+});
+
 test('a past day left undone is marked as not logged', async () => {
   setNow('2026-10-20T09:00:00+02:00');
   mockServer({

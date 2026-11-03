@@ -62,3 +62,5 @@ tmp/
 # Backup files
 *.bak
 *.backup
+
+tasks.md

@@ -151,11 +151,14 @@ export function Carousel({
   };
 
   // Follow the selection when something else changes it, e.g. a link,
-  // turning the shorter way round a ring.
+  // turning the shorter way round a ring. Writes from here reach the UI
+  // thread later, so reading `target` back would still give the old one.
   useEffect(() => {
-    if (index === tabAt(target.get(), count, ring)) return;
-    target.set(ring ? target.get() + ringDistance(target.get(), index, count) : index);
-    position.set(withSpring(target.get(), SPRING));
+    const from = target.get();
+    if (index === tabAt(from, count, ring)) return;
+    const to = ring ? from + ringDistance(from, index, count) : index;
+    target.set(to);
+    position.set(withSpring(to, SPRING));
   }, [index, count, ring, position, target]);
 
   const tick = (i: number) => {

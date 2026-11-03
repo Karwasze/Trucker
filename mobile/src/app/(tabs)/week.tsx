@@ -140,8 +140,8 @@ function DayCard({
         ? { label: 'Today', color: theme.accent }
         : null;
 
-  const content = (
-    <Card style={date === today && { borderWidth: 1, borderColor: theme.accent }}>
+  const lifting = (
+    <View style={styles.section}>
       <View style={styles.row}>
         <ThemedText type="smallBold" style={styles.name}>
           {heading}
@@ -160,31 +160,56 @@ function DayCard({
           </ThemedText>
         </View>
       ))}
-      {sessions.map((s) => (
-        <SessionDetails key={s.id} session={s} compact />
-      ))}
       {exercises.length === 0 && sessions.length === 0 && (
         <ThemedText type="small" themeColor="textSecondary">
           Rest day
         </ThemedText>
       )}
+    </View>
+  );
+
+  // The logged workout and each session done open on their own.
+  const card = (
+    <Card style={date === today && { borderWidth: 1, borderColor: theme.accent }}>
+      {logged ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={heading}
+          onPress={() =>
+            router.navigate({ pathname: '/history/[id]', params: { id: logged.id } }, { withAnchor: true })
+          }
+          style={({ pressed }) => pressed && styles.pressed}>
+          {lifting}
+        </Pressable>
+      ) : (
+        lifting
+      )}
+      {sessions.map((s) => (
+        <SessionLink key={s.id} session={s} />
+      ))}
     </Card>
   );
 
-  if (!logged) {
-    return (
-      <View accessible accessibilityLabel={heading}>
-        {content}
-      </View>
-    );
-  }
+  if (logged) return card;
+  return (
+    // Read out as one, unless it has a session to open.
+    <View accessible={!sessions.some((s) => s.cardio_workout_id)} accessibilityLabel={heading}>
+      {card}
+    </View>
+  );
+}
+
+/** A goal session, opening the workout that filled it once done. */
+function SessionLink({ session }: { session: PlannedSession }) {
+  const id = session.cardio_workout_id;
+  if (!id) return <SessionDetails session={session} compact />;
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={heading}
-      onPress={() => router.navigate({ pathname: '/history/[id]', params: { id: logged.id } }, { withAnchor: true })}
-      style={({ pressed }) => pressed && { opacity: 0.6 }}>
-      {content}
+      accessibilityLabel={`${session.description}, done`}
+      onPress={() => router.navigate({ pathname: '/history/cardio/[id]', params: { id } }, { withAnchor: true })}
+      style={({ pressed }) => pressed && styles.pressed}>
+      <SessionDetails session={session} compact />
     </Pressable>
   );
 }
@@ -197,6 +222,12 @@ const styles = StyleSheet.create({
   },
   name: {
     flex: 1,
+  },
+  section: {
+    gap: Spacing.two,
+  },
+  pressed: {
+    opacity: 0.6,
   },
   track: {
     height: 8,

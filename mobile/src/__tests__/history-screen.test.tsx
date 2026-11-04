@@ -208,3 +208,21 @@ test('deleting the last workout of a picked day shows the rest of the month', as
   await alerts.press('Delete');
   expect(await screen.findByText('🏃 Run')).toBeOnTheScreen();
 });
+
+test('an earlier month jumps back to this one from the top', async () => {
+  server([lift, { ...september, date: '2026-08-03' }], []);
+  const user = userEvent.setup();
+  await renderInApp(<HistoryScreen />);
+  await screen.findByText('Squat');
+  // Already on this month, there's nowhere to jump to.
+  expect(screen.queryByRole('button', { name: 'This month' })).not.toBeOnTheScreen();
+
+  await user.press(screen.getByRole('button', { name: 'Previous month' }));
+  await user.press(screen.getByRole('button', { name: 'Previous month' }));
+  expect(await screen.findByText('Deadlift')).toBeOnTheScreen();
+
+  await user.press(screen.getByRole('button', { name: 'This month' }));
+  expect(await screen.findByText('Squat')).toBeOnTheScreen();
+  expect(screen.getByText('October 2026')).toBeOnTheScreen();
+  expect(screen.queryByRole('button', { name: 'This month' })).not.toBeOnTheScreen();
+});

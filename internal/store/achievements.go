@@ -111,6 +111,7 @@ func (s *Store) cardioWithSamples() ([]CardioWorkout, error) {
 				return nil, err
 			}
 		}
+		scaleToManualDistance(&w)
 		workouts = append(workouts, w)
 	}
 	return workouts, rows.Err()

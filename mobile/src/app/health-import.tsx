@@ -9,7 +9,7 @@ import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Chip, Message, Screen } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
-import { matchRange, sessionLabel, withinMatch } from '@/goals/session-match';
+import { canFill, matchRange, sessionLabel } from '@/goals/session-match';
 import { CardioSummary } from '@/health/cardio-summary';
 import { IMPORT_LOOKBACK_DAYS, useHealthImports, useHealthReport, useHealthState } from '@/health/health-state';
 import type { HealthWorkoutStatus } from '@/health/healthkit';
@@ -18,7 +18,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { useSettings } from '@/settings/settings-context';
 
 /**
- * Pairs each workout with the open session of the same activity on its
+ * Pairs each workout with the open session of its activity on its
  * date or, failing that, the earliest open one of its week, at most one
  * workout per session. Sessions come by date, so a skipped day is caught up
  * before a later one is done early.
@@ -31,11 +31,7 @@ function defaultMatches(workouts: NewCardioWorkout[], sessions: PlannedSession[]
       const key = w.source_uuid ?? String(i);
       if (matches.get(key)) return;
       const session = sessions.find(
-        (s) =>
-          !s.workout &&
-          !taken.has(s.id) &&
-          s.activity === w.activity &&
-          (sameDay ? s.date === w.date : withinMatch(s, w.date))
+        (s) => !s.workout && !taken.has(s.id) && canFill(s, w) && (!sameDay || s.date === w.date)
       );
       if (session) taken.add(session.id);
       matches.set(key, session?.id ?? null);
@@ -123,7 +119,7 @@ export default function HealthImportScreen() {
           {imports.candidates.map((w, i) => {
             const uuid = uuidOf(i);
             const checked = !unticked.has(uuid);
-            const options = (sessions.data ?? []).filter((s) => withinMatch(s, w.date) && !s.workout);
+            const options = (sessions.data ?? []).filter((s) => canFill(s, w) && !s.workout);
             const match = matchOf(uuid);
             return (
               <Card key={uuid} style={!checked && { opacity: 0.5 }}>

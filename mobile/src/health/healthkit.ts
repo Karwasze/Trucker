@@ -159,9 +159,30 @@ export type HealthWorkoutReport = {
 const SWIM_POOL = 1;
 const SWIM_OPEN_WATER = 2;
 
+/** Whether Apple Health recorded the workout indoors, or undefined when it didn't say. */
+function indoorOf(metadata?: Record<string, unknown>): boolean | undefined {
+  const indoor = metadata?.HKIndoorWorkout;
+  return typeof indoor === 'boolean' ? indoor : undefined;
+}
+
+/**
+ * Whether the Health workout with the UUID was indoors, or undefined when
+ * Health doesn't say or has no such workout, e.g. for one imported before
+ * the place was kept.
+ */
+export async function healthWorkoutIndoor(uuid: string): Promise<boolean | undefined> {
+  if (!healthkit) return undefined;
+  try {
+    const [workout] = await healthkit.queryWorkoutSamples({ limit: 1, filter: { uuid } });
+    return indoorOf(workout?.metadata as Record<string, unknown> | undefined);
+  } catch {
+    return undefined;
+  }
+}
+
 /** The workout's name as Apple Health shows it, from its activity and metadata. */
 export function appleWorkoutName(activity: CardioActivity | undefined, metadata?: Record<string, unknown>): string {
-  const indoor = metadata?.HKIndoorWorkout;
+  const indoor = indoorOf(metadata);
   const place = indoor === true ? 'Indoor' : indoor === false ? 'Outdoor' : undefined;
   switch (activity) {
     case 'running':
@@ -277,6 +298,7 @@ async function toCardioWorkout(
     laps: laps.length > 0 ? laps : undefined,
     source: workout.sourceRevision?.source?.name,
     source_uuid: workout.uuid,
+    indoor: indoorOf(workout.metadata as Record<string, unknown> | undefined),
   };
 }
 

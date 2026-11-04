@@ -10,7 +10,27 @@ import (
 var (
 	ErrGoalNotFound    = errors.New("goal not found")
 	ErrSessionNotFound = errors.New("planned session not found")
+	// ErrActivityMismatch is returned for filling a planned session with a
+	// workout of another activity, e.g. a run with a ride.
+	ErrActivityMismatch = errors.New("workout is of another activity than the session")
 )
+
+// checkSessionActivity returns ErrActivityMismatch unless the planned
+// session is of activity, or ErrSessionNotFound for an unknown session.
+func checkSessionActivity(q querier, sessionID int, activity string) error {
+	var sessionActivity string
+	err := q.QueryRow("SELECT activity FROM planned_sessions WHERE id = ?", sessionID).Scan(&sessionActivity)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrSessionNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if sessionActivity != activity {
+		return ErrActivityMismatch
+	}
+	return nil
+}
 
 const (
 	// A finished week below this share of its planned distance, or with
@@ -206,12 +226,16 @@ func (s *Store) MatchSession(sessionID int, cardioID *int, today string) error {
 		return err
 	}
 	if cardioID != nil {
-		var exists int
-		if err := tx.QueryRow("SELECT COUNT(*) FROM cardio_workouts WHERE id = ?", *cardioID).Scan(&exists); err != nil {
+		var activity string
+		err := tx.QueryRow("SELECT activity FROM cardio_workouts WHERE id = ?", *cardioID).Scan(&activity)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrCardioWorkoutNotFound
+		}
+		if err != nil {
 			return err
 		}
-		if exists == 0 {
-			return ErrCardioWorkoutNotFound
+		if err := checkSessionActivity(tx, sessionID, activity); err != nil {
+			return err
 		}
 		if _, err := tx.Exec("UPDATE planned_sessions SET cardio_workout_id = NULL WHERE cardio_workout_id = ?", *cardioID); err != nil {
 			return err

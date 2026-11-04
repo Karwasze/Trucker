@@ -3,6 +3,7 @@ import {
   connectHealth,
   healthBodyweight,
   healthHeartRateProfile,
+  healthWorkoutIndoor,
   healthWorkoutReport,
   healthWorkoutsSince,
   isHealthAvailable,
@@ -116,7 +117,29 @@ test('a Health workout converts to the API shape, with units normalised', async 
     laps: undefined,
     source: 'Apple Watch',
     source_uuid: 'run-1',
+    indoor: false,
   });
+});
+
+test('indoor workouts are marked, and ones Health has no place for left unknown', async () => {
+  hk.queryWorkoutSamples.mockResolvedValue([
+    workout({ uuid: 'treadmill', metadata: { HKIndoorWorkout: true } }),
+    workout({ uuid: 'unknown', metadata: undefined }),
+  ]);
+  const imported = await healthWorkoutsSince(at('2026-10-10T00:00:00Z'), new Set());
+  expect(imported.map((w) => w.indoor)).toEqual([true, undefined]);
+});
+
+test('whether a workout was indoors is looked up by its UUID', async () => {
+  hk.queryWorkoutSamples.mockResolvedValue([workout({ uuid: 'treadmill', metadata: { HKIndoorWorkout: true } })]);
+  expect(await healthWorkoutIndoor('treadmill')).toBe(true);
+  expect(hk.queryWorkoutSamples).toHaveBeenCalledWith(
+    expect.objectContaining({ limit: 1, filter: { uuid: 'treadmill' } })
+  );
+  hk.queryWorkoutSamples.mockResolvedValue([]);
+  expect(await healthWorkoutIndoor('deleted')).toBeUndefined();
+  hk.queryWorkoutSamples.mockRejectedValue(new Error('denied'));
+  expect(await healthWorkoutIndoor('treadmill')).toBeUndefined();
 });
 
 test('workouts that are unsupported, too old or skipped aren’t imported', async () => {

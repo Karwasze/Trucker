@@ -1,8 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, screen, userEvent } from '@testing-library/react-native';
-import { AppState } from 'react-native';
+import { AppState, Pressable } from 'react-native';
 
 import { renderInApp, selectPlan } from '@/test-utils';
+import { useTimer } from '@/timer/timer-context';
 import { TimerIsland } from '@/timer/timer-island';
 
 beforeEach(async () => {
@@ -64,4 +65,37 @@ test('without a notch or island, the idle island isn’t a tap target', async ()
   await renderInApp(<TimerIsland />, { topInset: 20 });
   await user.press(island());
   expect(island()).toHaveAccessibleName('Start rest timer');
+});
+
+// Under the scene life cycle iOS ignores app-wide status bar calls, so the
+// island asks the root stack to hide it (react-native-screens' statusBarHidden).
+test('on a Dynamic Island iPhone, the status bar is hidden while the timer shows', async () => {
+  const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+  const onStatusBarHiddenChange = jest.fn();
+  await renderInApp(<TimerIsland onStatusBarHiddenChange={onStatusBarHiddenChange} />, { topInset: 59 });
+  expect(onStatusBarHiddenChange).toHaveBeenLastCalledWith(false);
+  await user.press(island());
+  expect(onStatusBarHiddenChange).toHaveBeenLastCalledWith(true);
+  await user.press(island());
+  await user.press(screen.getByRole('button', { name: 'Stop' }));
+  expect(onStatusBarHiddenChange).toHaveBeenLastCalledWith(false);
+});
+
+test('without a notch or island, the status bar stays while the timer shows', async () => {
+  const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+  const onStatusBarHiddenChange = jest.fn();
+  function StartButton() {
+    const { start } = useTimer();
+    return <Pressable accessibilityRole="button" accessibilityLabel="Start" onPress={start} />;
+  }
+  await renderInApp(
+    <>
+      <StartButton />
+      <TimerIsland onStatusBarHiddenChange={onStatusBarHiddenChange} />
+    </>,
+    { topInset: 20 }
+  );
+  await user.press(screen.getByRole('button', { name: 'Start' }));
+  expect(island()).toHaveAccessibleName(/Rest timer, 0:00/);
+  expect(onStatusBarHiddenChange).not.toHaveBeenCalledWith(true);
 });

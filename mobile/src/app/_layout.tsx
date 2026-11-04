@@ -1,6 +1,6 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
@@ -22,6 +22,8 @@ function HideSplashWhenReady() {
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  // The timer island hides the status bar while it covers the clock and battery.
+  const [statusBarHidden, setStatusBarHidden] = useState(false);
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
@@ -30,14 +32,14 @@ export default function RootLayout() {
             <AchievementsProvider>
               <DietReminderProvider>
                 <HideSplashWhenReady />
-                <Stack>
+                <Stack screenOptions={{ statusBarHidden, statusBarAnimation: 'fade' }}>
                   <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                   <Stack.Screen
                     name="health-import"
                     options={{ title: 'Import from Apple Health', presentation: 'modal' }}
                   />
                 </Stack>
-                <TimerIsland />
+                <TimerIsland onStatusBarHiddenChange={setStatusBarHidden} />
               </DietReminderProvider>
             </AchievementsProvider>
           </TimerProvider>

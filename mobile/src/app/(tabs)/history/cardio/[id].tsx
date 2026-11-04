@@ -9,9 +9,10 @@ import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Chip, Message, Screen, SectionLabel } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { SessionDetails } from '@/goals/session-card';
-import { matchRange, sessionLabel, withinMatch } from '@/goals/session-match';
+import { canFill, matchRange, sessionLabel } from '@/goals/session-match';
 import { useHealthState } from '@/health/health-state';
 import { WorkoutZones } from '@/health/heart-rate-zones';
+import { healthWorkoutIndoor, isHealthAvailable } from '@/health/healthkit';
 import { useQuery } from '@/hooks/use-query';
 import { useTheme } from '@/hooks/use-theme';
 import { useSettings } from '@/settings/settings-context';
@@ -29,8 +30,17 @@ import {
 export default function CardioDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { api, serverUrl } = useSettings();
-  const { dismiss } = useHealthState();
+  const { state: health, dismiss } = useHealthState();
   const workout = useQuery(`cardio:${serverUrl}:${id}`, () => api.getCardio(Number(id)));
+  // Workouts imported before their place was kept: whether Health has them indoors.
+  const unknownPlace = workout.data?.indoor === undefined && !workout.data?.manual_distance;
+  const uuid = workout.data?.source_uuid;
+  const healthIndoor = useQuery(
+    unknownPlace && uuid && workout.data?.distance_m && health.connectedAt && isHealthAvailable()
+      ? `cardio-indoor:${uuid}`
+      : null,
+    () => healthWorkoutIndoor(uuid!)
+  );
   const [deleting, setDeleting] = useState(false);
   // The active goal's sessions the workout may count as, to say which it fills.
   const date = workout.data?.date;
@@ -91,9 +101,10 @@ export default function CardioDetailScreen() {
             ))}
           </Card>
           <WorkoutZones samples={w.samples} />
-          {(!w.distance_m || w.manual_distance) && (
+          {(!w.distance_m || w.manual_distance || (w.indoor ?? healthIndoor.data)) && (
             <DistanceEntry
               workout={w}
+              markIndoor={w.indoor === undefined && healthIndoor.data === true}
               onSaved={() => {
                 workout.refresh();
                 sessions.refresh();
@@ -133,10 +144,20 @@ export default function CardioDetailScreen() {
 
 /**
  * Enters the distance of a workout Apple Health has none for, such as an
- * indoor ride without a speed sensor, or corrects one entered before. Swims
- * are in metres, the rest in km.
+ * indoor ride without a speed sensor, replaces the watch's estimate of an
+ * indoor one, such as a treadmill run, or corrects one entered before.
+ * Swims are in metres, the rest in km. `markIndoor` tells the server a
+ * workout imported before its place was kept was indoors.
  */
-function DistanceEntry({ workout: w, onSaved }: { workout: CardioWorkout; onSaved: () => void }) {
+function DistanceEntry({
+  workout: w,
+  markIndoor,
+  onSaved,
+}: {
+  workout: CardioWorkout;
+  markIndoor: boolean;
+  onSaved: () => void;
+}) {
   const theme = useTheme();
   const { api } = useSettings();
   const achievements = useAchievements();
@@ -153,7 +174,7 @@ function DistanceEntry({ workout: w, onSaved }: { workout: CardioWorkout; onSave
     }
     setSaving(true);
     try {
-      await api.setCardioDistance(w.id, metres ? value : value * 1000, localDate());
+      await api.setCardioDistance(w.id, metres ? value : value * 1000, localDate(), markIndoor);
       achievements.check();
       onSaved();
     } catch (e) {
@@ -166,12 +187,17 @@ function DistanceEntry({ workout: w, onSaved }: { workout: CardioWorkout; onSave
   return (
     <Card>
       <ThemedText type="smallBold">
-        {w.manual_distance ? 'Distance entered by hand' : 'No distance recorded'}
+        {w.manual_distance
+          ? 'Distance entered by hand'
+          : w.distance_m
+            ? 'Distance estimated by the watch'
+            : 'No distance recorded'}
       </ThemedText>
       {!w.manual_distance && (
         <ThemedText type="small" themeColor="textSecondary">
-          Apple Health has no distance for this workout. Enter it, e.g. from your bike computer or the machine, so it
-          counts toward your plan.
+          {w.distance_m
+            ? 'The watch only estimates the distance of indoor workouts. Enter the one from the treadmill or machine, so your pace, records and plan use it.'
+            : 'Apple Health has no distance for this workout. Enter it, e.g. from your bike computer or the machine, so it counts toward your plan.'}
         </ThemedText>
       )}
       <View style={styles.row}>
@@ -213,8 +239,8 @@ function CountsAs({
   onMatch: (session: PlannedSession | null, current: PlannedSession | undefined) => void;
 }) {
   const current = sessions.find((s) => s.cardio_workout_id === workout.id);
-  // Sessions another workout filled aren't offered.
-  const options = sessions.filter((s) => s === current || (!s.cardio_workout_id && withinMatch(s, workout.date)));
+  // Sessions another workout filled, or of another activity, aren't offered.
+  const options = sessions.filter((s) => s === current || (!s.cardio_workout_id && canFill(s, workout)));
   if (options.length === 0) return null;
   return (
     <>

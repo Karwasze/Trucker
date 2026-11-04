@@ -118,6 +118,29 @@ func TestListAchievements_PaceFromTheBestStretch(t *testing.T) {
 	}
 }
 
+func TestListAchievements_PaceFromAnIndoorRunsEnteredDistance(t *testing.T) {
+	s := newTestStore(t)
+	// The watch made a treadmill run 5 km in 21 minutes; it was 4 km.
+	run := cardio(ActivityRunning, "2026-03-10", 5000, 1260)
+	run.Indoor = boolean(true)
+	run.Samples = []CardioSample{{T: 0, D: 0}, {T: 630, D: 2500}, {T: 1260, D: 5000}}
+	seedCardio(t, s, run)
+	if fiveK := achievement(t, listAchievements(t, s), "pace-running-5000"); fiveK.Best == nil {
+		t.Fatal("expected the watch's 5 km to count before it's corrected")
+	}
+
+	list, err := s.ListCardioWorkouts(ActivityRunning)
+	if err != nil || len(list) != 1 {
+		t.Fatalf("expected one run, got %v %v", list, err)
+	}
+	if _, err := s.SetCardioDistance(list[0].ID, 4000, false); err != nil {
+		t.Fatal(err)
+	}
+	if fiveK := achievement(t, listAchievements(t, s), "pace-running-5000"); fiveK.Best != nil {
+		t.Errorf("expected no 5 km from a 4 km run, got %v", *fiveK.Best)
+	}
+}
+
 func TestListAchievements_PaceScalesARunJustShortOfTheDistance(t *testing.T) {
 	s := newTestStore(t)
 	// GPS made a 5 km race 4.96 km: 19:50 there is 20:00 for 5 km.

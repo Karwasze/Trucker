@@ -270,8 +270,10 @@ export type CardioWorkout = {
   activity: CardioActivity;
   duration_seconds: number;
   distance_m?: number;
-  /** Set when distance_m was entered by hand, as Apple Health had none. */
+  /** Set when distance_m was entered by hand, as Apple Health had none or the workout was indoors. */
   manual_distance?: boolean;
+  /** Whether Apple Health recorded it indoors; unset when it didn't say, or it was imported before this was kept. */
+  indoor?: boolean;
   energy_kcal?: number;
   avg_heart_rate?: number;
   max_heart_rate?: number;

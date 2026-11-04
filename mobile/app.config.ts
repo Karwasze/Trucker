@@ -28,6 +28,9 @@ export default ({ config }: ConfigContext): ExpoConfig =>
 // longer looks as expected, e.g. once the template adopts scenes itself.
 function withSceneLifecycle(config: ExpoConfig): ExpoConfig {
   config = withInfoPlist(config, (cfg) => {
+    // Under scenes iOS ignores app-wide status bar calls, so screens set it
+    // per view controller (react-native-screens' statusBarHidden option).
+    cfg.modResults.UIViewControllerBasedStatusBarAppearance = true;
     cfg.modResults.UIApplicationSceneManifest = {
       UIApplicationSupportsMultipleScenes: false,
       UISceneConfigurations: {

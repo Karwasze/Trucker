@@ -55,17 +55,20 @@ type CardioWorkout struct {
 	DurationSeconds float64  `json:"duration_seconds"`
 	DistanceM       *float64 `json:"distance_m,omitempty"`
 	// ManualDistance is set when DistanceM was entered by hand, as Health
-	// had none. Importing ignores it.
-	ManualDistance bool           `json:"manual_distance,omitempty"`
-	EnergyKcal     *float64       `json:"energy_kcal,omitempty"`
-	AvgHeartRate   *float64       `json:"avg_heart_rate,omitempty"`
-	MaxHeartRate   *float64       `json:"max_heart_rate,omitempty"`
-	SwimStrokes    *int           `json:"swim_strokes,omitempty"`
-	LapLengthM     *float64       `json:"lap_length_m,omitempty"`
-	Samples        []CardioSample `json:"samples,omitempty"`
-	Laps           []CardioLap    `json:"laps,omitempty"`
-	Source         string         `json:"source,omitempty"`
-	SourceUUID     *string        `json:"source_uuid,omitempty"`
+	// had none or the workout was indoors. Importing ignores it.
+	ManualDistance bool `json:"manual_distance,omitempty"`
+	// Indoor is whether Health recorded the workout indoors, nil when it
+	// didn't say or the workout was imported before it was kept.
+	Indoor       *bool          `json:"indoor,omitempty"`
+	EnergyKcal   *float64       `json:"energy_kcal,omitempty"`
+	AvgHeartRate *float64       `json:"avg_heart_rate,omitempty"`
+	MaxHeartRate *float64       `json:"max_heart_rate,omitempty"`
+	SwimStrokes  *int           `json:"swim_strokes,omitempty"`
+	LapLengthM   *float64       `json:"lap_length_m,omitempty"`
+	Samples      []CardioSample `json:"samples,omitempty"`
+	Laps         []CardioLap    `json:"laps,omitempty"`
+	Source       string         `json:"source,omitempty"`
+	SourceUUID   *string        `json:"source_uuid,omitempty"`
 	// PlannedSessionID, when importing, is the planned session it fills.
 	PlannedSessionID *int `json:"planned_session_id,omitempty"`
 }

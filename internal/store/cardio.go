@@ -5,13 +5,14 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"math"
 	"slices"
 )
 
 var (
 	ErrCardioWorkoutNotFound = errors.New("cardio workout not found")
-	// ErrDistanceMeasured is returned for setting the distance of a workout
-	// whose distance Health measured.
+	// ErrDistanceMeasured is returned for setting the distance of an
+	// outdoor workout whose distance Health measured.
 	ErrDistanceMeasured = errors.New("distance was measured")
 )
 
@@ -23,7 +24,8 @@ func ValidCardioActivity(activity string) bool {
 // SaveCardioWorkouts saves workouts in one transaction and returns the ones
 // it saved, with their IDs. Workouts whose SourceUUID was already imported
 // are skipped. A workout with a PlannedSessionID fills that session, in
-// place of any workout that filled it before.
+// place of any workout that filled it before; it returns
+// ErrActivityMismatch, saving nothing, for a session of another activity.
 func (s *Store) SaveCardioWorkouts(workouts []CardioWorkout) ([]CardioWorkout, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -44,12 +46,12 @@ func (s *Store) SaveCardioWorkouts(workouts []CardioWorkout) ([]CardioWorkout, e
 		result, err := tx.Exec(`
 			INSERT INTO cardio_workouts (date, started_at, activity, duration_seconds,
 				distance_m, energy_kcal, avg_heart_rate, max_heart_rate, swim_strokes,
-				lap_length_m, samples, laps, source, source_uuid)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				lap_length_m, samples, laps, source, source_uuid, indoor)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(source_uuid) DO NOTHING
 		`, w.Date, w.StartedAt, w.Activity, w.DurationSeconds,
 			w.DistanceM, w.EnergyKcal, w.AvgHeartRate, w.MaxHeartRate, w.SwimStrokes,
-			w.LapLengthM, samples, laps, w.Source, w.SourceUUID)
+			w.LapLengthM, samples, laps, w.Source, w.SourceUUID, w.Indoor)
 		if err != nil {
 			return nil, err
 		}
@@ -64,6 +66,9 @@ func (s *Store) SaveCardioWorkouts(workouts []CardioWorkout) ([]CardioWorkout, e
 		}
 		w.ID = int(id)
 		if w.PlannedSessionID != nil {
+			if err := checkSessionActivity(tx, *w.PlannedSessionID, w.Activity); err != nil {
+				return nil, err
+			}
 			result, err := tx.Exec("UPDATE planned_sessions SET cardio_workout_id = ? WHERE id = ?", w.ID, *w.PlannedSessionID)
 			if err != nil {
 				return nil, err
@@ -81,7 +86,7 @@ func (s *Store) SaveCardioWorkouts(workouts []CardioWorkout) ([]CardioWorkout, e
 
 const cardioColumns = `id, date, started_at, activity, duration_seconds, distance_m,
 	energy_kcal, avg_heart_rate, max_heart_rate, swim_strokes, lap_length_m,
-	COALESCE(source, ''), source_uuid, manual_distance`
+	COALESCE(source, ''), source_uuid, manual_distance, indoor`
 
 // ListCardioWorkouts returns the cardio workouts of an activity, or of every
 // activity for "", newest first, without their samples and laps.
@@ -139,7 +144,36 @@ func getCardioWorkout(q querier, id int) (CardioWorkout, error) {
 		}
 		w.Laps = kilometreLaps(w.Laps)
 	}
+	scaleToManualDistance(&w)
 	return w, nil
+}
+
+// scaleToManualDistance scales the distances of the samples and laps of a
+// workout whose distance was entered by hand to it, as the watch only
+// estimated them (e.g. on a treadmill). Fast stretches and splits then add
+// up to the distance entered.
+func scaleToManualDistance(w *CardioWorkout) {
+	if !w.ManualDistance || w.DistanceM == nil {
+		return
+	}
+	measured := 0.0
+	if n := len(w.Samples); n > 0 {
+		measured = w.Samples[n-1].D
+	} else {
+		for _, lap := range w.Laps {
+			measured += lap.D
+		}
+	}
+	if measured <= 0 {
+		return
+	}
+	factor := *w.DistanceM / measured
+	for i := range w.Samples {
+		w.Samples[i].D = math.Round(w.Samples[i].D*factor*10) / 10
+	}
+	for i := range w.Laps {
+		w.Laps[i].D = math.Round(w.Laps[i].D*factor*10) / 10
+	}
 }
 
 // lapOverlapS is how far a lap may start before the previous one ends and
@@ -187,10 +221,12 @@ func lastEnd(laps []CardioLap) float64 {
 }
 
 // SetCardioDistance sets the distance (metres) of a cardio workout Health
-// had none for, or whose distance was entered by hand before, returning the
-// updated workout. It returns ErrDistanceMeasured for a distance Health
-// measured and ErrCardioWorkoutNotFound for an unknown id.
-func (s *Store) SetCardioDistance(id int, metres float64) (CardioWorkout, error) {
+// had none for, that was indoors, or whose distance was entered by hand
+// before, returning the updated workout. indoor says a workout imported
+// before Health's place was kept was indoors, which is then recorded. It
+// returns ErrDistanceMeasured for a distance Health measured outdoors and
+// ErrCardioWorkoutNotFound for an unknown id.
+func (s *Store) SetCardioDistance(id int, metres float64, indoor bool) (CardioWorkout, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return CardioWorkout{}, err
@@ -200,13 +236,21 @@ func (s *Store) SetCardioDistance(id int, metres float64) (CardioWorkout, error)
 	if err != nil {
 		return CardioWorkout{}, err
 	}
-	if w.DistanceM != nil && !w.ManualDistance {
+	if indoor && w.Indoor == nil {
+		w.Indoor = &indoor
+	}
+	isIndoor := w.Indoor != nil && *w.Indoor
+	if w.DistanceM != nil && !w.ManualDistance && !isIndoor {
 		return CardioWorkout{}, ErrDistanceMeasured
 	}
-	if _, err := tx.Exec("UPDATE cardio_workouts SET distance_m = ?, manual_distance = 1 WHERE id = ?", metres, id); err != nil {
+	if _, err := tx.Exec("UPDATE cardio_workouts SET distance_m = ?, manual_distance = 1, indoor = ? WHERE id = ?",
+		metres, w.Indoor, id); err != nil {
 		return CardioWorkout{}, err
 	}
-	w.DistanceM, w.ManualDistance = &metres, true
+	// Read back, so the samples and laps are scaled to the new distance.
+	if w, err = getCardioWorkout(tx, id); err != nil {
+		return CardioWorkout{}, err
+	}
 	return w, tx.Commit()
 }
 
@@ -262,7 +306,7 @@ func scanCardioWorkout(row interface{ Scan(...any) error }, extra ...any) (Cardi
 	var w CardioWorkout
 	dest := append([]any{&w.ID, &w.Date, &w.StartedAt, &w.Activity, &w.DurationSeconds,
 		&w.DistanceM, &w.EnergyKcal, &w.AvgHeartRate, &w.MaxHeartRate, &w.SwimStrokes,
-		&w.LapLengthM, &w.Source, &w.SourceUUID, &w.ManualDistance}, extra...)
+		&w.LapLengthM, &w.Source, &w.SourceUUID, &w.ManualDistance, &w.Indoor}, extra...)
 	err := row.Scan(dest...)
 	return w, err
 }

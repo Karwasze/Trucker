@@ -5,7 +5,7 @@ import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import type { CardioWorkout, Triathlon, Workout } from '@/api/types';
 import { SwipeToDelete, type SwipeRow } from '@/components/swipe-to-delete';
 import { ThemedText } from '@/components/themed-text';
-import { Card, Message, Screen } from '@/components/ui';
+import { Button, Card, Message, Screen } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { CardioSummary } from '@/health/cardio-summary';
 import { useHealthImports, useHealthState } from '@/health/health-state';
@@ -114,6 +114,12 @@ export default function HistoryScreen() {
   return (
     <Screen
       title="History"
+      // Months back, a way home without stepping through each one.
+      action={
+        month !== thisMonth && (
+          <Button title="This month" variant="secondary" compact onPress={() => changeMonth(thisMonth)} />
+        )
+      }
       refreshing={workouts.refreshing || cardio.refreshing}
       onRefresh={() => {
         workouts.refresh();

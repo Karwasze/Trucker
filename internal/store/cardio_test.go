@@ -10,6 +10,8 @@ func float(v float64) *float64 { return &v }
 
 func text(v string) *string { return &v }
 
+func boolean(v bool) *bool { return &v }
+
 func cardioRun(uuid, date string, km float64) CardioWorkout {
 	return CardioWorkout{
 		Date:            date,
@@ -155,7 +157,7 @@ func TestSetCardioDistance(t *testing.T) {
 	}
 	rideID, runID := saved[0].ID, saved[1].ID
 
-	got, err := s.SetCardioDistance(rideID, 30000)
+	got, err := s.SetCardioDistance(rideID, 30000, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +166,7 @@ func TestSetCardioDistance(t *testing.T) {
 	}
 
 	// A distance entered by hand can be corrected.
-	if got, err = s.SetCardioDistance(rideID, 32000); err != nil || *got.DistanceM != 32000 {
+	if got, err = s.SetCardioDistance(rideID, 32000, false); err != nil || *got.DistanceM != 32000 {
 		t.Errorf("expected the distance corrected to 32 km, got %v %v", got.DistanceM, err)
 	}
 	if list, _ := s.ListCardioWorkouts(ActivityCycling); len(list) != 1 || !list[0].ManualDistance {
@@ -172,15 +174,88 @@ func TestSetCardioDistance(t *testing.T) {
 	}
 
 	// One Health measured is kept.
-	if _, err := s.SetCardioDistance(runID, 6000); !errors.Is(err, ErrDistanceMeasured) {
+	if _, err := s.SetCardioDistance(runID, 6000, false); !errors.Is(err, ErrDistanceMeasured) {
 		t.Errorf("expected ErrDistanceMeasured for a measured run, got %v", err)
 	}
 	if run, _ := s.GetCardioWorkout(runID); *run.DistanceM != 5000 || run.ManualDistance {
 		t.Errorf("expected the run's 5 km kept, got %v manual=%v", *run.DistanceM, run.ManualDistance)
 	}
 
-	if _, err := s.SetCardioDistance(9999, 1000); !errors.Is(err, ErrCardioWorkoutNotFound) {
+	if _, err := s.SetCardioDistance(9999, 1000, false); !errors.Is(err, ErrCardioWorkoutNotFound) {
 		t.Errorf("expected ErrCardioWorkoutNotFound, got %v", err)
+	}
+}
+
+func TestSetCardioDistance_IndoorRun(t *testing.T) {
+	s := newTestStore(t)
+
+	// The watch estimates an indoor run's distance from the wrist: 5 km here
+	// of a 6 km treadmill run.
+	indoor := cardioRun("treadmill", "2026-10-10", 5)
+	indoor.Indoor = boolean(true)
+	indoor.Samples = []CardioSample{{T: 0, D: 0}, {T: 900, D: 2500, HR: float(140)}, {T: 1650, D: 5000}}
+	indoor.Laps = []CardioLap{{T: 0, Duration: 330, D: 1000}, {T: 330, Duration: 330, D: 1000}}
+	outdoor := cardioRun("outdoor", "2026-10-11", 5)
+	outdoor.Indoor = boolean(false)
+	// Imported before the place was recorded.
+	unknown := cardioRun("unknown", "2026-10-12", 5)
+	saved, err := s.SaveCardioWorkouts([]CardioWorkout{indoor, outdoor, unknown})
+	if err != nil {
+		t.Fatal(err)
+	}
+	indoorID, outdoorID, unknownID := saved[0].ID, saved[1].ID, saved[2].ID
+
+	got, err := s.SetCardioDistance(indoorID, 6000, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *got.DistanceM != 6000 || !got.ManualDistance || got.Indoor == nil || !*got.Indoor {
+		t.Errorf("expected a manual 6 km indoor run, got %v manual=%v indoor=%v", *got.DistanceM, got.ManualDistance, got.Indoor)
+	}
+
+	// What the samples and laps covered follows the distance entered.
+	run, err := s.GetCardioWorkout(indoorID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := run.Samples[1].D; d != 3000 {
+		t.Errorf("expected the samples scaled to 3 km halfway, got %v", d)
+	}
+	if d := run.Samples[2].D; d != 6000 {
+		t.Errorf("expected the samples scaled to 6 km in all, got %v", d)
+	}
+	if run.Samples[1].HR == nil || *run.Samples[1].HR != 140 || run.Samples[1].T != 900 {
+		t.Errorf("expected the rest of the samples kept, got %+v", run.Samples[1])
+	}
+	if want := []CardioLap{{T: 0, Duration: 330, D: 1200}, {T: 330, Duration: 330, D: 1200}}; !reflect.DeepEqual(run.Laps, want) {
+		t.Errorf("expected laps %+v, got %+v", want, run.Laps)
+	}
+
+	// Correcting it scales from what the watch measured, not the last entry.
+	if _, err := s.SetCardioDistance(indoorID, 5500, false); err != nil {
+		t.Fatal(err)
+	}
+	if run, _ := s.GetCardioWorkout(indoorID); run.Samples[2].D != 5500 || run.Laps[0].D != 1100 {
+		t.Errorf("expected samples and laps scaled to 5.5 km, got %v and %v", run.Samples[2].D, run.Laps[0].D)
+	}
+
+	// An outdoor run's distance is measured.
+	if _, err := s.SetCardioDistance(outdoorID, 6000, true); !errors.Is(err, ErrDistanceMeasured) {
+		t.Errorf("expected ErrDistanceMeasured for an outdoor run, got %v", err)
+	}
+	// One imported before the place was recorded is taken as measured
+	// unless it's said to be indoors, which is then recorded.
+	if _, err := s.SetCardioDistance(unknownID, 6000, false); !errors.Is(err, ErrDistanceMeasured) {
+		t.Errorf("expected ErrDistanceMeasured for a run of unknown place, got %v", err)
+	}
+	if got, err := s.SetCardioDistance(unknownID, 6000, true); err != nil || got.Indoor == nil || !*got.Indoor {
+		t.Errorf("expected the run recorded indoors, got %v %v", got.Indoor, err)
+	}
+	if run, _ := s.GetCardioWorkout(unknownID); run.Indoor == nil || !*run.Indoor || *run.DistanceM != 6000 {
+		t.Errorf("expected a 6 km indoor run stored, got %v %v", run.Indoor, *run.DistanceM)
+	}
+	if run, _ := s.GetCardioWorkout(outdoorID); run.Indoor == nil || *run.Indoor {
+		t.Errorf("expected the outdoor run kept outdoors, got %v", run.Indoor)
 	}
 }
 

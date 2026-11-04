@@ -103,9 +103,8 @@ test('a workout on another day fills the earliest open session of its week', asy
   ]);
   const user = userEvent.setup();
   await renderInApp(<HealthImportScreen />);
-  // The run's chips come first; the swim on Sunday is offered them too.
-  expect((await screen.findAllByRole('button', { name: 'Easy run 6 km · Wed' }))[0]).toBeSelected();
-  expect(screen.getAllByRole('button', { name: 'Long run 20 km · Sun' })[0]).not.toBeSelected();
+  expect(await screen.findByRole('button', { name: 'Easy run 6 km · Wed' })).toBeSelected();
+  expect(screen.getByRole('button', { name: 'Long run 20 km · Sun' })).not.toBeSelected();
   // Last week's session is over.
   expect(screen.queryByRole('button', { name: /Tempo run/ })).toBeNull();
   const query = requests.find((r) => r.path === '/api/goals/sessions')!.query;
@@ -113,6 +112,39 @@ test('a workout on another day fills the earliest open session of its week', asy
 
   await user.press(screen.getByRole('button', { name: 'Import 2 workouts' }));
   expect(requests.find((r) => r.method === 'POST')?.body).toEqual([{ ...run, planned_session_id: 11 }, swim]);
+});
+
+test('a workout is only offered sessions of its activity', async () => {
+  const ride: NewCardioWorkout = { ...run, activity: 'cycling', source_uuid: 'ride' };
+  const treadmill: NewCardioWorkout = { ...run, source_uuid: 'treadmill', indoor: true };
+  jest.mocked(healthWorkoutsSince).mockResolvedValue([treadmill, ride, swim]);
+  const requests = fakeServer([
+    session(11, 'Easy run 6 km'),
+    { ...session(12, 'Long ride 40 km'), activity: 'cycling' },
+    { ...session(13, 'Technique swim 1500 m', '2026-10-18'), activity: 'swimming' },
+  ]);
+  const user = userEvent.setup();
+  await renderInApp(<HealthImportScreen />);
+  // One chip each: the indoor run's run, the ride's ride and the swim's swim.
+  expect(await screen.findByRole('button', { name: 'Easy run 6 km' })).toBeSelected();
+  expect(screen.getByRole('button', { name: 'Long ride 40 km' })).toBeSelected();
+  expect(screen.getByRole('button', { name: 'Technique swim 1500 m' })).toBeSelected();
+  expect(screen.getAllByRole('button', { name: 'No session' })).toHaveLength(3);
+
+  await user.press(screen.getByRole('button', { name: 'Import 3 workouts' }));
+  expect(requests.find((r) => r.method === 'POST')?.body).toEqual([
+    { ...treadmill, planned_session_id: 11 },
+    { ...ride, planned_session_id: 12 },
+    { ...swim, planned_session_id: 13 },
+  ]);
+});
+
+test('a workout without a session of its activity is offered none', async () => {
+  fakeServer([session(11, 'Easy run 6 km', '2026-10-18')]);
+  await renderInApp(<HealthImportScreen />);
+  // Only the run gets the chips.
+  expect(await screen.findByRole('button', { name: 'Easy run 6 km · Sun' })).toBeOnTheScreen();
+  expect(screen.getAllByRole('button', { name: 'No session' })).toHaveLength(1);
 });
 
 test('a workout fills a session later in its week when none before is open', async () => {

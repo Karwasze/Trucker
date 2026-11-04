@@ -1,4 +1,3 @@
-import { StatusBar } from 'expo-status-bar';
 import { SymbolView } from 'expo-symbols';
 import { useEffect, useState } from 'react';
 import { Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
@@ -57,8 +56,14 @@ function useNow(active: boolean) {
  * progress and buttons to restart or stop. When the timer finishes in
  * animation mode it springs open to celebrate, then shrinks away. While idle
  * it is invisible, but a tap on the notch or island starts the timer.
+ *
+ * The compact time sits where the clock and battery are, so while it shows
+ * on a notch or Dynamic Island iPhone the status bar has to go. Under the
+ * scene life cycle iOS ignores app-wide status bar calls (what `StatusBar`
+ * from React Native does), so `onStatusBarHiddenChange` hands that to the root
+ * stack, whose screens control the status bar per view controller.
  */
-export function TimerIsland() {
+export function TimerIsland({ onStatusBarHiddenChange }: { onStatusBarHiddenChange?: (hidden: boolean) => void }) {
   const theme = useTheme();
   const window = useWindowDimensions();
   const frame = useIslandFrame();
@@ -97,12 +102,13 @@ export function TimerIsland() {
     borderTopRightRadius: frame.docked ? 0 : withSpring(radius, spring),
   }));
 
+  const hidesStatusBar = frame.hardware && shown;
+  useEffect(() => onStatusBarHiddenChange?.(hidesStatusBar), [onStatusBarHiddenChange, hidesStatusBar]);
+
   const onPress = running ? () => setExpandRequested(!expanded) : celebrating ? celebration.dismiss : start;
 
   return (
     <>
-      {/* The compact time sits where the clock and battery are; hide them meanwhile. */}
-      {frame.hardware && <StatusBar hidden={shown} animated />}
       {/* While expanded, a tap anywhere else collapses it. */}
       {expanded && (
         <Pressable

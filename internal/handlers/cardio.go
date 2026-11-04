@@ -82,6 +82,10 @@ func (h *Handlers) CardioAPI(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Planned session not found", http.StatusBadRequest)
 			return
 		}
+		if errors.Is(err, store.ErrActivityMismatch) {
+			http.Error(w, "A workout can only fill a session of its activity", http.StatusBadRequest)
+			return
+		}
 		if err != nil {
 			http.Error(w, "Database error", http.StatusInternalServerError)
 			log.Printf("Error saving cardio workouts: %v", err)
@@ -107,6 +111,8 @@ func (h *Handlers) CardioAPI(w http.ResponseWriter, r *http.Request) {
 		}
 		var body struct {
 			DistanceM *float64 `json:"distance_m"`
+			// Indoor marks a workout imported before Health's place was kept as indoors.
+			Indoor bool `json:"indoor"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.DistanceM == nil || *body.DistanceM <= 0 {
 			http.Error(w, "Expected a positive distance_m", http.StatusBadRequest)
@@ -116,13 +122,13 @@ func (h *Handlers) CardioAPI(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			return
 		}
-		workout, err := h.store.SetCardioDistance(id, *body.DistanceM)
+		workout, err := h.store.SetCardioDistance(id, *body.DistanceM, body.Indoor)
 		if errors.Is(err, store.ErrCardioWorkoutNotFound) {
 			http.Error(w, "Cardio workout not found", http.StatusNotFound)
 			return
 		}
 		if errors.Is(err, store.ErrDistanceMeasured) {
-			http.Error(w, "Apple Health measured this workout's distance", http.StatusConflict)
+			http.Error(w, "Apple Health measured this outdoor workout's distance", http.StatusConflict)
 			return
 		}
 		if err != nil {

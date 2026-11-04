@@ -151,6 +151,14 @@ func TestCardioAPI_PATCHSetsMissingDistance(t *testing.T) {
 	if w := cardioRequest(t, h, "PATCH", runURL, `{"distance_m":6000}`); w.Code != http.StatusConflict {
 		t.Errorf("expected 409 changing a measured distance, got %d", w.Code)
 	}
+	// Unless the app says it was indoors, from Health, as it was imported
+	// before that was kept.
+	w = cardioRequest(t, h, "PATCH", runURL, `{"distance_m":6000,"indoor":true}`)
+	got = store.CardioWorkout{}
+	json.NewDecoder(w.Body).Decode(&got)
+	if w.Code != http.StatusOK || *got.DistanceM != 6000 || got.Indoor == nil || !*got.Indoor {
+		t.Errorf("expected 200 with a 6 km indoor run, got %d %+v", w.Code, got)
+	}
 	for _, body := range []string{"not json", `{}`, `{"distance_m":0}`, `{"distance_m":-5}`} {
 		if w := cardioRequest(t, h, "PATCH", rideURL, body); w.Code != http.StatusBadRequest {
 			t.Errorf("%s: expected 400, got %d", body, w.Code)

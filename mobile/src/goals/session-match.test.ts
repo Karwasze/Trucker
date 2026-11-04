@@ -1,5 +1,5 @@
 import type { PlannedSession } from '@/api/types';
-import { addDays, matchRange, sessionLabel, withinMatch } from '@/goals/session-match';
+import { addDays, canFill, matchRange, sessionLabel, withinMatch } from '@/goals/session-match';
 
 const session = (date: string): PlannedSession => ({
   id: 1,
@@ -35,4 +35,12 @@ test('a workout counts as any session of its week, not the next or last', () => 
 test('a session on another day is labelled with its weekday', () => {
   expect(sessionLabel(session('2026-10-28'), '2026-10-28')).toBe('Easy run 6 km');
   expect(sessionLabel(session('2026-10-27'), '2026-10-28')).toBe('Easy run 6 km · Tue');
+});
+
+test('a workout can only fill a session of its activity in its week', () => {
+  const run = session('2026-10-14');
+  expect(canFill(run, { activity: 'running', date: '2026-10-18' })).toBe(true);
+  expect(canFill(run, { activity: 'cycling', date: '2026-10-14' })).toBe(false);
+  expect(canFill(run, { activity: 'swimming', date: '2026-10-14' })).toBe(false);
+  expect(canFill(run, { activity: 'running', date: '2026-10-19' })).toBe(false);
 });

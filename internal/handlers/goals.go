@@ -193,6 +193,8 @@ func (h *Handlers) GoalMatchAPI(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Planned session not found", http.StatusNotFound)
 	case errors.Is(err, store.ErrCardioWorkoutNotFound):
 		http.Error(w, "Cardio workout not found", http.StatusNotFound)
+	case errors.Is(err, store.ErrActivityMismatch):
+		http.Error(w, "A workout can only fill a session of its activity", http.StatusBadRequest)
 	case err != nil:
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		log.Printf("Error matching session: %v", err)

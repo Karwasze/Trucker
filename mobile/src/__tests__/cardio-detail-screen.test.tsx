@@ -4,13 +4,14 @@ import { router, useLocalSearchParams } from 'expo-router';
 
 import type { CardioWorkout, PlannedSession } from '@/api/types';
 import CardioDetailScreen from '@/app/(tabs)/history/cardio/[id]';
-import { healthHeartRateProfile, isHealthAvailable } from '@/health/healthkit';
+import { healthHeartRateProfile, healthWorkoutIndoor, isHealthAvailable } from '@/health/healthkit';
 import { mockAlerts, mockServer, renderInApp, selectPlan, setNow, TEST_ZONES, type Request } from '@/test-utils';
 
 jest.mock('@/health/healthkit', () => ({
   isHealthAvailable: jest.fn(() => false),
   connectHealth: jest.fn(async () => {}),
   healthHeartRateProfile: jest.fn(async () => ({})),
+  healthWorkoutIndoor: jest.fn(async () => undefined),
 }));
 
 const ride: CardioWorkout = {
@@ -111,6 +112,61 @@ test('a workout without a distance can have one entered', async () => {
   expect(patch?.query.get('date')).toBe('2026-10-18');
 });
 
+describe('an indoor run', () => {
+  // The watch estimated 5 km of a 6 km treadmill run.
+  const treadmill: CardioWorkout = {
+    ...ride,
+    id: 7,
+    activity: 'running',
+    duration_seconds: 1800,
+    distance_m: 5000,
+    laps: undefined,
+    source_uuid: 'treadmill',
+    indoor: true,
+  };
+
+  test('can have the watch’s distance replaced', async () => {
+    jest.mocked(useLocalSearchParams).mockReturnValue({ id: '7' });
+    const requests = server(treadmill);
+    const user = userEvent.setup();
+    await renderInApp(<CardioDetailScreen />);
+    expect(await screen.findByText('Distance estimated by the watch')).toBeOnTheScreen();
+    const input = screen.getByLabelText('Distance in kilometres');
+    expect(input).toHaveDisplayValue('5');
+    await user.clear(input);
+    await user.type(input, '6');
+    await user.press(screen.getByRole('button', { name: 'Save' }));
+    expect(requests.find((r) => r.method === 'PATCH')?.body).toEqual({ distance_m: 6000 });
+    expect(healthWorkoutIndoor).not.toHaveBeenCalled();
+  });
+
+  test('imported before its place was kept is looked up in Apple Health', async () => {
+    jest.mocked(useLocalSearchParams).mockReturnValue({ id: '7' });
+    jest.mocked(isHealthAvailable).mockReturnValue(true);
+    jest.mocked(healthWorkoutIndoor).mockResolvedValue(true);
+    await AsyncStorage.setItem(
+      `trucker.health:http://cardio-${count}:8081`,
+      JSON.stringify({ connectedAt: '2026-10-01T08:00:00.000Z' })
+    );
+    const requests = server({ ...treadmill, indoor: undefined });
+    const user = userEvent.setup();
+    await renderInApp(<CardioDetailScreen />);
+    const input = await screen.findByLabelText('Distance in kilometres');
+    expect(healthWorkoutIndoor).toHaveBeenCalledWith('treadmill');
+    await user.clear(input);
+    await user.type(input, '6');
+    await user.press(screen.getByRole('button', { name: 'Save' }));
+    expect(requests.find((r) => r.method === 'PATCH')?.body).toEqual({ distance_m: 6000, indoor: true });
+  });
+
+  test('an outdoor run’s measured distance can’t be changed', async () => {
+    server({ ...treadmill, id: 5, indoor: false });
+    await renderInApp(<CardioDetailScreen />);
+    expect(await screen.findByText('🏃 Run')).toBeOnTheScreen();
+    expect(screen.queryByLabelText('Distance in kilometres')).not.toBeOnTheScreen();
+  });
+});
+
 test('the session it fills can be changed or cleared', async () => {
   const requests = server(ride, [session(21, 'Long ride 40 km · easy', 5), session(22, 'Recovery spin: 30 min')]);
   const user = userEvent.setup();
@@ -143,6 +199,18 @@ test('it can count as any open session of its week', async () => {
   expect(screen.queryByRole('button', { name: /Tempo ride/ })).toBeNull();
   const query = requests.find((r) => r.path === '/api/goals/sessions')!.query;
   expect([query.get('from'), query.get('to')]).toEqual(['2026-10-12', '2026-10-18']);
+});
+
+test('it can only count as a session of its activity', async () => {
+  server(ride, [
+    session(21, 'Long ride 40 km · easy'),
+    { ...session(22, 'Easy run 6 km'), activity: 'running' },
+    { ...session(23, 'Technique swim 1500 m'), activity: 'swimming' },
+  ]);
+  await renderInApp(<CardioDetailScreen />);
+  expect(await screen.findByRole('button', { name: 'Long ride 40 km' })).toBeOnTheScreen();
+  expect(screen.queryByRole('button', { name: 'Easy run 6 km' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Technique swim 1500 m' })).toBeNull();
 });
 
 test('deleting dismisses it from Apple Health imports and goes back', async () => {

@@ -1,5 +1,5 @@
 import { localDate } from '@/api/client';
-import type { PlannedSession } from '@/api/types';
+import type { CardioWorkout, PlannedSession } from '@/api/types';
 import { formatDate } from '@/workout/format';
 
 /** The YYYY-MM-DD date `days` after `date` (before, when negative). */
@@ -28,6 +28,14 @@ export function matchRange(dates: string[]): [string, string] {
  */
 export function withinMatch(session: PlannedSession, date: string) {
   return mondayOf(session.date) === mondayOf(date);
+}
+
+/**
+ * Whether a workout may fill the session: one of its activity (indoors or
+ * out) in the session's week.
+ */
+export function canFill(session: PlannedSession, workout: Pick<CardioWorkout, 'activity' | 'date'>) {
+  return session.activity === workout.activity && withinMatch(session, workout.date);
 }
 
 /**

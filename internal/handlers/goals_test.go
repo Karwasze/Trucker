@@ -128,6 +128,10 @@ func TestGoalTodayAPI_ImportFillsSession(t *testing.T) {
 	if w := serve(t, h.CardioAPI, "POST", "/api/cardio?date=2026-10-19", unknown); w.Code != http.StatusBadRequest {
 		t.Errorf("expected 400 for an unknown session, got %d", w.Code)
 	}
+	ride := strings.Replace(strings.Replace(run, "run-1", "ride-1", 1), `"activity":"running"`, `"activity":"cycling"`, 1)
+	if w := serve(t, h.CardioAPI, "POST", "/api/cardio?date=2026-10-19", ride); w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for a ride filling a run, got %d", w.Code)
+	}
 }
 
 func TestGoalSessionsAndMatchAPI(t *testing.T) {
@@ -161,9 +165,16 @@ func TestGoalSessionsAndMatchAPI(t *testing.T) {
 		t.Errorf("expected Monday met after matching, got %+v", sessions[0].Verdict)
 	}
 
+	ride, err := s.SaveCardioWorkouts([]store.CardioWorkout{{
+		Date: "2026-10-19", StartedAt: "2026-10-19T19:00:00Z", Activity: store.ActivityCycling, DurationSeconds: 3600,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
 	for body, want := range map[string]int{
-		`{"session_id":999,"cardio_id":null}`:                        http.StatusNotFound,
-		fmt.Sprintf(`{"session_id":%d,"cardio_id":999}`, week[0].ID): http.StatusNotFound,
+		fmt.Sprintf(`{"session_id":%d,"cardio_id":%d}`, week[1].ID, ride[0].ID): http.StatusBadRequest,
+		`{"session_id":999,"cardio_id":null}`:                                   http.StatusNotFound,
+		fmt.Sprintf(`{"session_id":%d,"cardio_id":999}`, week[0].ID):            http.StatusNotFound,
 		`nope`: http.StatusBadRequest,
 	} {
 		if w := serve(t, h.GoalMatchAPI, "PUT", "/api/goals/match", body); w.Code != want {

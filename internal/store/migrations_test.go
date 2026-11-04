@@ -47,8 +47,8 @@ func TestMigrate_IsIdempotent(t *testing.T) {
 	if err := s.db.QueryRow("SELECT COUNT(*) FROM schema_migrations").Scan(&count); err != nil {
 		t.Fatalf("failed to count schema_migrations: %v", err)
 	}
-	if count != 17 {
-		t.Errorf("expected 17 applied migrations, got %d", count)
+	if count != 18 {
+		t.Errorf("expected 18 applied migrations, got %d", count)
 	}
 }
 
@@ -484,11 +484,14 @@ func TestMigrate_UpgradeFromV9KeepsCardioAsMeasured(t *testing.T) {
 	if err != nil || run.DistanceM == nil || *run.DistanceM != 5000 || run.ManualDistance {
 		t.Errorf("expected the run's measured 5 km kept, got %+v (%v)", run, err)
 	}
-	if _, err := s.SetCardioDistance(1, 6000); err != ErrDistanceMeasured {
+	if run.Indoor != nil {
+		t.Errorf("expected the existing run's place unknown, got %v", *run.Indoor)
+	}
+	if _, err := s.SetCardioDistance(1, 6000, false); err != ErrDistanceMeasured {
 		t.Errorf("expected the existing run's distance kept as measured, got %v", err)
 	}
 	// An existing ride without a distance can have one entered.
-	if ride, err := s.SetCardioDistance(2, 30000); err != nil || !ride.ManualDistance {
+	if ride, err := s.SetCardioDistance(2, 30000, false); err != nil || !ride.ManualDistance {
 		t.Errorf("expected a distance entered for the existing ride, got %+v (%v)", ride, err)
 	}
 }

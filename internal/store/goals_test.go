@@ -104,6 +104,51 @@ func TestImportIntoUnknownSessionFails(t *testing.T) {
 	}
 }
 
+func TestImportIntoSessionOfAnotherActivityFails(t *testing.T) {
+	s := newTestStore(t)
+	g := mustCreateGoal(t, s, newGoal(), "2026-10-19")
+	monday := sessionsOn(t, s, g.ID, "2026-10-19", "2026-10-19", "2026-10-19")[0]
+	// A ride can't fill a run, even alongside a run that's saved fine.
+	ride := cardioRun("ride", "2026-10-19", 30)
+	ride.Activity = ActivityCycling
+	ride.PlannedSessionID = &monday.ID
+	if _, err := s.SaveCardioWorkouts([]CardioWorkout{cardioRun("run", "2026-10-19", 5), ride}); !errors.Is(err, ErrActivityMismatch) {
+		t.Errorf("expected ErrActivityMismatch, got %v", err)
+	}
+	if all, _ := s.ListCardioWorkouts(""); len(all) != 0 {
+		t.Errorf("expected nothing saved, got %+v", all)
+	}
+	if got := sessionsOn(t, s, g.ID, "2026-10-19", "2026-10-19", "2026-10-19")[0]; got.CardioWorkoutID != nil {
+		t.Errorf("expected the session left empty, got %+v", got)
+	}
+
+	// An indoor run fills it like an outdoor one.
+	treadmill := cardioRun("treadmill", "2026-10-19", 5)
+	treadmill.Indoor = boolean(true)
+	treadmill.PlannedSessionID = &monday.ID
+	if _, err := s.SaveCardioWorkouts([]CardioWorkout{treadmill}); err != nil {
+		t.Errorf("expected an indoor run to fill a run, got %v", err)
+	}
+}
+
+func TestMatchSession_OtherActivityFails(t *testing.T) {
+	s := newTestStore(t)
+	g := mustCreateGoal(t, s, newGoal(), "2026-10-19")
+	monday := sessionsOn(t, s, g.ID, "2026-10-19", "2026-10-19", "2026-10-19")[0]
+	swim := cardioRun("swim", "2026-10-19", 2)
+	swim.Activity = ActivitySwimming
+	saved, err := s.SaveCardioWorkouts([]CardioWorkout{swim})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MatchSession(monday.ID, &saved[0].ID, "2026-10-19"); !errors.Is(err, ErrActivityMismatch) {
+		t.Errorf("expected ErrActivityMismatch, got %v", err)
+	}
+	if got := sessionsOn(t, s, g.ID, "2026-10-19", "2026-10-19", "2026-10-19")[0]; got.CardioWorkoutID != nil {
+		t.Errorf("expected the session left empty, got %+v", got)
+	}
+}
+
 func TestMatchSession(t *testing.T) {
 	s := newTestStore(t)
 	g := mustCreateGoal(t, s, newGoal(), "2026-10-19")
@@ -293,7 +338,7 @@ func TestSetCardioDistance_JudgesSessionByIt(t *testing.T) {
 	}
 
 	// Half the target entered by hand misses the session.
-	if _, err := s.SetCardioDistance(saved[0].ID, deref(monday.TargetDistanceM)/2); err != nil {
+	if _, err := s.SetCardioDistance(saved[0].ID, deref(monday.TargetDistanceM)/2, false); err != nil {
 		t.Fatal(err)
 	}
 	after := sessionsOn(t, s, g.ID, "2026-10-19", "2026-10-19", "2026-10-20")[0]

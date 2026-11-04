@@ -68,35 +68,6 @@ func TestDeleteDietDay(t *testing.T) {
 	}
 }
 
-func TestDietSettings_DefaultsToNoTargetAndSaves(t *testing.T) {
-	s := newTestStore(t)
-
-	settings, err := s.DietSettings()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if settings.ProteinTargetG != nil {
-		t.Errorf("expected no target, got %v", *settings.ProteinTargetG)
-	}
-
-	if err := s.SaveDietSettings(DietSettings{ProteinTargetG: ptr(160)}); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if err := s.SaveDietSettings(DietSettings{ProteinTargetG: ptr(170)}); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	settings, _ = s.DietSettings()
-	if settings.ProteinTargetG == nil || *settings.ProteinTargetG != 170 {
-		t.Errorf("expected a 170 g target, got %v", settings.ProteinTargetG)
-	}
-
-	s.SaveDietSettings(DietSettings{})
-	settings, _ = s.DietSettings()
-	if settings.ProteinTargetG != nil {
-		t.Errorf("expected the target cleared, got %v", *settings.ProteinTargetG)
-	}
-}
-
 func TestDietInsights_Empty(t *testing.T) {
 	s := newTestStore(t)
 
@@ -184,7 +155,6 @@ func TestDietInsights_NoMostMissedWeekdayForOneMiss(t *testing.T) {
 
 func TestDietInsights_Protein(t *testing.T) {
 	s := newTestStore(t)
-	s.SaveDietSettings(DietSettings{ProteinTargetG: ptr(150)})
 	s.SaveDietDay(DietDay{Date: "2026-10-18", Adhered: true, ProteinG: ptr(160)})
 	s.SaveDietDay(DietDay{Date: "2026-10-19", Adhered: true, ProteinG: ptr(120)})
 	s.SaveDietDay(DietDay{Date: "2026-10-20", Adhered: true, ProteinG: ptr(150)})
@@ -200,18 +170,8 @@ func TestDietInsights_Protein(t *testing.T) {
 	if p == nil {
 		t.Fatal("expected a protein summary")
 	}
-	if p.Days != 3 || p.AverageG != 143.3 || p.DaysAtTarget != 2 || p.TargetG == nil || *p.TargetG != 150 {
+	if p.Days != 3 || p.AverageG != 143.3 {
 		t.Errorf("unexpected protein summary %+v", p)
-	}
-}
-
-func TestDietInsights_ProteinWithoutTarget(t *testing.T) {
-	s := newTestStore(t)
-	s.SaveDietDay(DietDay{Date: "2026-10-20", Adhered: true, ProteinG: ptr(150)})
-
-	got, _ := s.DietInsights("2026-10-20")
-	if got.Protein == nil || got.Protein.TargetG != nil || got.Protein.DaysAtTarget != 0 {
-		t.Errorf("unexpected protein summary %+v", got.Protein)
 	}
 }
 

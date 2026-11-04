@@ -62,7 +62,6 @@ func TestDietAPI_Invalid(t *testing.T) {
 		{"PUT", "/api/diet", `{"date":"2026-10-12","adhered":true,"protein_g":5000}`},
 		{"GET", "/api/diet?from=yesterday", ""},
 		{"DELETE", "/api/diet", ""},
-		{"PUT", "/api/diet/settings", `{"protein_target_g":0}`},
 		{"GET", "/api/diet/insights?date=today", ""},
 	} {
 		if w := serveDiet(h, c.method, c.target, c.body); w.Code != http.StatusBadRequest {
@@ -83,24 +82,11 @@ func TestDietAPI_DELETE(t *testing.T) {
 	}
 }
 
-func TestDietSettingsAPI(t *testing.T) {
+func TestDietSettingsAPI_Gone(t *testing.T) {
 	h, _ := newTestHandlers(t)
-
-	w := serveDiet(h, "GET", "/api/diet/settings", "")
-	if body := strings.TrimSpace(w.Body.String()); body != `{"protein_target_g":null}` {
-		t.Errorf("expected no target, got %s", body)
-	}
-
-	w = serveDiet(h, "PUT", "/api/diet/settings", `{"protein_target_g":160}`)
-	if body := strings.TrimSpace(w.Body.String()); w.Code != http.StatusOK || body != `{"protein_target_g":160}` {
-		t.Errorf("expected the target saved, got %d %s", w.Code, body)
-	}
-
-	// null clears it.
-	serveDiet(h, "PUT", "/api/diet/settings", `{"protein_target_g":null}`)
-	w = serveDiet(h, "GET", "/api/diet/settings", "")
-	if body := strings.TrimSpace(w.Body.String()); body != `{"protein_target_g":null}` {
-		t.Errorf("expected the target cleared, got %s", body)
+	// The protein target was dropped, so its route is no longer served.
+	if w := serveDiet(h, "GET", "/api/diet/settings", ""); w.Code == http.StatusOK {
+		t.Errorf("expected no diet settings route, got %d %s", w.Code, w.Body.String())
 	}
 }
 

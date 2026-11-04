@@ -7,7 +7,6 @@ import type {
   DateRange,
   DietDay,
   DietInsights,
-  DietSettings,
   Goal,
   GoalToday,
   ExerciseDB,
@@ -121,10 +120,6 @@ export function createApi(baseUrl: string) {
     /** Records a day, replacing what was logged for it. */
     saveDietDay: (day: DietDay) => request<DietDay>('/api/diet', { method: 'PUT', body: JSON.stringify(day) }),
     deleteDietDay: (date: string) => request<{ success: boolean }>(`/api/diet?date=${q(date)}`, { method: 'DELETE' }),
-    dietSettings: () => request<DietSettings>('/api/diet/settings'),
-    /** Replaces the protein target; null clears it. Returns the stored settings. */
-    saveDietSettings: (settings: DietSettings) =>
-      request<DietSettings>('/api/diet/settings', { method: 'PUT', body: JSON.stringify(settings) }),
     /** The diet summed up to `today`. */
     dietInsights: (today: string) => request<DietInsights>(`/api/diet/insights?date=${q(today)}`),
 

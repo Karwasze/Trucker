@@ -362,14 +362,53 @@ describe('category buttons and series select', () => {
     expect(screen.getByRole('button', { name: 'Sync from Apple Health' })).toBeOnTheScreen();
   });
 
-  test('Bodyweight has no series select', async () => {
+  test('Bodyweight selects between bodyweight and diet adherence', async () => {
     server();
     await renderProgress();
     await screen.findByText('Since 9 Oct');
     await pickCategory('Bodyweight');
     expect(screen.getAllByText('82.4 kg')[0]).toBeOnTheScreen();
+    expect(selectValue('Show')).toBe('Bodyweight');
     expect(screen.queryByRole('button', { name: 'Exercise' })).not.toBeOnTheScreen();
     expect(screen.queryByRole('button', { name: 'Activity' })).not.toBeOnTheScreen();
+  });
+
+  test('diet adherence counts the days kept to in the timespan', async () => {
+    const requests = mockServer({
+      'GET /api/statistics': { exercises: ['Squat'], data: [] },
+      'GET /api/cardio': [],
+      'GET /api/bodyweight': [],
+      'GET /api/diet': [
+        { date: '2026-10-05', adhered: true },
+        { date: '2026-10-06', adhered: false },
+        { date: '2026-10-12', adhered: true },
+        { date: '2026-10-13', adhered: true },
+      ],
+    });
+    await renderProgress();
+    await screen.findByRole('tab', { name: 'Bodyweight' });
+    await pickCategory('Bodyweight');
+    await screen.findByRole('button', { name: 'Show' });
+    await selectOption('Show', 'Diet adherence');
+    expect(await screen.findByText('Days kept per week')).toBeOnTheScreen();
+    expect(screen.getByText('3')).toBeOnTheScreen();
+    expect(screen.getByText('1')).toBeOnTheScreen();
+    expect(screen.getByText('75%')).toBeOnTheScreen();
+    const query = requests.find((r) => r.path === '/api/diet')!.query;
+    expect([query.get('from'), query.get('to')]).toEqual(['2026-09-18', '2026-10-18']);
+  });
+
+  test('diet adherence with nothing logged says so', async () => {
+    mockServer({
+      'GET /api/statistics': { exercises: [], data: [] },
+      'GET /api/cardio': [],
+      'GET /api/bodyweight': [],
+      'GET /api/diet': [],
+    });
+    await renderProgress();
+    await screen.findByRole('button', { name: 'Show' });
+    await selectOption('Show', 'Diet adherence');
+    expect(await screen.findByText('No days logged in the last 1 month.')).toBeOnTheScreen();
   });
 
   test('the categories are Strength, Cardio, then Bodyweight', async () => {

@@ -76,42 +76,6 @@ func (h *Handlers) DietAPI(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// DietSettingsAPI returns (GET) and replaces (PUT) the daily protein
-// target; a null target clears it.
-func (h *Handlers) DietSettingsAPI(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	switch r.Method {
-	case "GET":
-	case "PUT":
-		var settings store.DietSettings
-		if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
-			http.Error(w, "Invalid JSON", http.StatusBadRequest)
-			return
-		}
-		if !validProtein(settings.ProteinTargetG) {
-			http.Error(w, fmt.Sprintf("Protein target must be between 0 and %d g", maxProteinG), http.StatusBadRequest)
-			return
-		}
-		if err := h.store.SaveDietSettings(settings); err != nil {
-			http.Error(w, "Database error", http.StatusInternalServerError)
-			log.Printf("Error saving diet settings: %v", err)
-			return
-		}
-	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	settings, err := h.store.DietSettings()
-	if err != nil {
-		http.Error(w, "Database error", http.StatusInternalServerError)
-		log.Printf("Error loading diet settings: %v", err)
-		return
-	}
-	json.NewEncoder(w).Encode(settings)
-}
-
 // DietInsightsAPI sums up the diet up to ?date=, the client's today.
 func (h *Handlers) DietInsightsAPI(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {

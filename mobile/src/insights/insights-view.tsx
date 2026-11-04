@@ -8,6 +8,7 @@ import type {
   CardioActivity,
   CardioProgress,
   CardioSummary,
+  DietInsights,
   GoalSummary,
   Insights,
   LiftProgress,
@@ -18,6 +19,7 @@ import { ThemedText } from '@/components/themed-text';
 import { DEFAULT_TIMESPAN, TimespanPicker, timespanStart, type Timespan } from '@/components/timespan';
 import { Card, Message, Screen, SectionLabel } from '@/components/ui';
 import { Spacing, type ThemeColor } from '@/constants/theme';
+import { dietInsights } from '@/diet/insights';
 import { PHASE_NAMES } from '@/goals/presets';
 import { BodyMap } from '@/insights/body-map';
 import { ZoneRanges } from '@/health/heart-rate-zones';
@@ -50,17 +52,18 @@ const MISSED_SHOWN = 5;
 /** Sessions with a distance an activity needs for a pace trend, as on the server. */
 const CARDIO_PROGRESS_SESSIONS = 3;
 
-type Page = 'strength' | 'cardio';
+type Page = 'strength' | 'cardio' | 'bodyweight';
 
 const PAGES: { key: Page; label: string; subtitle: string }[] = [
   { key: 'strength', label: 'Strength', subtitle: 'Plan adherence, progression and strength levels' },
   { key: 'cardio', label: 'Cardio', subtitle: 'Race goal, pace and triathlons' },
+  { key: 'bodyweight', label: 'Bodyweight', subtitle: 'Diet streaks, slips and bodyweight' },
 ];
 
 /**
- * Insights: buttons for lifting and endurance analysis, the timespan both
- * share, then the chosen one's content. Charts per lift or activity live on
- * the Progress tab, a tap away.
+ * Insights: buttons for lifting, endurance and diet analysis, the timespan
+ * lifting and endurance share, then the chosen one's content. Charts per
+ * lift or activity live on the Progress tab, a tap away.
  */
 export function InsightsScreen() {
   const { api, planId, serverUrl } = useSettings();
@@ -69,22 +72,33 @@ export function InsightsScreen() {
   const today = localDate();
   const from = timespanStart(timespan);
   // One request for both pages.
-  const insights = useQuery(`insights:${serverUrl}:${today}:${from}:${planId}`, () =>
+  const insights = useQuery(page === 'bodyweight' ? null : `insights:${serverUrl}:${today}:${from}:${planId}`, () =>
     api.insights(today, from, planId)
   );
+  // Over set stretches of days, so the timespan doesn't apply.
+  const diet = useQuery(page === 'bodyweight' ? `diet-insights:${serverUrl}:${today}` : null, () =>
+    api.dietInsights(today)
+  );
+  const shown = page === 'bodyweight' ? diet : insights;
   return (
     <Screen
       title="Insights"
       subtitle={PAGES.find((p) => p.key === page)!.subtitle}
-      refreshing={insights.refreshing}
-      onRefresh={insights.refresh}>
+      refreshing={shown.refreshing}
+      onRefresh={shown.refresh}>
       <View accessibilityRole="tablist" accessibilityLabel="Insights" style={styles.pages}>
         {PAGES.map((p) => (
           <TileButton key={p.key} label={p.label} selected={p.key === page} onPress={() => setPage(p.key)} />
         ))}
       </View>
-      <TimespanPicker value={timespan} onChange={setTimespan} />
-      {!insights.data ? (
+      {page !== 'bodyweight' && <TimespanPicker value={timespan} onChange={setTimespan} />}
+      {page === 'bodyweight' ? (
+        !diet.data ? (
+          <Message loading={!diet.error} error={diet.error} />
+        ) : (
+          <DietContent data={diet.data} />
+        )
+      ) : !insights.data ? (
         <Message loading={!insights.error} error={insights.error} />
       ) : page === 'strength' ? (
         <StrengthContent data={insights.data} timespan={timespan} hasPlan={planId !== null} />
@@ -191,6 +205,27 @@ function StrengthContent({ data, timespan, hasPlan }: { data: Insights; timespan
             </ThemedText>
           </Card>
         </>
+      )}
+    </>
+  );
+}
+
+function DietContent({ data }: { data: DietInsights }) {
+  const lines = dietInsights(data);
+  return (
+    <>
+      <SectionLabel>Diet</SectionLabel>
+      {lines.length === 0 ? (
+        <Message>Log a few days on the Diet tab to see how your diet is going.</Message>
+      ) : (
+        lines.map((line) => (
+          <Card key={line.title}>
+            <ThemedText type="smallBold">{line.title}</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              {line.body}
+            </ThemedText>
+          </Card>
+        ))
       )}
     </>
   );

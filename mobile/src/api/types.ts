@@ -446,10 +446,6 @@ export type DietDay = {
   protein_g?: number;
 };
 
-export type DietSettings = {
-  protein_target_g: number | null;
-};
-
 /** Mirrors store.DietInsights. */
 export type DietInsights = {
   /** Days kept to in a row up to today, or yesterday while today isn't logged. */
@@ -460,7 +456,7 @@ export type DietInsights = {
   /** The weekday missed most, once one was missed at least twice. */
   most_missed?: { weekday: string; missed: number; logged: number };
   /** Protein over the last `window` days; unset if none was logged. */
-  protein?: { window: number; days: number; average_g: number; target_g?: number; days_at_target: number };
+  protein?: { window: number; days: number; average_g: number };
   /** Between the first and last weigh-in of the last recent.days days. */
   bodyweight?: { from: string; to: string; change_kg: number };
   /** The oldest day logged. */

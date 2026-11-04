@@ -5,19 +5,15 @@ import type { DietDay } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Chip } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
-import { formatGrams, parseGrams } from '@/diet/grams';
+import { parseGrams } from '@/diet/grams';
 import { useTheme } from '@/hooks/use-theme';
 import { formatDate } from '@/workout/format';
 
-/**
- * Asks whether a day's diet was kept to and, once answered, the protein
- * eaten, compared with the target if one is set.
- */
+/** Asks whether a day's diet was kept to and, once answered, the protein eaten. */
 export function DayCard({
   date,
   today,
   day,
-  targetG,
   saving,
   onSave,
   onClear,
@@ -25,7 +21,6 @@ export function DayCard({
   date: string;
   today: string;
   day: DietDay | undefined;
-  targetG: number | null;
   saving: boolean;
   onSave: (day: DietDay) => void;
   onClear: () => void;
@@ -44,7 +39,7 @@ export function DayCard({
       {day ? (
         <>
           {/* Keyed so the input starts from what's saved, for each day. */}
-          <ProteinInput key={`${date}:${day.protein_g}`} day={day} targetG={targetG} onSave={onSave} />
+          <ProteinInput key={`${date}:${day.protein_g}`} day={day} onSave={onSave} />
           <View style={styles.row}>
             <Button title="Clear day" variant="secondary" compact loading={saving} onPress={onClear} />
           </View>
@@ -58,15 +53,7 @@ export function DayCard({
   );
 }
 
-function ProteinInput({
-  day,
-  targetG,
-  onSave,
-}: {
-  day: DietDay;
-  targetG: number | null;
-  onSave: (day: DietDay) => void;
-}) {
+function ProteinInput({ day, onSave }: { day: DietDay; onSave: (day: DietDay) => void }) {
   const theme = useTheme();
   const [text, setText] = useState(day.protein_g === undefined ? '' : String(day.protein_g));
   const grams = parseGrams(text);
@@ -76,16 +63,6 @@ function ProteinInput({
     if (invalid || grams === day.protein_g) return;
     onSave({ ...day, protein_g: grams });
   };
-
-  const saved = day.protein_g;
-  const hint =
-    targetG === null
-      ? 'Optional. Set a daily target below.'
-      : saved === undefined
-        ? `Target ${formatGrams(targetG)}`
-        : saved >= targetG
-          ? `Target ${formatGrams(targetG)} reached ✓`
-          : `${formatGrams(targetG - saved)} short of ${formatGrams(targetG)}`;
 
   return (
     <View style={styles.protein}>
@@ -108,16 +85,8 @@ function ProteinInput({
           ]}
         />
       </View>
-      <ThemedText
-        type="small"
-        style={{
-          color: invalid
-            ? theme.danger
-            : saved !== undefined && targetG !== null && saved >= targetG
-              ? theme.success
-              : theme.textSecondary,
-        }}>
-        {invalid ? 'Enter grams of protein, e.g. 150.' : hint}
+      <ThemedText type="small" style={{ color: invalid ? theme.danger : theme.textSecondary }}>
+        {invalid ? 'Enter grams of protein, e.g. 150.' : 'Optional.'}
       </ThemedText>
     </View>
   );

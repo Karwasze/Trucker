@@ -45,10 +45,7 @@ export function dietInsights(insights: DietInsights): DietInsight[] {
     const window = `the last ${protein.window} days`;
     lines.push({
       title: `Averaging ${formatGrams(protein.average_g)} of protein`,
-      body:
-        protein.target_g === undefined
-          ? `Over ${plural(protein.days, 'day')} counted in ${window}.`
-          : `Reached ${formatGrams(protein.target_g)} on ${protein.days_at_target} of ${plural(protein.days, 'day')} counted in ${window}.`,
+      body: `Over ${plural(protein.days, 'day')} counted in ${window}.`,
     });
   }
 

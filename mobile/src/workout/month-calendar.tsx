@@ -30,7 +30,7 @@ export function monthRange(month: string): DateRange {
 export const formatMonth = (month: string) => formatDate(`${month}-01`, { month: 'long', year: 'numeric' });
 
 /** A month's days in weeks from Monday, with null for days of the months either side. */
-function weeksOf(month: string) {
+export function weeksOf(month: string) {
   const [year, m] = parse(month);
   const leading = (new Date(year, m - 1, 1).getDay() + 6) % 7;
   const days: (string | null)[] = Array(leading).fill(null);
@@ -72,30 +72,7 @@ export function MonthCalendar({
   const theme = useTheme();
   return (
     <Card style={{ gap: Spacing.one }}>
-      <View style={styles.header}>
-        <MonthButton
-          label="Previous month"
-          symbol={{ ios: 'chevron.left', android: 'chevron_left', web: 'chevron_left' }}
-          fallback="‹"
-          disabled={month <= earliest}
-          onPress={() => onMonthChange(addMonths(month, -1))}
-        />
-        <ThemedText style={{ fontWeight: 700 }}>{formatMonth(month)}</ThemedText>
-        <MonthButton
-          label="Next month"
-          symbol={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
-          fallback="›"
-          disabled={month >= latest}
-          onPress={() => onMonthChange(addMonths(month, 1))}
-        />
-      </View>
-      <View style={styles.week}>
-        {WEEKDAYS.map((name, i) => (
-          <ThemedText key={i} type="small" themeColor="textSecondary" style={styles.weekday}>
-            {name}
-          </ThemedText>
-        ))}
-      </View>
+      <MonthHeader month={month} earliest={earliest} latest={latest} onMonthChange={onMonthChange} />
       {weeksOf(month).map((week, i) => (
         <View key={i} style={styles.week}>
           {week.map((date, j) => {
@@ -132,6 +109,51 @@ export function MonthCalendar({
         </View>
       ))}
     </Card>
+  );
+}
+
+/**
+ * A month's name between chevrons stepping back to `earliest` and on to
+ * `latest` (both YYYY-MM), over the initials of the weekdays from Monday.
+ */
+export function MonthHeader({
+  month,
+  earliest,
+  latest,
+  onMonthChange,
+}: {
+  month: string;
+  earliest: string;
+  latest: string;
+  onMonthChange: (month: string) => void;
+}) {
+  return (
+    <>
+      <View style={styles.header}>
+        <MonthButton
+          label="Previous month"
+          symbol={{ ios: 'chevron.left', android: 'chevron_left', web: 'chevron_left' }}
+          fallback="‹"
+          disabled={month <= earliest}
+          onPress={() => onMonthChange(addMonths(month, -1))}
+        />
+        <ThemedText style={{ fontWeight: 700 }}>{formatMonth(month)}</ThemedText>
+        <MonthButton
+          label="Next month"
+          symbol={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
+          fallback="›"
+          disabled={month >= latest}
+          onPress={() => onMonthChange(addMonths(month, 1))}
+        />
+      </View>
+      <View style={styles.week}>
+        {WEEKDAYS.map((name, i) => (
+          <ThemedText key={i} type="small" themeColor="textSecondary" style={styles.weekday}>
+            {name}
+          </ThemedText>
+        ))}
+      </View>
+    </>
   );
 }
 

@@ -27,11 +27,6 @@ type DietDay struct {
 	ProteinG *float64 `json:"protein_g,omitempty"`
 }
 
-// DietSettings holds the daily protein target in grams, if one is set.
-type DietSettings struct {
-	ProteinTargetG *float64 `json:"protein_target_g"`
-}
-
 // DietInsights sums up the diet up to and including a day.
 type DietInsights struct {
 	// CurrentStreak counts the days kept to in a row up to today, or up to
@@ -64,13 +59,11 @@ type WeekdayMisses struct {
 }
 
 // ProteinIntake sums up the protein logged over the last Window days: Days
-// of them have it, averaging AverageG, and DaysAtTarget reached TargetG.
+// of them have it, averaging AverageG.
 type ProteinIntake struct {
-	Window       int      `json:"window"`
-	Days         int      `json:"days"`
-	AverageG     float64  `json:"average_g"`
-	TargetG      *float64 `json:"target_g,omitempty"`
-	DaysAtTarget int      `json:"days_at_target"`
+	Window   int     `json:"window"`
+	Days     int     `json:"days"`
+	AverageG float64 `json:"average_g"`
 }
 
 // BodyweightChange is the change in kg between the first and last weigh-in
@@ -134,32 +127,6 @@ func (s *Store) DeleteDietDay(date string) error {
 	return err
 }
 
-// DietSettings returns the diet settings, with no target before one is set.
-func (s *Store) DietSettings() (DietSettings, error) {
-	var settings DietSettings
-	var target sql.NullFloat64
-	err := s.db.QueryRow("SELECT protein_target_g FROM diet_settings WHERE id = 1").Scan(&target)
-	if err == sql.ErrNoRows {
-		return settings, nil
-	}
-	if err != nil {
-		return settings, err
-	}
-	if target.Valid {
-		settings.ProteinTargetG = &target.Float64
-	}
-	return settings, nil
-}
-
-// SaveDietSettings replaces the diet settings; a nil target clears it.
-func (s *Store) SaveDietSettings(settings DietSettings) error {
-	_, err := s.db.Exec(`
-		INSERT INTO diet_settings (id, protein_target_g) VALUES (1, ?)
-		ON CONFLICT(id) DO UPDATE SET protein_target_g = excluded.protein_target_g
-	`, settings.ProteinTargetG)
-	return err
-}
-
 // DietInsights sums up the diet up to and including today (YYYY-MM-DD).
 func (s *Store) DietInsights(today string) (DietInsights, error) {
 	now, err := time.Parse(dateLayout, today)
@@ -167,10 +134,6 @@ func (s *Store) DietInsights(today string) (DietInsights, error) {
 		return DietInsights{}, err
 	}
 	days, err := s.ListDietDays("", today)
-	if err != nil {
-		return DietInsights{}, err
-	}
-	settings, err := s.DietSettings()
 	if err != nil {
 		return DietInsights{}, err
 	}
@@ -190,7 +153,7 @@ func (s *Store) DietInsights(today string) (DietInsights, error) {
 		LongestStreak: longestDietStreak(days),
 		Recent:        DietAdherence{Days: dietRecentDays},
 		MostMissed:    mostMissedWeekday(days, since(dietPatternDays)),
-		Protein:       proteinIntake(days, since(dietProteinDays), settings.ProteinTargetG),
+		Protein:       proteinIntake(days, since(dietProteinDays)),
 		Bodyweight:    bodyweightChange(weights, since(dietRecentDays), today),
 	}
 	if len(days) > 0 {
@@ -287,8 +250,8 @@ func mostMissedWeekday(days []DietDay, from string) *WeekdayMisses {
 }
 
 // proteinIntake sums up the protein logged from from on, or nil if none was.
-func proteinIntake(days []DietDay, from string, target *float64) *ProteinIntake {
-	intake := ProteinIntake{Window: dietProteinDays, TargetG: target}
+func proteinIntake(days []DietDay, from string) *ProteinIntake {
+	intake := ProteinIntake{Window: dietProteinDays}
 	total := 0.0
 	for _, d := range days {
 		if d.Date < from || d.ProteinG == nil {
@@ -296,9 +259,6 @@ func proteinIntake(days []DietDay, from string, target *float64) *ProteinIntake 
 		}
 		intake.Days++
 		total += *d.ProteinG
-		if target != nil && *d.ProteinG >= *target {
-			intake.DaysAtTarget++
-		}
 	}
 	if intake.Days == 0 {
 		return nil

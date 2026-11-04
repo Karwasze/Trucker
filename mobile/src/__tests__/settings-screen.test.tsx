@@ -1,8 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { screen, userEvent } from '@testing-library/react-native';
+import { fireEvent, screen, userEvent, waitFor } from '@testing-library/react-native';
 
 import SettingsScreen from '@/app/(tabs)/settings';
-import { mockAlerts, mockServer, renderInApp, selectPlan } from '@/test-utils';
+import { requestReminderPermission, scheduleCheckIns } from '@/diet/reminder-native';
+import { mockAlerts, mockServer, renderInApp, selectPlan, setNow } from '@/test-utils';
 
 const exercises = [
   { id: 1, name: 'Squat', is_default: true, muscles: [] },
@@ -13,6 +14,7 @@ const server = () =>
   mockServer({
     'GET /api/exercises': exercises,
     'GET /api/exercise-muscles': {},
+    'GET /api/diet': [],
     'DELETE /api/exercises': { success: true },
   });
 
@@ -69,4 +71,36 @@ test('the rest timer can be lengthened and its finish behaviour toggled', async 
   expect(screen.getByText(/Vibrates even with the phone locked/)).toBeOnTheScreen();
   const stored = JSON.parse((await AsyncStorage.getItem('trucker.timer.settings'))!);
   expect(stored).toEqual({ durationSec: 195, animation: true, vibration: true });
+});
+
+describe('diet', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // Wednesday 14 October 2026.
+    setNow('2026-10-14T18:00:00+02:00');
+  });
+  afterEach(() => jest.useRealTimers());
+
+  test('turns on the evening check-in, scheduling it from today', async () => {
+    server();
+    const user = userEvent.setup();
+    await renderInApp(<SettingsScreen />);
+
+    await fireEvent(await screen.findByRole('switch', { name: 'Evening check-in' }), 'valueChange', true);
+    expect(requestReminderPermission).toHaveBeenCalled();
+    expect(await screen.findByText('21:00')).toBeOnTheScreen();
+    await waitFor(() => expect(scheduleCheckIns).toHaveBeenCalled());
+    const checkIns = jest.mocked(scheduleCheckIns).mock.calls.at(-1)![0];
+    expect(checkIns[0]).toEqual({ date: '2026-10-14', at: new Date('2026-10-14T21:00:00+02:00') });
+
+    await user.press(screen.getByRole('button', { name: '15 minutes later' }));
+    expect(screen.getByText('21:15')).toBeOnTheScreen();
+    await waitFor(() =>
+      expect(jest.mocked(scheduleCheckIns).mock.calls.at(-1)![0][0].at).toEqual(new Date('2026-10-14T21:15:00+02:00'))
+    );
+    expect(JSON.parse((await AsyncStorage.getItem('trucker.diet-reminder'))!)).toEqual({
+      enabled: true,
+      minutes: 1275,
+    });
+  });
 });

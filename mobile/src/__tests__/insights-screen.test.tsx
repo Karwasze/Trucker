@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { screen, userEvent } from '@testing-library/react-native';
+import { screen, userEvent, within } from '@testing-library/react-native';
 import { router } from 'expo-router';
 
 import { MUSCLES, type CardioActivity, type Goal, type Insights } from '@/api/types';
@@ -320,6 +320,41 @@ test('buttons switch between Strength and Cardio, which share the timespan and o
   // Switching asks for nothing new: both pages show the same insights.
   expect(insightsRequests()).toHaveLength(before);
   expect(insightsRequests().at(-1)?.query.get('from')).toBe('2026-07-18');
+});
+
+test('Bodyweight sums up the diet, without a timespan', async () => {
+  const requests = mockServer({
+    'GET /api/insights': empty,
+    'GET /api/diet/insights': {
+      current_streak: 4,
+      longest_streak: 9,
+      recent: { days: 30, logged: 30, adhered: 27 },
+      bodyweight: { from: '2026-09-20', to: '2026-10-17', change_kg: -1.4 },
+    },
+  });
+  const user = userEvent.setup();
+  await renderInApp(<InsightsTab />);
+  const tabs = within(screen.getByLabelText('Insights')).getAllByRole('tab');
+  expect(tabs.map((t) => t.props.accessibilityLabel)).toEqual(['Strength', 'Cardio', 'Bodyweight']);
+
+  await user.press(screen.getByRole('tab', { name: 'Bodyweight' }));
+  expect(await screen.findByText('4-day streak')).toBeOnTheScreen();
+  expect(screen.getByText('Your best is 9 days.')).toBeOnTheScreen();
+  expect(screen.getByText('Kept to 27 of 30 days logged')).toBeOnTheScreen();
+  expect(screen.getByText('Down 1.4 kg')).toBeOnTheScreen();
+  expect(screen.queryByRole('radiogroup', { name: 'Timespan' })).not.toBeOnTheScreen();
+  expect(requests.find((r) => r.path === '/api/diet/insights')?.query.get('date')).toBe(TODAY);
+});
+
+test('Bodyweight asks to log a few days first', async () => {
+  mockServer({
+    'GET /api/insights': empty,
+    'GET /api/diet/insights': { current_streak: 0, longest_streak: 0, recent: { days: 30, logged: 0, adhered: 0 } },
+  });
+  const user = userEvent.setup();
+  await renderInApp(<InsightsTab />);
+  await user.press(await screen.findByRole('tab', { name: 'Bodyweight' }));
+  expect(await screen.findByText('Log a few days on the Diet tab to see how your diet is going.')).toBeOnTheScreen();
 });
 
 test('tapping a lift or an activity opens its chart on Progress with the same timespan', async () => {

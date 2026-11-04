@@ -15,6 +15,7 @@ import { isHealthAvailable } from '@/health/healthkit';
 import { useQuery } from '@/hooks/use-query';
 import { BodyweightStats } from '@/progress/bodyweight-stats';
 import { CardioStats } from '@/progress/cardio-stats';
+import { DietStats } from '@/progress/diet-stats';
 import { useOpenedWith, useProgressTimespan } from '@/progress/progress-context';
 import { personalRecords } from '@/progress/records';
 import { CATEGORIES, categoryOf, seriesKey, seriesLabel, type Category, type Series } from '@/progress/series';
@@ -26,8 +27,8 @@ import { formatDate, formatKg } from '@/workout/format';
 
 /**
  * Progress: buttons for the categories (strength, cardio, bodyweight), a
- * select of the lifts or activities in the chosen one, the timespan, and that
- * series' charts and sessions below.
+ * select of the lifts, activities or bodyweight and diet in the chosen one,
+ * the timespan, and that series' charts and sessions below.
  */
 export default function ProgressScreen() {
   const { api, serverUrl } = useSettings();
@@ -65,7 +66,7 @@ export default function ProgressScreen() {
       ...[...new Set(workouts.map((w) => w.activity))].map((activity) => ({ kind: 'cardio' as const, activity })),
       ...((triathlons.data ?? []).length > 0 ? [{ kind: 'triathlon' as const }] : []),
     ],
-    bodyweight: [{ kind: 'bodyweight' }],
+    bodyweight: [{ kind: 'bodyweight' }, { kind: 'diet' }],
   };
   // Until one is picked: lifts if there are any, else cardio, else bodyweight.
   // A list that failed to load leaves its category empty, saying why.
@@ -96,9 +97,9 @@ export default function ProgressScreen() {
           <TileButton key={c.key} label={c.label} selected={c.key === shown} onPress={() => setCategory(c.key)} />
         ))}
       </View>
-      {shown !== 'bodyweight' && series && (
+      {series && (
         <Select
-          label={shown === 'strength' ? 'Exercise' : 'Activity'}
+          label={shown === 'strength' ? 'Exercise' : shown === 'cardio' ? 'Activity' : 'Show'}
           options={choices.map((c) => ({ key: seriesKey(c), label: seriesLabel(c) }))}
           value={seriesKey(series)}
           onChange={(key) => setPicked((p) => ({ ...p, [shown]: choices.find((c) => seriesKey(c) === key) }))}
@@ -164,6 +165,10 @@ function ProgressPage({
     isTonnage ? `tonnage:${serverUrl}:${today}:${from}` : null,
     async () => (await api.insights(today, from, null)).tonnage
   );
+  const isDiet = series?.kind === 'diet';
+  const diet = useQuery(isDiet ? `diet:${serverUrl}:${from}:${today}` : null, () =>
+    api.listDiet(from ? { from, to: today } : undefined)
+  );
   // Bodyweight shows the stored log and syncs it from Apple Health alongside,
   // so a slow or stalled Health read can't hold the log back.
   const health = useHealthState();
@@ -180,6 +185,7 @@ function ProgressPage({
     onRefresh();
     if (exercise !== null) exerciseData.refresh();
     if (isTonnage) tonnage.refresh();
+    if (isDiet) diet.refresh();
     if (isBodyweight) {
       storedBodyweight.refresh();
       if (healthConnected) healthSync.refresh();
@@ -207,6 +213,12 @@ function ProgressPage({
             healthSyncError={healthSync.error}
             onSynced={healthSync.refresh}
           />
+        )
+      ) : series.kind === 'diet' ? (
+        !diet.data ? (
+          <Message loading={!diet.error} error={diet.error} />
+        ) : (
+          <DietStats days={diet.data} timespan={timespan} today={today} />
         )
       ) : series.kind === 'tonnage' ? (
         !tonnage.data ? (

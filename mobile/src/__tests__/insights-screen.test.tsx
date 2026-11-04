@@ -487,3 +487,38 @@ test('each deeper strength insight gets its own section on Strength', async () =
   expect(request.query.get('plan_id')).toBe('1');
   expect(request.query.get('from')).toBeNull();
 });
+
+test('each deeper cardio insight gets its own section on Cardio', async () => {
+  const requests = mockServer({
+    'GET /api/insights': full,
+    'GET /api/insights/cardio': {
+      date: TODAY,
+      efficiency: [],
+      run_weight: null,
+      drift: [],
+      intensity: null,
+      load: { acute: 420, chronic_weekly: 300, ratio: 1.4, history_days: 28 },
+      compliance: null,
+      resting_hr: null,
+      diet: null,
+    },
+  });
+  await renderCardio();
+
+  expect(await screen.findByText('Load up 40% on your 4-week average')).toBeOnTheScreen();
+  for (const title of [
+    'Aerobic efficiency',
+    'Run pace vs weight',
+    'Cardiac drift · long sessions',
+    'Intensity · last 4 weeks',
+    'Load ramp',
+    'Planned-session compliance',
+    'Resting heart rate',
+    'Cardio and your diet',
+  ]) {
+    expect(screen.getByText(title)).toBeOnTheScreen();
+  }
+  const request = requests.findLast((r) => r.path === '/api/insights/cardio')!;
+  expect(request.query.get('date')).toBe(TODAY);
+  expect(request.query.get('from')).toBeNull();
+});

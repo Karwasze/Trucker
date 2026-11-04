@@ -118,6 +118,30 @@ export async function healthHeartRateProfile(): Promise<{ dateOfBirth?: Date; re
 }
 
 /**
+ * The resting heart rate Health recorded each day of the last `days` (bpm,
+ * the day's readings averaged, by the device's time zone), oldest first.
+ */
+export async function healthRestingHeartRates(days: number): Promise<{ date: string; bpm: number }[]> {
+  if (!healthkit) return [];
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const samples = await healthkit.queryQuantitySamples(RESTING_HEART_RATE, {
+    limit: 0,
+    ascending: true,
+    unit: 'count/min',
+    filter: { date: { startDate: since } },
+  });
+  const byDate = new Map<string, number[]>();
+  for (const s of samples) {
+    const date = localDate(s.startDate);
+    byDate.set(date, [...(byDate.get(date) ?? []), s.quantity]);
+  }
+  return [...byDate].map(([date, bpms]) => ({
+    date,
+    bpm: Math.round((bpms.reduce((sum, b) => sum + b, 0) / bpms.length) * 10) / 10,
+  }));
+}
+
+/**
  * Health workouts of a known activity that started at or after `since`,
  * oldest first, leaving out the ones whose UUID is in `skip` before reading
  * their samples.

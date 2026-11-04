@@ -72,3 +72,14 @@ func (h *Handlers) StrengthInsightsAPI(w http.ResponseWriter, r *http.Request) {
 	insights, err := h.store.GetStrengthInsights(date, from, planID)
 	writeInsights(w, insights, err)
 }
+
+// CardioInsightsAPI gives deeper endurance insights up to ?date= over the
+// timespan from the optional ?from=.
+func (h *Handlers) CardioInsightsAPI(w http.ResponseWriter, r *http.Request) {
+	date, from, _, ok := insightsParams(w, r)
+	if !ok {
+		return
+	}
+	insights, err := h.store.GetCardioInsights(date, from)
+	writeInsights(w, insights, err)
+}

@@ -2,6 +2,7 @@ import type {
   Achievement,
   BodyweightEntry,
   CardioActivity,
+  CardioInsights,
   CardioWorkout,
   CreatedWorkout,
   DateRange,
@@ -240,6 +241,32 @@ export function createApi(baseUrl: string) {
         fatigue: res.fatigue ?? [],
       };
     },
+
+    /** Deeper endurance insights up to date, over the timespan from from (null for all time). */
+    cardioInsights: async (date: string, from: string | null) => {
+      const res = await request<CardioInsights>(insightsPath('/api/insights/cardio', date, from, null));
+      return {
+        ...res,
+        efficiency: res.efficiency ?? [],
+        run_weight: res.run_weight ?? null,
+        drift: res.drift ?? [],
+        intensity: res.intensity ? { ...res.intensity, zone_seconds: res.intensity.zone_seconds ?? [] } : null,
+        load: res.load ?? null,
+        compliance: res.compliance
+          ? {
+              ...res.compliance,
+              by_kind: res.compliance.by_kind ?? [],
+              by_activity: res.compliance.by_activity ?? [],
+              by_weekday: res.compliance.by_weekday ?? [],
+            }
+          : null,
+        resting_hr: res.resting_hr ?? null,
+        diet: res.diet ?? null,
+      };
+    },
+    /** Records each day's resting heart rate, keeping days not sent. */
+    saveRestingHeartRates: (readings: { date: string; bpm: number }[]) =>
+      request<{ saved: number }>('/api/resting-heart-rates', { method: 'PUT', body: JSON.stringify(readings) }),
 
     listPlans: async () => (await request<TrainingPlan[] | null>('/api/plans')) ?? [],
     getPlan: (id: number) => request<TrainingPlan>(`/api/plans?id=${id}`),

@@ -152,3 +152,29 @@ func TestStrengthInsightsAPI_InvalidParams(t *testing.T) {
 		t.Errorf("expected 405, got %d", w.Code)
 	}
 }
+
+func TestCardioInsightsAPI(t *testing.T) {
+	h, s := newTestHandlers(t)
+	s.SaveRestingHeartRates([]store.RestingHeartRate{{Date: "2026-03-30", BPM: 52}})
+
+	w := httptest.NewRecorder()
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+	mux.ServeHTTP(w, httptest.NewRequest("GET", "/api/insights/cardio?date=2026-03-31&from=2026-03-01", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var insights store.CardioInsights
+	if err := json.NewDecoder(w.Body).Decode(&insights); err != nil {
+		t.Fatalf("failed to decode: %v", err)
+	}
+	if insights.From != "2026-03-01" || insights.RestingHR == nil || insights.RestingHR.Current != 52 {
+		t.Errorf("unexpected insights %+v", insights)
+	}
+
+	w = httptest.NewRecorder()
+	h.CardioInsightsAPI(w, httptest.NewRequest("GET", "/api/insights/cardio?date=today", nil))
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for a bad date, got %d", w.Code)
+	}
+}

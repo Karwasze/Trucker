@@ -547,3 +547,76 @@ export type StrengthInsights = {
     growing: boolean;
   }[];
 };
+
+/** Mirrors store.ComplianceGroup. */
+export type ComplianceGroup = { key: string; met: number; partial: number; missed: number };
+
+/** Mirrors store.CardioInsights. */
+export type CardioInsights = {
+  date: string;
+  from?: string;
+  /** Metres per heartbeat above resting, fitted from start to end, per activity. */
+  efficiency: {
+    activity: CardioActivity;
+    sessions: number;
+    first_date: string;
+    last_date: string;
+    start: number;
+    end: number;
+  }[];
+  run_weight: {
+    first_date: string;
+    last_date: string;
+    speed_change_pct: number;
+    weight_change_kg: number;
+    weight_change_pct: number;
+    /** The share of the speed change down to weight, and to fitness, in percent. */
+    weight_pct: number;
+    fitness_pct: number;
+  } | null;
+  /** The latest long sessions, newest first. */
+  drift: {
+    id: number;
+    date: string;
+    activity: CardioActivity;
+    duration_seconds: number;
+    distance_m: number;
+    drift_pct: number;
+  }[];
+  /** Null without heart rate zones. */
+  intensity: {
+    from: string;
+    sessions: number;
+    unmeasured: number;
+    /** Seconds per zone, zone 1 first. */
+    zone_seconds: number[];
+    easy_share: number;
+  } | null;
+  load: {
+    acute: number;
+    chronic_weekly: number;
+    ratio: number;
+    history_days: number;
+    weight_per_week_kg?: number;
+    weight_per_week_pct?: number;
+  } | null;
+  /** Null without an active goal. */
+  compliance: {
+    goal: string;
+    by_kind: ComplianceGroup[];
+    by_activity: ComplianceGroup[];
+    by_weekday: ComplianceGroup[];
+  } | null;
+  resting_hr: {
+    latest_date: string;
+    current: number;
+    current_days: number;
+    baseline?: number;
+    baseline_days: number;
+  } | null;
+  diet: {
+    big_sessions: number;
+    after_big: { logged: number; missed: number };
+    other: { logged: number; missed: number };
+  } | null;
+};

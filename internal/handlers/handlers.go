@@ -28,6 +28,8 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/bodyweight", h.BodyweightAPI)
 	mux.HandleFunc("/api/insights", h.InsightsAPI)
 	mux.HandleFunc("/api/insights/strength", h.StrengthInsightsAPI)
+	mux.HandleFunc("/api/insights/cardio", h.CardioInsightsAPI)
+	mux.HandleFunc("/api/resting-heart-rates", h.RestingHeartRatesAPI)
 	mux.HandleFunc("/api/cardio", h.CardioAPI)
 	mux.HandleFunc("/api/triathlons", h.TriathlonsAPI)
 	mux.HandleFunc("/api/history", h.HistoryAPI)

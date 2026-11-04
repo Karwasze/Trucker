@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { localDate } from '@/api/client';
 import type {
   Adherence,
+  CardioInsights,
   CardioActivity,
   CardioProgress,
   CardioSummary,
@@ -23,6 +24,7 @@ import { Spacing, type ThemeColor } from '@/constants/theme';
 import { dietInsights } from '@/diet/insights';
 import { PHASE_NAMES } from '@/goals/presets';
 import { BodyMap } from '@/insights/body-map';
+import { cardioInsights } from '@/insights/cardio-insights';
 import { InsightSections, type Insight } from '@/insights/insight-section';
 import { strengthInsights } from '@/insights/strength-insights';
 import { ZoneRanges } from '@/health/heart-rate-zones';
@@ -87,10 +89,14 @@ export function InsightsScreen() {
     page === 'strength' ? `strength-insights:${serverUrl}:${today}:${from}:${planId}` : null,
     () => api.strengthInsights(today, from, planId)
   );
+  const cardio = useQuery(page === 'cardio' ? `cardio-insights:${serverUrl}:${today}:${from}` : null, () =>
+    api.cardioInsights(today, from)
+  );
   const shown = page === 'bodyweight' ? diet : insights;
   const refresh = () => {
     shown.refresh();
     if (page === 'strength') strength.refresh();
+    if (page === 'cardio') cardio.refresh();
   };
   return (
     <Screen
@@ -121,7 +127,10 @@ export function InsightsScreen() {
           />
         </>
       ) : (
-        <CardioContent data={insights.data} timespan={timespan} />
+        <>
+          <CardioContent data={insights.data} timespan={timespan} />
+          <DeeperInsights query={cardio} render={(data: CardioInsights) => cardioInsights(data)} />
+        </>
       )}
     </Screen>
   );

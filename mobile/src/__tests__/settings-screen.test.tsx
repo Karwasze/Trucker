@@ -15,6 +15,7 @@ const server = () =>
     'GET /api/exercises': exercises,
     'GET /api/exercise-muscles': {},
     'GET /api/diet': [],
+    'GET /api/diet/target': { target_weight_kg: 78 },
     'DELETE /api/exercises': { success: true },
   });
 
@@ -33,6 +34,12 @@ test('only custom exercises can be removed, after confirming', async () => {
   expect(alerts.latest().title).toBe('Remove Zercher Squat?');
   await alerts.press('Remove');
   expect(requests.find((r) => r.method === 'DELETE')?.query.get('id')).toBe('7');
+});
+
+test('the target weight is set under Diet', async () => {
+  server();
+  await renderInApp(<SettingsScreen />);
+  expect(await screen.findByLabelText('Target weight in kg')).toHaveDisplayValue('78');
 });
 
 test('testing the server reports how many exercises it has', async () => {

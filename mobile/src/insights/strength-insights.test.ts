@@ -94,7 +94,6 @@ test('names stalled lifts with the diet around them', () => {
             weight_change_kg: -2.5,
             diet_logged: 30,
             diet_adhered: 24,
-            protein_per_kg: 1.8,
           },
         ],
       },
@@ -103,7 +102,7 @@ test('names stalled lifts with the diet around them', () => {
     'plateaus'
   );
   expect(said(s)).toContain(
-    'Bench Press flat for 5 weeks (100 kg est. 1RM) while you lost 2.5 kg · diet kept 24 of 30 days · 1.8 g protein/kg'
+    'Bench Press flat for 5 weeks (100 kg est. 1RM) while you lost 2.5 kg · diet kept 24 of 30 days'
   );
   expect(s).toMatchObject({ headline: 'Bench Press has stalled', tone: 'warn' });
 });

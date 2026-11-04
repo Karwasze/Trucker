@@ -4,7 +4,7 @@ import { Alert, StyleSheet, TextInput, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
-import { parseGrams } from '@/diet/grams';
+import { parseWeight } from '@/diet/parse-weight';
 import { useQuery } from '@/hooks/use-query';
 import { useTheme } from '@/hooks/use-theme';
 import { useSettings } from '@/settings/settings-context';
@@ -25,8 +25,7 @@ function TargetInput({ saved, onSaved }: { saved: number | null; onSaved: () => 
   const { api } = useSettings();
   const theme = useTheme();
   const [text, setText] = useState(saved === null ? '' : String(saved));
-  // Positive decimals with a dot or comma, as for grams.
-  const kg = parseGrams(text);
+  const kg = parseWeight(text);
   const invalid = Number.isNaN(kg);
 
   const save = async () => {

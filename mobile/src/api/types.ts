@@ -439,11 +439,10 @@ export type Achievement = {
   tiers: AchievementTier[];
 };
 
-/** Whether the diet was kept to on a day, with the protein eaten if counted. */
+/** Whether the diet was kept to on a day. */
 export type DietDay = {
   date: string;
   adhered: boolean;
-  protein_g?: number;
 };
 
 /** Mirrors store.DietInsights. */
@@ -455,8 +454,6 @@ export type DietInsights = {
   recent: { days: number; logged: number; adhered: number };
   /** The weekday missed most, once one was missed at least twice. */
   most_missed?: { weekday: string; missed: number; logged: number };
-  /** Protein over the last `window` days; unset if none was logged. */
-  protein?: { window: number; days: number; average_g: number };
   /** Between the first and last weigh-in of the last recent.days days. */
   bodyweight?: { from: string; to: string; change_kg: number };
   /** The oldest day logged. */
@@ -494,7 +491,6 @@ export type LiftPlateau = {
   weight_change_kg?: number;
   diet_logged: number;
   diet_adhered: number;
-  protein_per_kg?: number;
 };
 
 /** Mirrors store.LiftBalance. */

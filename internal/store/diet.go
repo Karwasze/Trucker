@@ -15,17 +15,14 @@ const (
 	dietPatternDays = 90
 	// A weekday needs this many misses to stand out.
 	dietMinWeekdayMisses = 2
-	dietProteinDays      = 14
 	// Weigh-ins closer together than this say more about water than diet.
 	dietMinBodyweightDays = 7
 )
 
-// DietDay records whether the diet was kept to on Date (YYYY-MM-DD), and
-// the protein eaten in grams if it was counted.
+// DietDay records whether the diet was kept to on Date (YYYY-MM-DD).
 type DietDay struct {
-	Date     string   `json:"date"`
-	Adhered  bool     `json:"adhered"`
-	ProteinG *float64 `json:"protein_g,omitempty"`
+	Date    string `json:"date"`
+	Adhered bool   `json:"adhered"`
 }
 
 // DietInsights sums up the diet up to and including a day.
@@ -36,7 +33,6 @@ type DietInsights struct {
 	LongestStreak int            `json:"longest_streak"`
 	Recent        DietAdherence  `json:"recent"`
 	MostMissed    *WeekdayMisses `json:"most_missed,omitempty"`
-	Protein       *ProteinIntake `json:"protein,omitempty"`
 	// Bodyweight is how it changed over the last Recent.Days days.
 	Bodyweight *BodyweightChange `json:"bodyweight,omitempty"`
 	// FirstDate is the oldest day logged, if any.
@@ -59,14 +55,6 @@ type WeekdayMisses struct {
 	Logged  int    `json:"logged"`
 }
 
-// ProteinIntake sums up the protein logged over the last Window days: Days
-// of them have it, averaging AverageG.
-type ProteinIntake struct {
-	Window   int     `json:"window"`
-	Days     int     `json:"days"`
-	AverageG float64 `json:"average_g"`
-}
-
 // BodyweightChange is the change in kg between the first and last weigh-in
 // in a stretch.
 type BodyweightChange struct {
@@ -78,16 +66,16 @@ type BodyweightChange struct {
 // SaveDietDay records a day, replacing any earlier record of it.
 func (s *Store) SaveDietDay(day DietDay) error {
 	_, err := s.db.Exec(`
-		INSERT INTO diet_days (date, adhered, protein_g) VALUES (?, ?, ?)
-		ON CONFLICT(date) DO UPDATE SET adhered = excluded.adhered, protein_g = excluded.protein_g
-	`, day.Date, day.Adhered, day.ProteinG)
+		INSERT INTO diet_days (date, adhered) VALUES (?, ?)
+		ON CONFLICT(date) DO UPDATE SET adhered = excluded.adhered
+	`, day.Date, day.Adhered)
 	return err
 }
 
 // ListDietDays returns the days from from to to (YYYY-MM-DD, inclusive;
 // either "" for no limit), oldest first.
 func (s *Store) ListDietDays(from, to string) ([]DietDay, error) {
-	query := "SELECT date, adhered, protein_g FROM diet_days"
+	query := "SELECT date, adhered FROM diet_days"
 	var where []string
 	var args []any
 	if from != "" {
@@ -110,12 +98,8 @@ func (s *Store) ListDietDays(from, to string) ([]DietDay, error) {
 	days := []DietDay{}
 	for rows.Next() {
 		var d DietDay
-		var protein sql.NullFloat64
-		if err := rows.Scan(&d.Date, &d.Adhered, &protein); err != nil {
+		if err := rows.Scan(&d.Date, &d.Adhered); err != nil {
 			return nil, err
-		}
-		if protein.Valid {
-			d.ProteinG = &protein.Float64
 		}
 		days = append(days, d)
 	}
@@ -154,7 +138,6 @@ func (s *Store) DietInsights(today string) (DietInsights, error) {
 		LongestStreak: longestDietStreak(days),
 		Recent:        DietAdherence{Days: dietRecentDays},
 		MostMissed:    mostMissedWeekday(days, since(dietPatternDays)),
-		Protein:       proteinIntake(days, since(dietProteinDays)),
 		Bodyweight:    bodyweightChange(weights, since(dietRecentDays), today),
 	}
 	if len(days) > 0 {
@@ -248,24 +231,6 @@ func mostMissedWeekday(days []DietDay, from string) *WeekdayMisses {
 		Missed:  missed[best],
 		Logged:  logged[best],
 	}
-}
-
-// proteinIntake sums up the protein logged from from on, or nil if none was.
-func proteinIntake(days []DietDay, from string) *ProteinIntake {
-	intake := ProteinIntake{Window: dietProteinDays}
-	total := 0.0
-	for _, d := range days {
-		if d.Date < from || d.ProteinG == nil {
-			continue
-		}
-		intake.Days++
-		total += *d.ProteinG
-	}
-	if intake.Days == 0 {
-		return nil
-	}
-	intake.AverageG = round(total/float64(intake.Days), 1)
-	return &intake
 }
 
 // bodyweightChange is the change between the first and last weigh-in from

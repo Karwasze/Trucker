@@ -7,6 +7,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Chip, Message, Screen, SectionLabel } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { DietReminderCard } from '@/diet/reminder-card';
+import { TargetWeightCard } from '@/diet/target-weight-card';
 import { useQuery } from '@/hooks/use-query';
 import { useTheme } from '@/hooks/use-theme';
 import { HealthCard } from '@/health/health-card';
@@ -77,6 +78,7 @@ export default function SettingsScreen() {
 
       <SectionLabel>Diet</SectionLabel>
       <DietReminderCard />
+      <TargetWeightCard />
 
       <SectionLabel>Apple Health</SectionLabel>
       <HealthCard />

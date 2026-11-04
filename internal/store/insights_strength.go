@@ -106,8 +106,8 @@ type StrengthProjection struct {
 
 // LiftPlateau is a lift whose est. 1RM went flat (or declined) from
 // FirstDate to LastDate, a straight line through its Sessions changing by
-// ChangePct, with the diet over those dates: the bodyweight change, the
-// days logged and kept to, and the average protein per kg of bodyweight.
+// ChangePct, with the diet over those dates: the bodyweight change and the
+// days logged and kept to.
 type LiftPlateau struct {
 	Exercise       string   `json:"exercise"`
 	Status         string   `json:"status"`
@@ -120,7 +120,6 @@ type LiftPlateau struct {
 	WeightChangeKg *float64 `json:"weight_change_kg,omitempty"`
 	DietLogged     int      `json:"diet_logged"`
 	DietAdhered    int      `json:"diet_adhered"`
-	ProteinPerKg   *float64 `json:"protein_per_kg,omitempty"`
 }
 
 // Statuses of a LiftPlateau.
@@ -396,7 +395,6 @@ func liftPlateaus(lifts map[string][]liftSession, weights []BodyweightEntry, die
 			change := round(w1-w0, 1)
 			p.WeightChangeKg = &change
 		}
-		protein, proteinDays := 0.0, 0
 		for _, d := range diet {
 			if d.Date < first.date || d.Date > min(last.date, today) {
 				continue
@@ -405,14 +403,6 @@ func liftPlateaus(lifts map[string][]liftSession, weights []BodyweightEntry, die
 			if d.Adhered {
 				p.DietAdhered++
 			}
-			if d.ProteinG != nil {
-				protein += *d.ProteinG
-				proteinDays++
-			}
-		}
-		if proteinDays > 0 && ok0 && ok1 {
-			perKg := round(protein/float64(proteinDays)/((w0+w1)/2), 2)
-			p.ProteinPerKg = &perKg
 		}
 		plateaus = append(plateaus, p)
 	}

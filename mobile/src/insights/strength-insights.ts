@@ -86,7 +86,6 @@ function plateaus({ plateaus: ps }: StrengthInsights): InsightSummary {
       context.push(w < 0 ? `while you lost ${kg(-w)}` : w > 0 ? `while you gained ${kg(w)}` : 'at a steady weight');
     }
     if (p.diet_logged > 0) context.push(`diet kept ${p.diet_adhered} of ${plural(p.diet_logged, 'day')}`);
-    if (p.protein_per_kg !== undefined) context.push(`${num(p.protein_per_kg)} g protein/kg`);
     return `${p.exercise} ${trend} (${kg(p.best_1rm)} est. 1RM)${context.length > 0 ? ` ${context.join(' · ')}` : ''}`;
   });
   return {

@@ -86,9 +86,7 @@ export function DietReminderProvider({ children }: { children: ReactNode }) {
       router.navigate('/diet');
       if (adhered === null) return;
       try {
-        // Keep the protein already counted for the day.
-        const [logged] = await api.listDiet({ from: date, to: date });
-        await api.saveDietDay({ ...logged, date, adhered });
+        await api.saveDietDay({ date, adhered });
         setAnswered((n) => n + 1);
         sync();
       } catch (e) {

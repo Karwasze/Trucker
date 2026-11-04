@@ -9,16 +9,8 @@ import (
 	"trucker/internal/store"
 )
 
-// maxProteinG is more protein than anyone eats in a day, to catch bad input.
-const maxProteinG = 1000
-
-// validProtein reports whether g, if set, is a plausible amount of protein.
-func validProtein(g *float64) bool {
-	return g == nil || (*g > 0 && *g <= maxProteinG)
-}
-
 // DietAPI lists the days logged (GET, optionally ?from= and &to=), records
-// whether a day's diet was kept to (PUT {date, adhered, protein_g?}) and
+// whether a day's diet was kept to (PUT {date, adhered}) and
 // removes a day's record (DELETE ?date=).
 func (h *Handlers) DietAPI(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -45,10 +37,6 @@ func (h *Handlers) DietAPI(w http.ResponseWriter, r *http.Request) {
 		}
 		if !validDate(day.Date) {
 			http.Error(w, "Date must be YYYY-MM-DD", http.StatusBadRequest)
-			return
-		}
-		if !validProtein(day.ProteinG) {
-			http.Error(w, fmt.Sprintf("Protein must be between 0 and %d g", maxProteinG), http.StatusBadRequest)
 			return
 		}
 		if err := h.store.SaveDietDay(day); err != nil {

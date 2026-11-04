@@ -60,7 +60,7 @@ test("shows this month's days, kept to, missed or not logged, with today selecte
   expect(screen.getByText('Not logged yet.')).toBeOnTheScreen();
 });
 
-test('logs today as kept to, then the protein eaten, with no target', async () => {
+test('logs today as kept to, asking nothing more', async () => {
   const api = server();
   const user = userEvent.setup();
   await renderInApp(<DietScreen />);
@@ -68,23 +68,19 @@ test('logs today as kept to, then the protein eaten, with no target', async () =
   await user.press(await screen.findByRole('button', { name: 'Yes' }));
   expect(await screen.findByRole('button', { name: 'Wednesday 14 Oct, kept to' })).toBeOnTheScreen();
   expect(api.days()).toEqual([{ date: '2026-10-14', adhered: true }]);
-  expect(screen.queryByText(/Target/)).not.toBeOnTheScreen();
-
-  const input = screen.getByLabelText('Protein in grams');
-  await user.type(input, '120', { submitEditing: true });
-  await waitFor(() => expect(api.days()).toEqual([{ date: '2026-10-14', adhered: true, protein_g: 120 }]));
+  expect(screen.queryByText(/protein/i)).not.toBeOnTheScreen();
+  expect(screen.queryByRole('textbox')).not.toBeOnTheScreen();
 });
 
 test('changes and clears an earlier day', async () => {
-  const api = server([{ date: '2026-10-12', adhered: true, protein_g: 160 }]);
+  const api = server([{ date: '2026-10-12', adhered: true }]);
   const user = userEvent.setup();
   await renderInApp(<DietScreen />);
 
   await user.press(await screen.findByRole('button', { name: 'Monday 12 Oct, kept to' }));
   expect(screen.getByText('Monday 12 October')).toBeOnTheScreen();
   await user.press(screen.getByRole('button', { name: 'No' }));
-  // The protein counted stays.
-  await waitFor(() => expect(api.days()).toEqual([{ date: '2026-10-12', adhered: false, protein_g: 160 }]));
+  await waitFor(() => expect(api.days()).toEqual([{ date: '2026-10-12', adhered: false }]));
 
   await user.press(screen.getByRole('button', { name: 'Clear day' }));
   expect(await screen.findByRole('button', { name: 'Monday 12 Oct, not logged' })).toBeOnTheScreen();
@@ -133,7 +129,7 @@ test('leaves insights and settings to their tabs', async () => {
   expect(await screen.findByText('Not logged yet.')).toBeOnTheScreen();
   expect(screen.queryByText('4-day streak')).not.toBeOnTheScreen();
   expect(screen.queryByRole('switch', { name: 'Evening check-in' })).not.toBeOnTheScreen();
-  expect(screen.queryByLabelText('Daily protein target in grams')).not.toBeOnTheScreen();
+  expect(screen.queryByLabelText('Target weight in kg')).not.toBeOnTheScreen();
 });
 
 test("skips today's check-in once today is logged", async () => {
@@ -148,7 +144,7 @@ test("skips today's check-in once today is logged", async () => {
 });
 
 test('records the answer given from a check-in notification', async () => {
-  const api = server([{ date: '2026-10-14', adhered: true, protein_g: 140 }]);
+  const api = server([{ date: '2026-10-14', adhered: true }]);
   await renderInApp(<DietScreen />);
   expect(await screen.findByRole('button', { name: 'Wednesday 14 Oct, kept to' })).toBeOnTheScreen();
 
@@ -156,5 +152,5 @@ test('records the answer given from a check-in notification', async () => {
   await act(async () => onAnswer({ date: '2026-10-14', adhered: false }));
 
   expect(await screen.findByRole('button', { name: 'Wednesday 14 Oct, missed' })).toBeOnTheScreen();
-  expect(api.days()).toEqual([{ date: '2026-10-14', adhered: false, protein_g: 140 }]);
+  expect(api.days()).toEqual([{ date: '2026-10-14', adhered: false }]);
 });

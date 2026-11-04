@@ -5,12 +5,10 @@ import (
 	"testing"
 )
 
-func ptr(v float64) *float64 { return &v }
-
 func TestSaveDietDay_ReplacesSameDate(t *testing.T) {
 	s := newTestStore(t)
 
-	if err := s.SaveDietDay(DietDay{Date: "2026-10-12", Adhered: true, ProteinG: ptr(150)}); err != nil {
+	if err := s.SaveDietDay(DietDay{Date: "2026-10-12", Adhered: true}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if err := s.SaveDietDay(DietDay{Date: "2026-10-12", Adhered: false}); err != nil {
@@ -21,7 +19,7 @@ func TestSaveDietDay_ReplacesSameDate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(days) != 1 || days[0].Adhered || days[0].ProteinG != nil {
+	if len(days) != 1 || days[0].Adhered {
 		t.Errorf("expected the second save to replace the first, got %+v", days)
 	}
 }
@@ -78,7 +76,7 @@ func TestDietInsights_Empty(t *testing.T) {
 	if got.CurrentStreak != 0 || got.LongestStreak != 0 || got.Recent.Logged != 0 {
 		t.Errorf("expected nothing, got %+v", got)
 	}
-	if got.MostMissed != nil || got.Protein != nil || got.Bodyweight != nil || got.FirstDate != nil {
+	if got.MostMissed != nil || got.Bodyweight != nil || got.FirstDate != nil {
 		t.Errorf("expected no summaries, got %+v", got)
 	}
 }
@@ -153,28 +151,6 @@ func TestDietInsights_NoMostMissedWeekdayForOneMiss(t *testing.T) {
 	}
 }
 
-func TestDietInsights_Protein(t *testing.T) {
-	s := newTestStore(t)
-	s.SaveDietDay(DietDay{Date: "2026-10-18", Adhered: true, ProteinG: ptr(160)})
-	s.SaveDietDay(DietDay{Date: "2026-10-19", Adhered: true, ProteinG: ptr(120)})
-	s.SaveDietDay(DietDay{Date: "2026-10-20", Adhered: true, ProteinG: ptr(150)})
-	// Without protein, and outside the last 14 days: neither counts.
-	s.SaveDietDay(DietDay{Date: "2026-10-17", Adhered: true})
-	s.SaveDietDay(DietDay{Date: "2026-10-01", Adhered: true, ProteinG: ptr(50)})
-
-	got, err := s.DietInsights("2026-10-20")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	p := got.Protein
-	if p == nil {
-		t.Fatal("expected a protein summary")
-	}
-	if p.Days != 3 || p.AverageG != 143.3 {
-		t.Errorf("unexpected protein summary %+v", p)
-	}
-}
-
 func TestDietInsights_Bodyweight(t *testing.T) {
 	s := newTestStore(t)
 	s.SaveDietDay(DietDay{Date: "2026-10-20", Adhered: true})
@@ -223,22 +199,5 @@ func TestTargetWeight(t *testing.T) {
 	}
 	if got, _ := s.TargetWeight(); got != nil {
 		t.Errorf("expected the target cleared, got %v", *got)
-	}
-}
-
-func TestTargetWeight_KeepsProteinTargetRow(t *testing.T) {
-	s := newTestStore(t)
-	// A database from before the protein target was dropped keeps its row.
-	if _, err := s.db.Exec("INSERT INTO diet_settings (id, protein_target_g) VALUES (1, 160)"); err != nil {
-		t.Fatal(err)
-	}
-	target := 80.0
-	if err := s.SetTargetWeight(&target); err != nil {
-		t.Fatal(err)
-	}
-	var protein float64
-	s.db.QueryRow("SELECT protein_target_g FROM diet_settings WHERE id = 1").Scan(&protein)
-	if got, _ := s.TargetWeight(); got == nil || *got != 80 || protein != 160 {
-		t.Errorf("expected 80 kg alongside the old protein target, got %v and %v", got, protein)
 	}
 }

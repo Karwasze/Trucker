@@ -23,7 +23,7 @@ func TestDietAPI_PUTAndGETWithinRange(t *testing.T) {
 	h, _ := newTestHandlers(t)
 
 	for _, body := range []string{
-		`{"date":"2026-10-12","adhered":true,"protein_g":150}`,
+		`{"date":"2026-10-12","adhered":true}`,
 		`{"date":"2026-10-13","adhered":false}`,
 		`{"date":"2026-10-20","adhered":true}`,
 	} {
@@ -38,7 +38,7 @@ func TestDietAPI_PUTAndGETWithinRange(t *testing.T) {
 	}
 	var days []store.DietDay
 	json.NewDecoder(w.Body).Decode(&days)
-	if len(days) != 2 || !days[0].Adhered || days[0].ProteinG == nil || *days[0].ProteinG != 150 || days[1].Adhered {
+	if len(days) != 2 || !days[0].Adhered || days[1].Adhered {
 		t.Errorf("unexpected days %+v", days)
 	}
 }
@@ -58,8 +58,6 @@ func TestDietAPI_Invalid(t *testing.T) {
 		{"PUT", "/api/diet", `not json`},
 		{"PUT", "/api/diet", `{"adhered":true}`},
 		{"PUT", "/api/diet", `{"date":"12/10/2026","adhered":true}`},
-		{"PUT", "/api/diet", `{"date":"2026-10-12","adhered":true,"protein_g":-5}`},
-		{"PUT", "/api/diet", `{"date":"2026-10-12","adhered":true,"protein_g":5000}`},
 		{"GET", "/api/diet?from=yesterday", ""},
 		{"DELETE", "/api/diet", ""},
 		{"GET", "/api/diet/insights?date=today", ""},

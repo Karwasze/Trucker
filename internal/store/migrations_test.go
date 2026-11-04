@@ -47,8 +47,8 @@ func TestMigrate_IsIdempotent(t *testing.T) {
 	if err := s.db.QueryRow("SELECT COUNT(*) FROM schema_migrations").Scan(&count); err != nil {
 		t.Fatalf("failed to count schema_migrations: %v", err)
 	}
-	if count != 20 {
-		t.Errorf("expected 20 applied migrations, got %d", count)
+	if count != 21 {
+		t.Errorf("expected 21 applied migrations, got %d", count)
 	}
 }
 
@@ -669,5 +669,55 @@ func TestMigrate_UpgradeFromV15KeepsHeartRateProfiles(t *testing.T) {
 	// The watch's zones can be stored after it.
 	if z, err := s.SetHeartRateZones("2026-11-01", []float64{137, 148, 158, 169}); err != nil || len(z.ZoneStarts) != 4 {
 		t.Errorf("expected the watch's zones stored, got %+v (%v)", z, err)
+	}
+}
+
+func TestMigrate_UpgradeFromV20ClearsProteinKeepingDiet(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "v20.db")
+
+	db, err := sql.Open("sqlite3", path)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	stmts := []string{"CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)"}
+	for i := 1; i <= 20; i++ {
+		matches, err := fs.Glob(migrationsFS, fmt.Sprintf("migrations/%04d_*.sql", i))
+		if err != nil || len(matches) != 1 {
+			t.Fatalf("failed to find migration %d: %v", i, err)
+		}
+		contents, err := migrationsFS.ReadFile(matches[0])
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", matches[0], err)
+		}
+		stmts = append(stmts, string(contents),
+			fmt.Sprintf("INSERT INTO schema_migrations (version, applied_at) VALUES (%d, '2026-01-01T00:00:00Z')", i))
+	}
+	stmts = append(stmts,
+		`INSERT INTO diet_days (date, adhered, protein_g) VALUES ('2026-10-12', 1, 150)`,
+		`INSERT INTO diet_days (date, adhered) VALUES ('2026-10-13', 0)`,
+		`INSERT INTO diet_settings (id, protein_target_g, target_weight_kg) VALUES (1, 160, 78)`,
+	)
+	for _, stmt := range stmts {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatalf("failed to build v20 database: %v", err)
+		}
+	}
+	db.Close()
+
+	s, err := Open(path)
+	if err != nil {
+		t.Fatalf("failed to open and migrate v20 database: %v", err)
+	}
+	defer s.Close()
+
+	if columnExists(t, s.db, "diet_days", "protein_g") || columnExists(t, s.db, "diet_settings", "protein_target_g") {
+		t.Error("expected the protein columns dropped")
+	}
+	days, err := s.ListDietDays("", "")
+	if err != nil || len(days) != 2 || !days[0].Adhered || days[1].Adhered {
+		t.Errorf("expected both days kept, got %+v (%v)", days, err)
+	}
+	if target, err := s.TargetWeight(); err != nil || target == nil || *target != 78 {
+		t.Errorf("expected the target weight kept, got %v (%v)", target, err)
 	}
 }

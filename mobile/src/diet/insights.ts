@@ -1,5 +1,4 @@
 import type { DietInsights } from '@/api/types';
-import { formatGrams } from '@/diet/grams';
 import { formatDate } from '@/workout/format';
 
 export type DietInsight = { title: string; body: string };
@@ -10,7 +9,7 @@ const percent = (part: number, whole: number) => Math.round((part / whole) * 100
 
 /** What the diet's insights say, a line each, or none before anything is logged. */
 export function dietInsights(insights: DietInsights): DietInsight[] {
-  const { current_streak, longest_streak, recent, most_missed, protein, bodyweight } = insights;
+  const { current_streak, longest_streak, recent, most_missed, bodyweight } = insights;
   const lines: DietInsight[] = [];
 
   if (current_streak > 0) {
@@ -38,14 +37,6 @@ export function dietInsights(insights: DietInsights): DietInsight[] {
     lines.push({
       title: `${weekday} slip most`,
       body: `Missed ${most_missed.missed} of the last ${plural(most_missed.logged, weekday.slice(0, -1))} logged. Worth planning ahead for.`,
-    });
-  }
-
-  if (protein) {
-    const window = `the last ${protein.window} days`;
-    lines.push({
-      title: `Averaging ${formatGrams(protein.average_g)} of protein`,
-      body: `Over ${plural(protein.days, 'day')} counted in ${window}.`,
     });
   }
 

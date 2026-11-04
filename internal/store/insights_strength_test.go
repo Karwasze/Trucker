@@ -113,8 +113,7 @@ func TestStrengthInsights_PlateauWithDietContext(t *testing.T) {
 	seedLift(t, s, "2026-03-10", "Squat", one(102))
 	seedLift(t, s, "2026-03-24", "Squat", one(108))
 	seedWeights(t, s, map[string]float64{"2026-03-03": 82.5, "2026-03-31": 80})
-	protein := 160.0
-	s.SaveDietDay(DietDay{Date: "2026-03-10", Adhered: true, ProteinG: &protein})
+	s.SaveDietDay(DietDay{Date: "2026-03-10", Adhered: true})
 	s.SaveDietDay(DietDay{Date: "2026-03-11", Adhered: false})
 	s.SaveDietDay(DietDay{Date: "2026-02-01", Adhered: false})
 
@@ -131,10 +130,6 @@ func TestStrengthInsights_PlateauWithDietContext(t *testing.T) {
 	}
 	if p.DietLogged != 2 || p.DietAdhered != 1 {
 		t.Errorf("expected 1 of 2 diet days in the window, got %d of %d", p.DietAdhered, p.DietLogged)
-	}
-	// 160 g over an average of 81.25 kg.
-	if p.ProteinPerKg == nil || *p.ProteinPerKg != 1.97 {
-		t.Errorf("expected 1.97 g/kg, got %v", p.ProteinPerKg)
 	}
 }
 

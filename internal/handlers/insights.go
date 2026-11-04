@@ -83,3 +83,15 @@ func (h *Handlers) CardioInsightsAPI(w http.ResponseWriter, r *http.Request) {
 	insights, err := h.store.GetCardioInsights(date, from)
 	writeInsights(w, insights, err)
 }
+
+// BodyInsightsAPI gives deeper bodyweight and diet insights up to ?date=,
+// with the optional ?plan_id= for skipped training. It has no timespan:
+// each insight covers its own stretch.
+func (h *Handlers) BodyInsightsAPI(w http.ResponseWriter, r *http.Request) {
+	date, _, planID, ok := insightsParams(w, r)
+	if !ok {
+		return
+	}
+	insights, err := h.store.GetBodyInsights(date, planID)
+	writeInsights(w, insights, err)
+}

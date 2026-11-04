@@ -6,6 +6,7 @@ import { Button, Message, Screen } from '@/components/ui';
 import { DayCard } from '@/diet/day-card';
 import { DietCalendar } from '@/diet/month-calendar';
 import { useDietReminder } from '@/diet/reminder-context';
+import { TargetWeightCard } from '@/diet/target-weight-card';
 import { useQuery } from '@/hooks/use-query';
 import { useToday } from '@/hooks/use-today';
 import { useSettings } from '@/settings/settings-context';
@@ -13,8 +14,8 @@ import { addMonths, monthOf, monthRange } from '@/workout/month-calendar';
 
 /**
  * A month of days kept to or not, this month's unless another is picked,
- * with the selected day's check-in below. Insights are on the Insights tab
- * and the evening check-in in Settings.
+ * with the selected day's check-in and the target weight below. Insights
+ * are on the Insights tab and the evening check-in in Settings.
  */
 export default function DietScreen() {
   const { api, serverUrl } = useSettings();
@@ -133,6 +134,7 @@ export default function DietScreen() {
           onClear={() => clear(selected)}
         />
       )}
+      <TargetWeightCard />
     </Screen>
   );
 }

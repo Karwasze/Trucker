@@ -205,3 +205,40 @@ func TestDietInsights_NoBodyweightChangeOverAFewDays(t *testing.T) {
 }
 
 func twoDigits(n int) string { return fmt.Sprintf("%02d", n) }
+
+func TestTargetWeight(t *testing.T) {
+	s := newTestStore(t)
+	if got, err := s.TargetWeight(); err != nil || got != nil {
+		t.Fatalf("expected no target at first, got %v %v", got, err)
+	}
+	target := 78.5
+	if err := s.SetTargetWeight(&target); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.TargetWeight(); got == nil || *got != 78.5 {
+		t.Errorf("expected 78.5 kg, got %v", got)
+	}
+	if err := s.SetTargetWeight(nil); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.TargetWeight(); got != nil {
+		t.Errorf("expected the target cleared, got %v", *got)
+	}
+}
+
+func TestTargetWeight_KeepsProteinTargetRow(t *testing.T) {
+	s := newTestStore(t)
+	// A database from before the protein target was dropped keeps its row.
+	if _, err := s.db.Exec("INSERT INTO diet_settings (id, protein_target_g) VALUES (1, 160)"); err != nil {
+		t.Fatal(err)
+	}
+	target := 80.0
+	if err := s.SetTargetWeight(&target); err != nil {
+		t.Fatal(err)
+	}
+	var protein float64
+	s.db.QueryRow("SELECT protein_target_g FROM diet_settings WHERE id = 1").Scan(&protein)
+	if got, _ := s.TargetWeight(); got == nil || *got != 80 || protein != 160 {
+		t.Errorf("expected 80 kg alongside the old protein target, got %v and %v", got, protein)
+	}
+}

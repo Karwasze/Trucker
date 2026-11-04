@@ -1,5 +1,6 @@
 import type {
   Achievement,
+  BodyInsights,
   BodyweightEntry,
   CardioActivity,
   CardioInsights,
@@ -267,6 +268,29 @@ export function createApi(baseUrl: string) {
     /** Records each day's resting heart rate, keeping days not sent. */
     saveRestingHeartRates: (readings: { date: string; bpm: number }[]) =>
       request<{ saved: number }>('/api/resting-heart-rates', { method: 'PUT', body: JSON.stringify(readings) }),
+
+    /** Deeper bodyweight and diet insights up to date, with planId's plan for skipped training. */
+    bodyInsights: async (date: string, planId: number | null) => {
+      const res = await request<BodyInsights>(insightsPath('/api/insights/body', date, null, planId));
+      return {
+        ...res,
+        rate: res.rate ?? null,
+        projection: res.projection ?? null,
+        adherence: res.adherence ?? [],
+        slips: res.slips ?? null,
+      };
+    },
+    /** The bodyweight the diet aims for, kg, or null. */
+    dietTarget: async () =>
+      (await request<{ target_weight_kg: number | null }>('/api/diet/target')).target_weight_kg ?? null,
+    /** Sets the bodyweight the diet aims for, or clears it for null; returns it. */
+    setDietTarget: async (kg: number | null) =>
+      (
+        await request<{ target_weight_kg: number | null }>('/api/diet/target', {
+          method: 'PUT',
+          body: JSON.stringify({ target_weight_kg: kg }),
+        })
+      ).target_weight_kg ?? null,
 
     listPlans: async () => (await request<TrainingPlan[] | null>('/api/plans')) ?? [],
     getPlan: (id: number) => request<TrainingPlan>(`/api/plans?id=${id}`),

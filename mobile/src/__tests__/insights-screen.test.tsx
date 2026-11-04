@@ -522,3 +522,29 @@ test('each deeper cardio insight gets its own section on Cardio', async () => {
   expect(request.query.get('date')).toBe(TODAY);
   expect(request.query.get('from')).toBeNull();
 });
+
+test('each deeper bodyweight insight gets its own section on Bodyweight', async () => {
+  await selectPlan(1);
+  const requests = mockServer({
+    'GET /api/insights': empty,
+    'GET /api/diet/insights': { current_streak: 0, longest_streak: 0, recent: { days: 30, logged: 0, adhered: 0 } },
+    'GET /api/insights/body': {
+      date: TODAY,
+      rate: { from: '2026-09-21', to: '2026-10-17', weighins: 12, weight: 82, per_week_kg: -0.5, per_week_pct: -0.61 },
+      projection: null,
+      adherence: [],
+      slips: null,
+    },
+  });
+  await renderInApp(<InsightsTab />);
+  await userEvent.setup().press(screen.getByRole('tab', { name: 'Bodyweight' }));
+
+  expect(await screen.findByText('Losing 0.5 kg/week (0.6%): on track')).toBeOnTheScreen();
+  for (const title of ['Rate of loss', 'Target weight', 'Weight by adherence', 'Habits that slip together']) {
+    expect(screen.getByText(title)).toBeOnTheScreen();
+  }
+  expect(screen.getByText('Set a target weight on the Diet tab to see when you’ll reach it.')).toBeOnTheScreen();
+  const request = requests.findLast((r) => r.path === '/api/insights/body')!;
+  expect(request.query.get('date')).toBe(TODAY);
+  expect(request.query.get('plan_id')).toBe('1');
+});

@@ -96,3 +96,42 @@ func (h *Handlers) DietInsightsAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewEncoder(w).Encode(insights)
 }
+
+// dietTarget is the body of DietTargetAPI.
+type dietTarget struct {
+	TargetWeightKg *float64 `json:"target_weight_kg"`
+}
+
+// DietTargetAPI returns (GET) and sets (PUT {target_weight_kg}, null to
+// clear) the bodyweight the diet aims for.
+func (h *Handlers) DietTargetAPI(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	switch r.Method {
+	case "GET":
+	case "PUT":
+		var body dietTarget
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			return
+		}
+		if kg := body.TargetWeightKg; kg != nil && (*kg < 20 || *kg > 400) {
+			http.Error(w, "Target weight must be between 20 and 400 kg", http.StatusBadRequest)
+			return
+		}
+		if err := h.store.SetTargetWeight(body.TargetWeightKg); err != nil {
+			http.Error(w, "Database error", http.StatusInternalServerError)
+			log.Printf("Error saving target weight: %v", err)
+			return
+		}
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	target, err := h.store.TargetWeight()
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		log.Printf("Error loading target weight: %v", err)
+		return
+	}
+	json.NewEncoder(w).Encode(dietTarget{TargetWeightKg: target})
+}

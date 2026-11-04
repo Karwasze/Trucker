@@ -620,3 +620,35 @@ export type CardioInsights = {
     other: { logged: number; missed: number };
   } | null;
 };
+
+/** Mirrors store.BodyInsights. */
+export type BodyInsights = {
+  date: string;
+  /** The bodyweight trend smoothed over the last 4 weeks; null with too few weigh-ins. */
+  rate: {
+    from: string;
+    to: string;
+    weighins: number;
+    weight: number;
+    per_week_kg: number;
+    per_week_pct: number;
+  } | null;
+  /** Null without a target weight. */
+  projection: {
+    target_kg: number;
+    current_kg?: number;
+    per_week_kg?: number;
+    reached?: boolean;
+    /** When the trend reaches the target, missing when it isn't heading there. */
+    date?: string;
+    race_name?: string;
+    race_date?: string;
+  } | null;
+  adherence: { group: '6–7' | '4–5' | '0–3'; weeks: number; avg_change_kg: number }[];
+  /** Null without a plan or race goal. */
+  slips: {
+    skipped_days: number;
+    skipped: { logged: number; missed: number };
+    other: { logged: number; missed: number };
+  } | null;
+};

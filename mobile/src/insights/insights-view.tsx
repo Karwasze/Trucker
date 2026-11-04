@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { localDate } from '@/api/client';
 import type {
   Adherence,
+  BodyInsights,
   CardioInsights,
   CardioActivity,
   CardioProgress,
@@ -24,6 +25,7 @@ import { Spacing, type ThemeColor } from '@/constants/theme';
 import { dietInsights } from '@/diet/insights';
 import { PHASE_NAMES } from '@/goals/presets';
 import { BodyMap } from '@/insights/body-map';
+import { bodyInsights } from '@/insights/body-insights';
 import { cardioInsights } from '@/insights/cardio-insights';
 import { InsightSections, type Insight } from '@/insights/insight-section';
 import { strengthInsights } from '@/insights/strength-insights';
@@ -92,11 +94,15 @@ export function InsightsScreen() {
   const cardio = useQuery(page === 'cardio' ? `cardio-insights:${serverUrl}:${today}:${from}` : null, () =>
     api.cardioInsights(today, from)
   );
+  const body = useQuery(page === 'bodyweight' ? `body-insights:${serverUrl}:${today}:${planId}` : null, () =>
+    api.bodyInsights(today, planId)
+  );
   const shown = page === 'bodyweight' ? diet : insights;
   const refresh = () => {
     shown.refresh();
     if (page === 'strength') strength.refresh();
     if (page === 'cardio') cardio.refresh();
+    if (page === 'bodyweight') body.refresh();
   };
   return (
     <Screen
@@ -114,7 +120,10 @@ export function InsightsScreen() {
         !diet.data ? (
           <Message loading={!diet.error} error={diet.error} />
         ) : (
-          <DietContent data={diet.data} />
+          <>
+            <DietContent data={diet.data} />
+            <DeeperInsights query={body} render={(data: BodyInsights) => bodyInsights(data)} />
+          </>
         )
       ) : !insights.data ? (
         <Message loading={!insights.error} error={insights.error} />

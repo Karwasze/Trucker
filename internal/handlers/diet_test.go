@@ -105,3 +105,21 @@ func TestDietInsightsAPI(t *testing.T) {
 		t.Errorf("unexpected insights %+v", insights)
 	}
 }
+
+func TestDietTargetAPI(t *testing.T) {
+	h, _ := newTestHandlers(t)
+	if w := serveDiet(h, "GET", "/api/diet/target", ""); w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != `{"target_weight_kg":null}` {
+		t.Errorf("expected no target, got %d %s", w.Code, w.Body.String())
+	}
+	if w := serveDiet(h, "PUT", "/api/diet/target", `{"target_weight_kg":78}`); w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != `{"target_weight_kg":78}` {
+		t.Errorf("expected 78 kg saved, got %d %s", w.Code, w.Body.String())
+	}
+	if w := serveDiet(h, "PUT", "/api/diet/target", `{"target_weight_kg":null}`); strings.TrimSpace(w.Body.String()) != `{"target_weight_kg":null}` {
+		t.Errorf("expected the target cleared, got %s", w.Body.String())
+	}
+	for _, body := range []string{`{"target_weight_kg":5}`, `nope`} {
+		if w := serveDiet(h, "PUT", "/api/diet/target", body); w.Code != http.StatusBadRequest {
+			t.Errorf("%s: expected 400, got %d", body, w.Code)
+		}
+	}
+}

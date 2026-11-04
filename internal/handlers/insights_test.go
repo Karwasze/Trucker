@@ -178,3 +178,30 @@ func TestCardioInsightsAPI(t *testing.T) {
 		t.Errorf("expected 400 for a bad date, got %d", w.Code)
 	}
 }
+
+func TestBodyInsightsAPI(t *testing.T) {
+	h, s := newTestHandlers(t)
+	target := 78.0
+	s.SetTargetWeight(&target)
+
+	w := httptest.NewRecorder()
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+	mux.ServeHTTP(w, httptest.NewRequest("GET", "/api/insights/body?date=2026-03-31", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var insights store.BodyInsights
+	if err := json.NewDecoder(w.Body).Decode(&insights); err != nil {
+		t.Fatalf("failed to decode: %v", err)
+	}
+	if insights.Projection == nil || insights.Projection.TargetKg != 78 || insights.Rate != nil {
+		t.Errorf("unexpected insights %+v", insights)
+	}
+
+	w = httptest.NewRecorder()
+	h.BodyInsightsAPI(w, httptest.NewRequest("GET", "/api/insights/body?date=2026-03-31&plan_id=-1", nil))
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for a bad plan, got %d", w.Code)
+	}
+}

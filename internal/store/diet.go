@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"errors"
 	"strings"
 	"time"
 )
@@ -291,4 +292,28 @@ func bodyweightChange(entries []BodyweightEntry, from, to string) *BodyweightCha
 		return nil
 	}
 	return &BodyweightChange{From: first.Date, To: last.Date, ChangeKg: round(last.Weight-first.Weight, 1)}
+}
+
+// TargetWeight returns the bodyweight (kg) the diet aims for, or nil if
+// none is set.
+func (s *Store) TargetWeight() (*float64, error) {
+	var target sql.NullFloat64
+	err := s.db.QueryRow("SELECT target_weight_kg FROM diet_settings WHERE id = 1").Scan(&target)
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && !target.Valid) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &target.Float64, nil
+}
+
+// SetTargetWeight sets the bodyweight (kg) the diet aims for, or clears it
+// for nil.
+func (s *Store) SetTargetWeight(kg *float64) error {
+	_, err := s.db.Exec(`
+		INSERT INTO diet_settings (id, target_weight_kg) VALUES (1, ?)
+		ON CONFLICT(id) DO UPDATE SET target_weight_kg = excluded.target_weight_kg
+	`, kg)
+	return err
 }

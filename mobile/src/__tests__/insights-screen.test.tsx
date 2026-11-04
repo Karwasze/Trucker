@@ -445,3 +445,45 @@ describe('heart rate zones', () => {
     expect(screen.queryByText('Heart rate zones')).not.toBeOnTheScreen();
   });
 });
+
+test('each deeper strength insight gets its own section on Strength', async () => {
+  const requests = mockServer({
+    'GET /api/insights': full,
+    'GET /api/insights/strength': {
+      date: TODAY,
+      projections: [],
+      plateaus: [],
+      weak_link: {
+        lagging: 'Overhead Press',
+        lifts: [
+          { exercise: 'Squat', best_1rm: 100, expected_kg: 90, balance: 0.11 },
+          { exercise: 'Overhead Press', best_1rm: 30, expected_kg: 44, balance: -0.32 },
+        ],
+      },
+      relative: null,
+      patterns: { weekdays: [], rest_days: [] },
+      interference: null,
+      fatigue: [],
+    },
+  });
+  await selectPlan(1);
+  await renderStrength();
+
+  expect(await screen.findByText('Overhead Press is lagging')).toBeOnTheScreen();
+  for (const title of [
+    'Level projections',
+    'Plateaus · last 8 weeks',
+    'Weak link',
+    'Strength vs bodyweight',
+    'Training patterns',
+    'Cardio interference',
+    'Fatigue within sessions',
+  ]) {
+    expect(screen.getByText(title)).toBeOnTheScreen();
+  }
+  expect(screen.getByText('No lift has gone flat')).toBeOnTheScreen();
+  const request = requests.findLast((r) => r.path === '/api/insights/strength')!;
+  expect(request.query.get('date')).toBe(TODAY);
+  expect(request.query.get('plan_id')).toBe('1');
+  expect(request.query.get('from')).toBeNull();
+});

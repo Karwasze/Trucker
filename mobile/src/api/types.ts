@@ -462,3 +462,88 @@ export type DietInsights = {
   /** The oldest day logged. */
   first_date?: string;
 };
+
+/** Mirrors store.StrengthProjection: when a main lift reaches its next level. */
+export type StrengthProjection = {
+  exercise: string;
+  level: string;
+  next_level: string;
+  best_1rm: number;
+  /** The next level at today's bodyweight, kg. */
+  target_kg: number;
+  /** Est. 1RM change per month over the timespan, kg. */
+  per_month: number;
+  /** Bodyweight change per week, kg; missing without a trend. */
+  weight_per_week?: number;
+  /** Days to the level with both trends; missing when it isn't reached at this rate. */
+  days?: number;
+  /** Days to the level if the weight held. */
+  days_steady_weight?: number;
+};
+
+/** Mirrors store.LiftPlateau: a lift that went flat over the last 8 weeks. */
+export type LiftPlateau = {
+  exercise: string;
+  status: 'flat' | 'declining';
+  sessions: number;
+  first_date: string;
+  last_date: string;
+  weeks: number;
+  best_1rm: number;
+  change_pct: number;
+  weight_change_kg?: number;
+  diet_logged: number;
+  diet_adhered: number;
+  protein_per_kg?: number;
+};
+
+/** Mirrors store.LiftBalance. */
+export type LiftBalance = { exercise: string; best_1rm: number; expected_kg: number; balance: number };
+
+/** Mirrors store.RelativeLift. */
+export type RelativeLift = {
+  exercise: string;
+  start_1rm: number;
+  end_1rm: number;
+  change_pct: number;
+  per_kg_change_pct: number;
+};
+
+/** Mirrors store.RelativeStrength. */
+export type RelativeStrength = {
+  from: string;
+  to: string;
+  start_weight: number;
+  end_weight: number;
+  weight_change_kg: number;
+  weight_change_pct: number;
+  lifts: RelativeLift[];
+  /** Empty without a main lift trained twice. */
+  verdict: '' | 'keeping' | 'mixed' | 'too_aggressive' | 'not_cutting';
+};
+
+/** Lifting sessions and how they went against the lift's previous three, in percent. */
+export type PerformanceGroup = { sessions: number; avg_change_pct: number };
+
+/** Mirrors store.StrengthInsights. */
+export type StrengthInsights = {
+  date: string;
+  from?: string;
+  projections: StrengthProjection[];
+  plateaus: LiftPlateau[];
+  weak_link: { lifts: LiftBalance[]; lagging?: string } | null;
+  relative: RelativeStrength | null;
+  patterns: {
+    weekdays: { weekday: Weekday; scheduled: number; skipped: number }[];
+    rest_days: ({ rest: '0–1' | '2' | '3+' } & PerformanceGroup)[];
+  };
+  interference: { hard_sessions: number; after_hard: PerformanceGroup; fresh: PerformanceGroup } | null;
+  fatigue: {
+    exercise: string;
+    sessions: number;
+    last_date: string;
+    recent_drop: number;
+    earlier_drop: number;
+    growing: boolean;
+  }[];
+};

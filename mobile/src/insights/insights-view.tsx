@@ -13,6 +13,7 @@ import type {
   Insights,
   LiftProgress,
   PlanStall,
+  StrengthInsights,
   StrengthLevel,
 } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
@@ -22,6 +23,8 @@ import { Spacing, type ThemeColor } from '@/constants/theme';
 import { dietInsights } from '@/diet/insights';
 import { PHASE_NAMES } from '@/goals/presets';
 import { BodyMap } from '@/insights/body-map';
+import { InsightSections, type Insight } from '@/insights/insight-section';
+import { strengthInsights } from '@/insights/strength-insights';
 import { ZoneRanges } from '@/health/heart-rate-zones';
 import { useQuery } from '@/hooks/use-query';
 import { useTheme } from '@/hooks/use-theme';
@@ -79,13 +82,22 @@ export function InsightsScreen() {
   const diet = useQuery(page === 'bodyweight' ? `diet-insights:${serverUrl}:${today}` : null, () =>
     api.dietInsights(today)
   );
+  // Deeper insights per page, loaded alongside; each section waits for its own.
+  const strength = useQuery(
+    page === 'strength' ? `strength-insights:${serverUrl}:${today}:${from}:${planId}` : null,
+    () => api.strengthInsights(today, from, planId)
+  );
   const shown = page === 'bodyweight' ? diet : insights;
+  const refresh = () => {
+    shown.refresh();
+    if (page === 'strength') strength.refresh();
+  };
   return (
     <Screen
       title="Insights"
       subtitle={PAGES.find((p) => p.key === page)!.subtitle}
       refreshing={shown.refreshing}
-      onRefresh={shown.refresh}>
+      onRefresh={refresh}>
       <View accessibilityRole="tablist" accessibilityLabel="Insights" style={styles.pages}>
         {PAGES.map((p) => (
           <TileButton key={p.key} label={p.label} selected={p.key === page} onPress={() => setPage(p.key)} />
@@ -101,7 +113,13 @@ export function InsightsScreen() {
       ) : !insights.data ? (
         <Message loading={!insights.error} error={insights.error} />
       ) : page === 'strength' ? (
-        <StrengthContent data={insights.data} timespan={timespan} hasPlan={planId !== null} />
+        <>
+          <StrengthContent data={insights.data} timespan={timespan} hasPlan={planId !== null} />
+          <DeeperInsights
+            query={strength}
+            render={(data: StrengthInsights) => strengthInsights(data, !!insights.data!.bodyweight)}
+          />
+        </>
       ) : (
         <CardioContent data={insights.data} timespan={timespan} />
       )}
@@ -208,6 +226,18 @@ function StrengthContent({ data, timespan, hasPlan }: { data: Insights; timespan
       )}
     </>
   );
+}
+
+/** The deeper insights of a page, a section each, once loaded. */
+function DeeperInsights<T>({
+  query,
+  render,
+}: {
+  query: { data?: T; error?: string | null };
+  render: (data: T) => Insight[];
+}) {
+  if (!query.data) return <Message loading={!query.error} error={query.error} />;
+  return <InsightSections insights={render(query.data)} />;
 }
 
 function DietContent({ data }: { data: DietInsights }) {

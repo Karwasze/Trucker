@@ -27,6 +27,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/exercise-muscles", h.ExerciseMusclesAPI)
 	mux.HandleFunc("/api/bodyweight", h.BodyweightAPI)
 	mux.HandleFunc("/api/insights", h.InsightsAPI)
+	mux.HandleFunc("/api/insights/strength", h.StrengthInsightsAPI)
 	mux.HandleFunc("/api/cardio", h.CardioAPI)
 	mux.HandleFunc("/api/triathlons", h.TriathlonsAPI)
 	mux.HandleFunc("/api/history", h.HistoryAPI)

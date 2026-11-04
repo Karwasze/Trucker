@@ -109,3 +109,46 @@ func TestInsightsAPI_MethodNotAllowed(t *testing.T) {
 		t.Errorf("expected 405, got %d", w.Code)
 	}
 }
+
+func TestStrengthInsightsAPI(t *testing.T) {
+	h, s := newTestHandlers(t)
+	s.SaveBodyweight("2026-03-31", 80)
+	for date, kg := range map[string]float64{"2026-03-03": 100, "2026-03-17": 105, "2026-03-31": 110} {
+		seedWorkout(t, s, date, []store.Exercise{{Name: "Squat", Sets: []store.Set{{Weight: kg, Reps: 1}}}})
+	}
+
+	w := httptest.NewRecorder()
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+	mux.ServeHTTP(w, httptest.NewRequest("GET", "/api/insights/strength?date=2026-03-31&from=2026-03-01", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var insights store.StrengthInsights
+	if err := json.NewDecoder(w.Body).Decode(&insights); err != nil {
+		t.Fatalf("failed to decode: %v", err)
+	}
+	if insights.From != "2026-03-01" || len(insights.Projections) != 1 || insights.Projections[0].NextLevel != "intermediate" {
+		t.Errorf("unexpected insights %+v", insights)
+	}
+}
+
+func TestStrengthInsightsAPI_InvalidParams(t *testing.T) {
+	h, _ := newTestHandlers(t)
+	for _, target := range []string{
+		"/api/insights/strength",
+		"/api/insights/strength?date=2026-03-31&from=soon",
+		"/api/insights/strength?date=2026-03-31&plan_id=x",
+	} {
+		w := httptest.NewRecorder()
+		h.StrengthInsightsAPI(w, httptest.NewRequest("GET", target, nil))
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("%s: expected 400, got %d", target, w.Code)
+		}
+	}
+	w := httptest.NewRecorder()
+	h.StrengthInsightsAPI(w, httptest.NewRequest("POST", "/api/insights/strength?date=2026-03-31", nil))
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405, got %d", w.Code)
+	}
+}

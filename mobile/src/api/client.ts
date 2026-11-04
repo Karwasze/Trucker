@@ -22,6 +22,7 @@ import type {
   Triathlon,
   Set,
   StatisticsResponse,
+  StrengthInsights,
   TrainingPlan,
   Workout,
 } from '@/api/types';
@@ -33,6 +34,16 @@ export class ApiError extends Error {
     super(message);
     this.status = status;
   }
+}
+
+const q = encodeURIComponent;
+
+/** An insights path for date, over the timespan from from (null for all time), with planId's plan. */
+function insightsPath(base: string, date: string, from: string | null, planId: number | null) {
+  let path = `${base}?date=${q(date)}`;
+  if (from) path += `&from=${q(from)}`;
+  if (planId !== null) path += `&plan_id=${planId}`;
+  return path;
 }
 
 /** A thin typed client for the Trucker Go API. */
@@ -57,7 +68,6 @@ export function createApi(baseUrl: string) {
     return res.json() as Promise<T>;
   }
 
-  const q = encodeURIComponent;
   /** A query string limiting a list to `range`, joined to the path with `sep`. */
   const within = (range: DateRange | undefined, sep: '?' | '&' = '?') =>
     range ? `${sep}from=${q(range.from)}&to=${q(range.to)}` : '';
@@ -194,10 +204,7 @@ export function createApi(baseUrl: string) {
 
     /** Analyses training up to date, over the timespan starting on from (null for all time). */
     insights: async (date: string, from: string | null, planId: number | null) => {
-      let path = `/api/insights?date=${q(date)}`;
-      if (from) path += `&from=${q(from)}`;
-      if (planId !== null) path += `&plan_id=${planId}`;
-      const res = await request<Insights>(path);
+      const res = await request<Insights>(insightsPath('/api/insights', date, from, planId));
       return {
         ...res,
         muscles: res.muscles ?? [],
@@ -216,6 +223,21 @@ export function createApi(baseUrl: string) {
         goal: res.goal ?? null,
         triathlon: res.triathlon ? { ...res.triathlon, records: res.triathlon.records ?? [] } : null,
         adherence: res.adherence && { ...res.adherence, missed: res.adherence.missed ?? [] },
+      };
+    },
+
+    /** Deeper lifting insights, with the same parameters as insights. */
+    strengthInsights: async (date: string, from: string | null, planId: number | null) => {
+      const res = await request<StrengthInsights>(insightsPath('/api/insights/strength', date, from, planId));
+      return {
+        ...res,
+        projections: res.projections ?? [],
+        plateaus: res.plateaus ?? [],
+        weak_link: res.weak_link ? { ...res.weak_link, lifts: res.weak_link.lifts ?? [] } : null,
+        relative: res.relative ? { ...res.relative, lifts: res.relative.lifts ?? [] } : null,
+        patterns: { weekdays: res.patterns?.weekdays ?? [], rest_days: res.patterns?.rest_days ?? [] },
+        interference: res.interference ?? null,
+        fatigue: res.fatigue ?? [],
       };
     },
 

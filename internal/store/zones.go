@@ -131,14 +131,72 @@ func heartRateZones(q querier, date string) (*HeartRateZones, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := fillZones(&z, maxHR, restingHR, starts); err != nil {
+		return nil, err
+	}
+	return &z, nil
+}
+
+// fillZones works out z's zones from a profile's columns: the watch's zone
+// starts when it has them, else its max and resting heart rate.
+func fillZones(z *HeartRateZones, maxHR, restingHR sql.NullFloat64, starts sql.NullString) error {
 	if starts.Valid {
 		if err := json.Unmarshal([]byte(starts.String), &z.ZoneStarts); err != nil {
-			return nil, err
+			return err
 		}
 		z.Zones = watchHeartRateZones(z.ZoneStarts)
-		return &z, nil
+		return nil
 	}
 	z.MaxHR, z.RestingHR = maxHR.Float64, restingHR.Float64
 	z.Zones = computeHeartRateZones(z.MaxHR, z.RestingHR)
-	return &z, nil
+	return nil
+}
+
+// allHeartRateZones returns the zones of every profile, oldest first.
+func (s *Store) allHeartRateZones() ([]HeartRateZones, error) {
+	rows, err := s.db.Query(`SELECT date, max_hr, resting_hr, zone_starts FROM heart_rate_profiles ORDER BY date`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var all []HeartRateZones
+	for rows.Next() {
+		var z HeartRateZones
+		var maxHR, restingHR sql.NullFloat64
+		var starts sql.NullString
+		if err := rows.Scan(&z.Date, &maxHR, &restingHR, &starts); err != nil {
+			return nil, err
+		}
+		if err := fillZones(&z, maxHR, restingHR, starts); err != nil {
+			return nil, err
+		}
+		all = append(all, z)
+	}
+	return all, rows.Err()
+}
+
+// zonesOn picks the zones in effect on date from all (oldest first), as
+// HeartRateZones does: the latest on or before it, else the earliest.
+func zonesOn(all []HeartRateZones, date string) *HeartRateZones {
+	if len(all) == 0 {
+		return nil
+	}
+	pick := &all[0]
+	for i := range all {
+		if all[i].Date <= date {
+			pick = &all[i]
+		}
+	}
+	return pick
+}
+
+// zoneOf is the zone (1 to 5) a heart rate falls in.
+func zoneOf(zones []HeartRateZone, hr float64) int {
+	zone := 1
+	for _, z := range zones {
+		if z.Min != nil && math.Round(hr) >= float64(*z.Min) {
+			zone = z.Zone
+		}
+	}
+	return zone
 }

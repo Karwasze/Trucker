@@ -1,4 +1,5 @@
 import { ApiError, createApi, localDate } from '@/api/client';
+import { onDataChange } from '@/api/data-changes';
 
 const fetchMock = jest.fn();
 globalThis.fetch = fetchMock;
@@ -151,4 +152,29 @@ test('saved goals always have a warnings list', async () => {
 test('localDate uses the device’s calendar date', () => {
   expect(localDate(new Date(2026, 0, 5, 23, 59))).toBe('2026-01-05');
   expect(localDate(new Date(2026, 9, 25, 0, 30))).toBe('2026-10-25');
+});
+
+test('every successful write reports a data change, reads and failures don’t', async () => {
+  const changed = jest.fn();
+  const stop = onDataChange(changed);
+  const api = createApi('http://host');
+
+  respond([]);
+  await api.listCardio();
+  expect(changed).not.toHaveBeenCalled();
+
+  respond('Database error', 500);
+  await expect(api.importCardio([])).rejects.toThrow('Database error');
+  expect(changed).not.toHaveBeenCalled();
+
+  respond([]);
+  await api.importCardio([]);
+  respond({ success: true });
+  await api.deleteBodyweight('2026-10-18');
+  expect(changed).toHaveBeenCalledTimes(2);
+
+  stop();
+  respond([]);
+  await api.importCardio([]);
+  expect(changed).toHaveBeenCalledTimes(2);
 });

@@ -78,24 +78,36 @@ export function InsightsScreen() {
   const [timespan, setTimespan] = useState<Timespan>(DEFAULT_TIMESPAN);
   const today = localDate();
   const from = timespanStart(timespan);
+  // Lifting, cardio, bodyweight and diet all feed each other's insights, so
+  // every query reloads whenever anything is saved, not only on focus.
+  const live = { refetchOnDataChange: true };
   // One request for both pages.
-  const insights = useQuery(page === 'bodyweight' ? null : `insights:${serverUrl}:${today}:${from}:${planId}`, () =>
-    api.insights(today, from, planId)
+  const insights = useQuery(
+    page === 'bodyweight' ? null : `insights:${serverUrl}:${today}:${from}:${planId}`,
+    () => api.insights(today, from, planId),
+    live
   );
   // Over set stretches of days, so the timespan doesn't apply.
-  const diet = useQuery(page === 'bodyweight' ? `diet-insights:${serverUrl}:${today}` : null, () =>
-    api.dietInsights(today)
+  const diet = useQuery(
+    page === 'bodyweight' ? `diet-insights:${serverUrl}:${today}` : null,
+    () => api.dietInsights(today),
+    live
   );
   // Deeper insights per page, loaded alongside; each section waits for its own.
   const strength = useQuery(
     page === 'strength' ? `strength-insights:${serverUrl}:${today}:${from}:${planId}` : null,
-    () => api.strengthInsights(today, from, planId)
+    () => api.strengthInsights(today, from, planId),
+    live
   );
-  const cardio = useQuery(page === 'cardio' ? `cardio-insights:${serverUrl}:${today}:${from}` : null, () =>
-    api.cardioInsights(today, from)
+  const cardio = useQuery(
+    page === 'cardio' ? `cardio-insights:${serverUrl}:${today}:${from}` : null,
+    () => api.cardioInsights(today, from),
+    live
   );
-  const body = useQuery(page === 'bodyweight' ? `body-insights:${serverUrl}:${today}:${planId}` : null, () =>
-    api.bodyInsights(today, planId)
+  const body = useQuery(
+    page === 'bodyweight' ? `body-insights:${serverUrl}:${today}:${planId}` : null,
+    () => api.bodyInsights(today, planId),
+    live
   );
   const shown = page === 'bodyweight' ? diet : insights;
   const refresh = () => {

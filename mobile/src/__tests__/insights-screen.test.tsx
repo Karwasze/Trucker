@@ -2,10 +2,20 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { screen, userEvent, within } from '@testing-library/react-native';
 import { router } from 'expo-router';
 
+import { createApi } from '@/api/client';
 import { MUSCLES, type CardioActivity, type Goal, type Insights } from '@/api/types';
 import InsightsTab from '@/app/(tabs)/insights/index';
 import { connectHealth, healthHeartRateProfile } from '@/health/healthkit';
-import { mockServer, renderInApp, selectPlan, setNow, TEST_ZONES, pickTimespan, type Request } from '@/test-utils';
+import {
+  mockServer,
+  renderInApp,
+  selectPlan,
+  SERVER,
+  setNow,
+  TEST_ZONES,
+  pickTimespan,
+  type Request,
+} from '@/test-utils';
 
 jest.mock('@/health/healthkit', () => ({
   isHealthAvailable: jest.fn(() => true),
@@ -521,6 +531,36 @@ test('each deeper cardio insight gets its own section on Cardio', async () => {
   const request = requests.findLast((r) => r.path === '/api/insights/cardio')!;
   expect(request.query.get('date')).toBe(TODAY);
   expect(request.query.get('from')).toBeNull();
+});
+
+test('importing a run reloads the open insights, deeper ones included', async () => {
+  let acute = 420;
+  const requests = mockServer({
+    'GET /api/insights': full,
+    'GET /api/insights/cardio': () => ({
+      date: TODAY,
+      efficiency: [],
+      run_weight: null,
+      drift: [],
+      intensity: null,
+      load: { acute, chronic_weekly: 300, ratio: acute / 300, history_days: 28 },
+      compliance: null,
+      resting_hr: null,
+      diet: null,
+    }),
+    'POST /api/cardio': [],
+  });
+  await renderCardio();
+  expect(await screen.findByText('Load up 40% on your 4-week average')).toBeOnTheScreen();
+  const loads = () => requests.filter((r) => r.path === '/api/insights' || r.path === '/api/insights/cardio').length;
+  const before = loads();
+
+  // Imported from the Health sheet, with the Insights tab still open below it.
+  acute = 600;
+  await createApi(SERVER).importCardio([]);
+
+  expect(await screen.findByText('Load up 100% on your 4-week average')).toBeOnTheScreen();
+  expect(loads()).toBe(before + 2);
 });
 
 test('each deeper bodyweight insight gets its own section on Bodyweight', async () => {

@@ -18,32 +18,43 @@ func New(s *store.Store) *Handlers {
 
 // RegisterRoutes wires up all API routes on the given mux.
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/workouts", h.WorkoutsAPI)
-	mux.HandleFunc("/api/exercises", h.ExercisesAPI)
-	mux.HandleFunc("/api/plans", h.PlansAPI)
-	mux.HandleFunc("/api/plans/today", h.PlanTodayAPI)
-	mux.HandleFunc("/api/latest-exercise", h.LatestExercise)
-	mux.HandleFunc("/api/statistics", h.StatisticsAPI)
-	mux.HandleFunc("/api/exercise-muscles", h.ExerciseMusclesAPI)
-	mux.HandleFunc("/api/bodyweight", h.BodyweightAPI)
-	mux.HandleFunc("/api/insights", h.InsightsAPI)
-	mux.HandleFunc("/api/insights/strength", h.StrengthInsightsAPI)
-	mux.HandleFunc("/api/insights/cardio", h.CardioInsightsAPI)
-	mux.HandleFunc("/api/insights/body", h.BodyInsightsAPI)
-	mux.HandleFunc("/api/resting-heart-rates", h.RestingHeartRatesAPI)
-	mux.HandleFunc("/api/cardio", h.CardioAPI)
-	mux.HandleFunc("/api/triathlons", h.TriathlonsAPI)
-	mux.HandleFunc("/api/history", h.HistoryAPI)
-	mux.HandleFunc("/api/achievements", h.AchievementsAPI)
-	mux.HandleFunc("/api/goals", h.GoalsAPI)
-	mux.HandleFunc("/api/goals/sessions", h.GoalSessionsAPI)
-	mux.HandleFunc("/api/goals/today", h.GoalTodayAPI)
-	mux.HandleFunc("/api/goals/match", h.GoalMatchAPI)
-	mux.HandleFunc("/api/heart-rate-zones", h.HeartRateZonesAPI)
-	mux.HandleFunc("/api/diet", h.DietAPI)
-	mux.HandleFunc("/api/diet/insights", h.DietInsightsAPI)
-	mux.HandleFunc("/api/diet/target", h.DietTargetAPI)
+	api := func(pattern string, handler http.HandlerFunc) { mux.Handle(pattern, noStore(handler)) }
+	api("/api/workouts", h.WorkoutsAPI)
+	api("/api/exercises", h.ExercisesAPI)
+	api("/api/plans", h.PlansAPI)
+	api("/api/plans/today", h.PlanTodayAPI)
+	api("/api/latest-exercise", h.LatestExercise)
+	api("/api/statistics", h.StatisticsAPI)
+	api("/api/exercise-muscles", h.ExerciseMusclesAPI)
+	api("/api/bodyweight", h.BodyweightAPI)
+	api("/api/insights", h.InsightsAPI)
+	api("/api/insights/strength", h.StrengthInsightsAPI)
+	api("/api/insights/cardio", h.CardioInsightsAPI)
+	api("/api/insights/body", h.BodyInsightsAPI)
+	api("/api/resting-heart-rates", h.RestingHeartRatesAPI)
+	api("/api/cardio", h.CardioAPI)
+	api("/api/triathlons", h.TriathlonsAPI)
+	api("/api/history", h.HistoryAPI)
+	api("/api/achievements", h.AchievementsAPI)
+	api("/api/goals", h.GoalsAPI)
+	api("/api/goals/sessions", h.GoalSessionsAPI)
+	api("/api/goals/today", h.GoalTodayAPI)
+	api("/api/goals/match", h.GoalMatchAPI)
+	api("/api/heart-rate-zones", h.HeartRateZonesAPI)
+	api("/api/diet", h.DietAPI)
+	api("/api/diet/insights", h.DietInsightsAPI)
+	api("/api/diet/target", h.DietTargetAPI)
 	mux.HandleFunc("/healthz", h.Health)
 	// Exact "/" only, for probes configured before /healthz existed.
 	mux.HandleFunc("/{$}", h.Health)
+}
+
+// noStore keeps clients from caching API responses: they change whenever
+// data is added, while their URLs (e.g. insights up to today) stay the same,
+// and iOS would otherwise answer a repeated GET from its cache.
+func noStore(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		next.ServeHTTP(w, r)
+	})
 }

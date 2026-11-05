@@ -28,6 +28,7 @@ import type {
   TrainingPlan,
   Workout,
 } from '@/api/types';
+import { dataChanged } from '@/api/data-changes';
 
 export class ApiError extends Error {
   status?: number;
@@ -67,7 +68,9 @@ export function createApi(baseUrl: string) {
       const text = (await res.text()).trim();
       throw new ApiError(text || `Request failed (${res.status})`, res.status);
     }
-    return res.json() as Promise<T>;
+    const data = (await res.json()) as T;
+    if ((init?.method ?? 'GET') !== 'GET') dataChanged();
+    return data;
   }
 
   /** A query string limiting a list to `range`, joined to the path with `sep`. */

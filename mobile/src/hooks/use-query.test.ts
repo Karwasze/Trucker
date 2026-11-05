@@ -1,5 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 
+import { dataChanged } from '@/api/data-changes';
 import { useQuery } from '@/hooks/use-query';
 
 /** A promise and the functions that settle it, to control when a fetch finishes. */
@@ -75,4 +76,32 @@ test('refresh refetches and reports refreshing, keeping the old data meanwhile',
   expect(result.current).toMatchObject({ data: 1, refreshing: true, loading: false });
   await act(async () => next.resolve(2));
   expect(result.current).toMatchObject({ data: 2, refreshing: false });
+});
+
+test('with refetchOnDataChange, saving anything refetches, keeping the old data meanwhile', async () => {
+  let n = 0;
+  const next = deferred<number>();
+  const { result } = await renderHook(() =>
+    useQuery('a', () => (n++ === 0 ? Promise.resolve(1) : next.promise), { refetchOnDataChange: true })
+  );
+  await waitFor(() => expect(result.current.data).toBe(1));
+
+  await act(async () => dataChanged());
+  expect(result.current).toMatchObject({ data: 1, refreshing: false });
+  await act(async () => next.resolve(2));
+  expect(result.current.data).toBe(2);
+});
+
+test('without refetchOnDataChange, or with a null key, saving doesn’t refetch', async () => {
+  const fetcher = jest.fn(() => Promise.resolve(1));
+  const disabled = jest.fn(() => Promise.resolve(1));
+  const { unmount } = await renderHook(() => {
+    useQuery('a', fetcher);
+    useQuery(null, disabled, { refetchOnDataChange: true });
+  });
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+  await act(async () => dataChanged());
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(disabled).not.toHaveBeenCalled();
+  await unmount();
 });

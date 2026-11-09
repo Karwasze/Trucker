@@ -183,6 +183,8 @@ export type Tonnage = {
 };
 
 export type Insights = {
+  /** When the server worked these out; missing from a server too old to say. */
+  calculated_at?: string;
   date: string;
   from?: string;
   bodyweight: BodyweightTrend | null;
@@ -447,6 +449,8 @@ export type DietDay = {
 
 /** Mirrors store.DietInsights. */
 export type DietInsights = {
+  /** When the server worked these out; missing from a server too old to say. */
+  calculated_at?: string;
   /** Days kept to in a row up to today, or yesterday while today isn't logged. */
   current_streak: number;
   longest_streak: number;

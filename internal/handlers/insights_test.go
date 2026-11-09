@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"trucker/internal/store"
 )
@@ -39,6 +40,31 @@ func TestInsightsAPI(t *testing.T) {
 	}
 	if insights.Adherence != nil {
 		t.Errorf("expected no adherence without a plan, got %+v", insights.Adherence)
+	}
+}
+
+// The app shows when insights were last worked out, so every response says.
+func TestInsightsAPI_SaysWhenCalculated(t *testing.T) {
+	h, _ := newTestHandlers(t)
+	for path, handler := range map[string]http.HandlerFunc{
+		"/api/insights?date=2026-03-31":      h.InsightsAPI,
+		"/api/diet/insights?date=2026-03-31": h.DietInsightsAPI,
+	} {
+		before := time.Now().Add(-time.Second)
+		w := httptest.NewRecorder()
+		handler(w, httptest.NewRequest("GET", path, nil))
+		if w.Code != http.StatusOK {
+			t.Fatalf("%s: expected 200, got %d: %s", path, w.Code, w.Body.String())
+		}
+		var body struct {
+			CalculatedAt time.Time `json:"calculated_at"`
+		}
+		if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+			t.Fatalf("%s: failed to decode: %v", path, err)
+		}
+		if body.CalculatedAt.Before(before) || body.CalculatedAt.After(time.Now()) {
+			t.Errorf("%s: expected calculated_at to be now, got %v", path, body.CalculatedAt)
+		}
 	}
 }
 

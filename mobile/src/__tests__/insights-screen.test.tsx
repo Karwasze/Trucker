@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { screen, userEvent, within } from '@testing-library/react-native';
+import { act, screen, userEvent, waitFor, within } from '@testing-library/react-native';
 import { router } from 'expo-router';
+import { AppState } from 'react-native';
 
 import { createApi } from '@/api/client';
 import { MUSCLES, type CardioActivity, type Goal, type Insights } from '@/api/types';
@@ -561,6 +562,82 @@ test('importing a run reloads the open insights, deeper ones included', async ()
 
   expect(await screen.findByText('Load up 100% on your 4-week average')).toBeOnTheScreen();
   expect(loads()).toBe(before + 2);
+});
+
+/** Pulls the screen down from the top. */
+async function pullToRefresh() {
+  let node = screen.getByText('Insights');
+  while (!node.props.refreshControl) node = node.parent!;
+  await act(async () => node.props.refreshControl.props.onRefresh());
+}
+
+test('pulling down recalculates the insights and shows when that happened', async () => {
+  let calculated_at = '2026-10-18T07:00:00Z';
+  let completed = 15;
+  await selectPlan(1);
+  mockServer({
+    'GET /api/insights': () => ({ ...full, calculated_at, adherence: { ...full.adherence!, completed } }),
+  });
+  await renderStrength();
+  expect(await screen.findByText('15 / 20')).toBeOnTheScreen();
+  expect(screen.getByText('Last recalculated 18 Oct, 09:00')).toBeOnTheScreen();
+
+  calculated_at = '2026-10-18T16:45:00Z';
+  completed = 16;
+  await pullToRefresh();
+
+  expect(await screen.findByText('16 / 20')).toBeOnTheScreen();
+  expect(screen.getByText('Last recalculated 18 Oct, 18:45')).toBeOnTheScreen();
+});
+
+test('Bodyweight shows when the diet insights were recalculated', async () => {
+  mockServer({
+    'GET /api/insights': empty,
+    'GET /api/diet/insights': {
+      current_streak: 4,
+      longest_streak: 9,
+      recent: { days: 30, logged: 30, adhered: 27 },
+      calculated_at: '2026-10-18T06:30:00Z',
+    },
+  });
+  await renderInApp(<InsightsTab />);
+  await userEvent.setup().press(screen.getByRole('tab', { name: 'Bodyweight' }));
+  expect(await screen.findByText('Last recalculated 18 Oct, 08:30')).toBeOnTheScreen();
+});
+
+test('a server too old to say when it recalculated shows no date', async () => {
+  mockServer({ 'GET /api/insights': full });
+  await renderStrength();
+  expect(await screen.findByText('Strength levels')).toBeOnTheScreen();
+  expect(screen.queryByText(/Last recalculated/)).not.toBeOnTheScreen();
+});
+
+describe('left open past midnight', () => {
+  const NEXT_DAY = '2026-10-19';
+  const lastDate = (requests: Request[]) => requests.findLast((r) => r.path === '/api/insights')?.query.get('date');
+
+  test('it asks for the new day when the app returns to the foreground', async () => {
+    const requests = mockServer({ 'GET /api/insights': empty });
+    await renderStrength();
+    await screen.findByText('Strength levels');
+    expect(lastDate(requests)).toBe(TODAY);
+
+    setNow(`${NEXT_DAY}T09:00:00+02:00`);
+    await act(async () => jest.mocked(AppState.addEventListener).mock.calls.forEach(([, fn]) => fn('active')));
+
+    await waitFor(() => expect(lastDate(requests)).toBe(NEXT_DAY));
+  });
+
+  test('pulling down asks for the new day', async () => {
+    const requests = mockServer({ 'GET /api/insights': empty });
+    await renderStrength();
+    await screen.findByText('Strength levels');
+
+    setNow(`${NEXT_DAY}T09:00:00+02:00`);
+    await pullToRefresh();
+
+    await waitFor(() => expect(lastDate(requests)).toBe(NEXT_DAY));
+  });
 });
 
 test('each deeper bodyweight insight gets its own section on Bodyweight', async () => {

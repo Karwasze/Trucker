@@ -1,5 +1,7 @@
 package store
 
+import "time"
+
 type Workout struct {
 	ID        int        `json:"id"`
 	Date      string     `json:"date"`
@@ -147,6 +149,8 @@ type ProgressionResult struct {
 // strength relative to bodyweight, cardio per activity and triathlons.
 // Cardio days count as sessions and towards adherence like lifting days.
 type Insights struct {
+	// CalculatedAt is when the server worked these out; set by the API.
+	CalculatedAt      time.Time         `json:"calculated_at"`
 	Date              string            `json:"date"`
 	From              string            `json:"from,omitempty"`
 	Bodyweight        *BodyweightTrend  `json:"bodyweight"`

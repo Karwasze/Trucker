@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"trucker/internal/store"
 )
@@ -82,6 +83,7 @@ func (h *Handlers) DietInsightsAPI(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Error loading diet insights: %v", err)
 		return
 	}
+	insights.CalculatedAt = time.Now().UTC()
 	json.NewEncoder(w).Encode(insights)
 }
 

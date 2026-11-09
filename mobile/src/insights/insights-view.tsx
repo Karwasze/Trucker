@@ -32,6 +32,7 @@ import { strengthInsights } from '@/insights/strength-insights';
 import { ZoneRanges } from '@/health/heart-rate-zones';
 import { useQuery } from '@/hooks/use-query';
 import { useTheme } from '@/hooks/use-theme';
+import { useToday } from '@/hooks/use-today';
 import { Tile, TileButton, TileRow } from '@/progress/tile';
 import { TriathlonInsights } from '@/triathlon/triathlon-insights';
 import { useSettings } from '@/settings/settings-context';
@@ -53,6 +54,9 @@ const shortDate = (date: string) =>
     day: 'numeric',
     year: date.slice(0, 4) === localDate().slice(0, 4) ? undefined : 'numeric',
   });
+/** When the server worked insights out, in the device's time zone. */
+const formatCalculatedAt = (iso: string) =>
+  new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const plural = (n: number, word: string, words = `${word}s`) => `${n} ${n === 1 ? word : words}`;
 /** Missed days listed before collapsing the rest into a count. */
 const MISSED_SHOWN = 5;
@@ -76,7 +80,7 @@ export function InsightsScreen() {
   const { api, planId, serverUrl } = useSettings();
   const [page, setPage] = useState<Page>('strength');
   const [timespan, setTimespan] = useState<Timespan>(DEFAULT_TIMESPAN);
-  const today = localDate();
+  const { today, recheck: recheckToday } = useToday();
   const from = timespanStart(timespan);
   // Lifting, cardio, bodyweight and diet all feed each other's insights, so
   // every query reloads whenever anything is saved, not only on focus.
@@ -111,6 +115,7 @@ export function InsightsScreen() {
   );
   const shown = page === 'bodyweight' ? diet : insights;
   const refresh = () => {
+    recheckToday();
     shown.refresh();
     if (page === 'strength') strength.refresh();
     if (page === 'cardio') cardio.refresh();
@@ -128,6 +133,11 @@ export function InsightsScreen() {
         ))}
       </View>
       {page !== 'bodyweight' && <TimespanPicker value={timespan} onChange={setTimespan} />}
+      {shown.data?.calculated_at && (
+        <ThemedText type="small" themeColor="textSecondary">
+          Last recalculated {formatCalculatedAt(shown.data.calculated_at)}
+        </ThemedText>
+      )}
       {page === 'bodyweight' ? (
         !diet.data ? (
           <Message loading={!diet.error} error={diet.error} />

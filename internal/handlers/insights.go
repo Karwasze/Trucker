@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 // insightsParams reads the client's today (?date=), the optional start of
@@ -59,6 +60,7 @@ func (h *Handlers) InsightsAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	insights, err := h.store.GetInsights(date, from, planID)
+	insights.CalculatedAt = time.Now().UTC()
 	writeInsights(w, insights, err)
 }
 

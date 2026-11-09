@@ -27,6 +27,8 @@ type DietDay struct {
 
 // DietInsights sums up the diet up to and including a day.
 type DietInsights struct {
+	// CalculatedAt is when the server worked these out; set by the API.
+	CalculatedAt time.Time `json:"calculated_at"`
 	// CurrentStreak counts the days kept to in a row up to today, or up to
 	// yesterday while today isn't logged yet.
 	CurrentStreak int            `json:"current_streak"`

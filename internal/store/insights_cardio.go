@@ -98,6 +98,10 @@ type CardiacDrift struct {
 	DurationSeconds float64 `json:"duration_seconds"`
 	DistanceM       float64 `json:"distance_m"`
 	DriftPct        float64 `json:"drift_pct"`
+	// EvenPace is set when the samples recorded no distance (e.g. an indoor
+	// ride), so the drift assumes the pace held and is the heart rate's rise.
+	EvenPace bool `json:"even_pace,omitempty"`
+	Indoor   bool `json:"indoor,omitempty"`
 }
 
 // IntensityDistribution is the time in each heart rate zone (seconds, zone
@@ -337,6 +341,23 @@ func halfRatio(samples []CardioSample, t0, t1 float64) (float64, bool) {
 	return (last.D - first.D) / (last.T - first.T) / (hrSum / float64(hrN)), true
 }
 
+// halfEvenPaceRatio is halfRatio at a steady unit speed: one over the
+// average heart rate of the samples from t0 up to t1 seconds in, or false
+// without one.
+func halfEvenPaceRatio(samples []CardioSample, t0, t1 float64) (float64, bool) {
+	hrSum, hrN := 0.0, 0
+	for _, s := range samples {
+		if s.T >= t0 && s.T < t1 && s.HR != nil {
+			hrSum += *s.HR
+			hrN++
+		}
+	}
+	if hrN == 0 || hrSum <= 0 {
+		return 0, false
+	}
+	return float64(hrN) / hrSum, true
+}
+
 func cardiacDrift(cardio []CardioWorkout, from string) []CardiacDrift {
 	out := []CardiacDrift{}
 	for i := len(cardio) - 1; i >= 0 && len(out) < driftShownLatest; i-- {
@@ -346,8 +367,15 @@ func cardiacDrift(cardio []CardioWorkout, from string) []CardiacDrift {
 			continue
 		}
 		half := w.DurationSeconds / 2
-		first, ok1 := halfRatio(w.Samples, 0, half)
-		second, ok2 := halfRatio(w.Samples, half, math.Inf(1))
+		// Without any distance in the samples, assume an even pace: speed
+		// per bpm then falls by as much as the heart rate rises.
+		evenPace := w.Samples[len(w.Samples)-1].D <= 0
+		ratio := halfRatio
+		if evenPace {
+			ratio = halfEvenPaceRatio
+		}
+		first, ok1 := ratio(w.Samples, 0, half)
+		second, ok2 := ratio(w.Samples, half, math.Inf(1))
 		if !ok1 || !ok2 {
 			continue
 		}
@@ -355,6 +383,7 @@ func cardiacDrift(cardio []CardioWorkout, from string) []CardiacDrift {
 			ID: w.ID, Date: w.Date, Activity: w.Activity,
 			DurationSeconds: w.DurationSeconds, DistanceM: deref(w.DistanceM),
 			DriftPct: round((first-second)/first*100, 1),
+			EvenPace: evenPace, Indoor: w.Indoor != nil && *w.Indoor,
 		})
 	}
 	return out

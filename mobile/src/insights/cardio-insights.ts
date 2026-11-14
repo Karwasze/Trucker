@@ -102,12 +102,17 @@ function drift({ drift: ds }: CardioInsights): InsightSummary {
       ? formatDistance(latest.distance_m, latest.activity)
       : formatDuration(latest.duration_seconds);
   const ok = latest.drift_pct < DRIFT_OK_PCT;
-  const body =
+  const comparison =
     earlier.length === 0
       ? `Under ${DRIFT_OK_PCT}% means your aerobic base handles the distance.`
       : latest.drift_pct < average
         ? `Down from ${num(average)}% on earlier long ${SESSIONS[latest.activity]}: you’re ready for more distance.`
         : `Up from ${num(average)}% on earlier long ${SESSIONS[latest.activity]}.`;
+  const body = latest.even_pace
+    ? `${comparison} Assumes you held an even pace, as no distance was recorded.`
+    : comparison;
+  // Sessions without a recorded distance are judged on heart rate alone.
+  const assumed = (d: (typeof ds)[number]) => (d.even_pace ? ` (${d.indoor ? 'indoor, ' : ''}even pace assumed)` : '');
   return {
     headline: ok
       ? `Your aerobic base handles ${distance}`
@@ -115,7 +120,7 @@ function drift({ drift: ds }: CardioInsights): InsightSummary {
     body,
     details: ds.map(
       (d) =>
-        `${shortDate(d.date)} · ${ACTIVITY_NAMES[d.activity]} ${formatDuration(d.duration_seconds)}${d.distance_m > 0 ? `, ${formatDistance(d.distance_m, d.activity)}` : ''}: ${num(d.drift_pct)}% drift`
+        `${shortDate(d.date)} · ${ACTIVITY_NAMES[d.activity]} ${formatDuration(d.duration_seconds)}${d.distance_m > 0 ? `, ${formatDistance(d.distance_m, d.activity)}` : ''}: ${num(d.drift_pct)}% drift${assumed(d)}`
     ),
     tone: ok ? 'good' : 'warn',
   };

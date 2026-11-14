@@ -26,8 +26,11 @@ const swim: NewCardioWorkout = {
   started_at: '2026-10-18T07:00:00+02:00',
   activity: 'swimming',
   duration_seconds: 1800,
+  distance_m: 1500,
   source_uuid: 'swim',
 };
+// A swim Health has no distance for, e.g. without a pool length set.
+const { distance_m: _distance, ...unmeasured } = { ...swim, source_uuid: 'unmeasured' };
 const session = (id: number, description: string, date = '2026-10-17'): PlannedSession => ({
   id,
   goal_id: 3,
@@ -71,10 +74,7 @@ test('every new workout is ticked; importing one dismisses the unticked other', 
   const requests = fakeServer();
   const user = userEvent.setup();
   await renderInApp(<HealthImportScreen />);
-  expect(
-    await screen.findByText('No distance from Apple Health. Add it after importing, from the workout in History.')
-  ).toBeOnTheScreen();
-  const [, swimBox] = screen.getAllByRole('checkbox');
+  const [, swimBox] = await screen.findAllByRole('checkbox');
   await user.press(swimBox);
   expect(swimBox).not.toBeChecked();
 
@@ -137,6 +137,76 @@ test('a workout is only offered sessions of its activity', async () => {
     { ...ride, planned_session_id: 12 },
     { ...swim, planned_session_id: 13 },
   ]);
+});
+
+test('the distance of an indoor or unmeasured workout can be entered while importing', async () => {
+  const ride: NewCardioWorkout = { ...run, activity: 'cycling', source_uuid: 'ride', distance_m: 30000, indoor: true };
+  jest.mocked(healthWorkoutsSince).mockResolvedValue([run, ride, unmeasured]);
+  const requests = fakeServer();
+  const user = userEvent.setup();
+  await renderInApp(<HealthImportScreen />);
+  expect(
+    await screen.findByText(
+      'Indoors the watch only estimates the distance. Enter the machine’s, or leave it empty to keep the estimate.'
+    )
+  ).toBeOnTheScreen();
+  expect(
+    screen.getByText('No distance from Apple Health. Enter it, e.g. from your bike computer or the machine.')
+  ).toBeOnTheScreen();
+  // The outdoor run's distance was measured, so only the ride and swim ask.
+  expect(screen.getAllByLabelText(/Distance in/)).toHaveLength(2);
+
+  await user.type(screen.getByLabelText('Distance in kilometres'), '35,5');
+  await user.type(screen.getByLabelText('Distance in metres'), '925');
+  await user.press(screen.getByRole('button', { name: 'Import 3 workouts' }));
+  expect(requests.find((r) => r.method === 'POST')?.body).toEqual([
+    run,
+    { ...ride, distance_m: 35500, manual_distance: true },
+    { ...unmeasured, distance_m: 925, manual_distance: true },
+  ]);
+});
+
+test('a workout without any distance can only be imported once one is entered', async () => {
+  jest.mocked(healthWorkoutsSince).mockResolvedValue([run, unmeasured]);
+  const requests = fakeServer();
+  const alerts = mockAlerts();
+  const user = userEvent.setup();
+  await renderInApp(<HealthImportScreen />);
+  await user.press(await screen.findByRole('button', { name: 'Import 2 workouts' }));
+  expect(alerts.latest()).toMatchObject({
+    title: "Can't import workouts",
+    message: 'Enter the distance of the swim on 18 Oct, as Apple Health has none.',
+  });
+  expect(requests.some((r) => r.method === 'POST')).toBe(false);
+  expect(router.back).not.toHaveBeenCalled();
+
+  // Unticked it needs none.
+  await user.press(screen.getAllByRole('checkbox')[1]);
+  await user.press(screen.getByRole('button', { name: 'Import 1 workout' }));
+  expect(requests.find((r) => r.method === 'POST')?.body).toEqual([run]);
+});
+
+test('an indoor workout left without a distance keeps the watch’s estimate', async () => {
+  const ride: NewCardioWorkout = { ...run, activity: 'cycling', source_uuid: 'ride', indoor: true };
+  jest.mocked(healthWorkoutsSince).mockResolvedValue([ride]);
+  const requests = fakeServer();
+  const user = userEvent.setup();
+  await renderInApp(<HealthImportScreen />);
+  await user.press(await screen.findByRole('button', { name: 'Import 1 workout' }));
+  expect(requests.find((r) => r.method === 'POST')?.body).toEqual([ride]);
+});
+
+test('an invalid distance stops the import and says why', async () => {
+  jest.mocked(healthWorkoutsSince).mockResolvedValue([run, unmeasured]);
+  const requests = fakeServer();
+  const alerts = mockAlerts();
+  const user = userEvent.setup();
+  await renderInApp(<HealthImportScreen />);
+  await user.type(await screen.findByLabelText('Distance in metres'), '0');
+  await user.press(screen.getByRole('button', { name: 'Import 2 workouts' }));
+  expect(alerts.latest()).toMatchObject({ title: "Can't import workouts", message: 'Enter a distance above 0.' });
+  expect(requests.some((r) => r.method === 'POST')).toBe(false);
+  expect(router.back).not.toHaveBeenCalled();
 });
 
 test('a workout without a session of its activity is offered none', async () => {

@@ -87,6 +87,40 @@ test('cardiac drift judges the latest long session against earlier ones', () => 
   expect(said(s)).toContain('12 Oct · Run 1:30:00, 18.2 km: 3.1% drift');
 });
 
+test('cardiac drift marks sessions without a recorded distance as assuming an even pace', () => {
+  const s = summary(
+    {
+      drift: [
+        {
+          id: 16,
+          date: '2026-11-14',
+          activity: 'cycling',
+          duration_seconds: 5400,
+          distance_m: 35000,
+          drift_pct: 2.1,
+          even_pace: true,
+          indoor: true,
+        },
+        { id: 2, date: '2026-10-18', activity: 'cycling', duration_seconds: 8100, distance_m: 45000, drift_pct: 6 },
+        {
+          id: 1,
+          date: '2026-10-11',
+          activity: 'cycling',
+          duration_seconds: 7200,
+          distance_m: 40000,
+          drift_pct: 4,
+          even_pace: true,
+        },
+      ],
+    },
+    'drift'
+  );
+  expect(said(s)).toContain('14 Nov · Ride 1:30:00, 35.0 km: 2.1% drift (indoor, even pace assumed)');
+  expect(said(s)).toContain('11 Oct · Ride 2:00:00, 40.0 km: 4% drift (even pace assumed)');
+  expect(said(s)).toContain('18 Oct · Ride 2:15:00, 45.0 km: 6% drift\n');
+  expect(said(s)).toContain('Assumes you held an even pace, as no distance was recorded.');
+});
+
 test('intensity flags easy days that are too hard', () => {
   const s = summary(
     {

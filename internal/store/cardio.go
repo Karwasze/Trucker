@@ -46,12 +46,14 @@ func (s *Store) SaveCardioWorkouts(workouts []CardioWorkout) ([]CardioWorkout, e
 		result, err := tx.Exec(`
 			INSERT INTO cardio_workouts (date, started_at, activity, duration_seconds,
 				distance_m, energy_kcal, avg_heart_rate, max_heart_rate, swim_strokes,
-				lap_length_m, samples, laps, source, source_uuid, indoor)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				lap_length_m, samples, laps, source, source_uuid, indoor, manual_distance)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(source_uuid) DO NOTHING
 		`, w.Date, w.StartedAt, w.Activity, w.DurationSeconds,
 			w.DistanceM, w.EnergyKcal, w.AvgHeartRate, w.MaxHeartRate, w.SwimStrokes,
-			w.LapLengthM, samples, laps, w.Source, w.SourceUUID, w.Indoor)
+			w.LapLengthM, samples, laps, w.Source, w.SourceUUID, w.Indoor,
+			// A distance entered while importing, e.g. a treadmill's.
+			w.ManualDistance && w.DistanceM != nil)
 		if err != nil {
 			return nil, err
 		}

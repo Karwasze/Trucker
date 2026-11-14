@@ -582,6 +582,9 @@ export type CardioInsights = {
     duration_seconds: number;
     distance_m: number;
     drift_pct: number;
+    /** No distance was recorded (e.g. indoors), so the drift assumes an even pace. */
+    even_pace?: boolean;
+    indoor?: boolean;
   }[];
   /** Null without heart rate zones. */
   intensity: {

@@ -118,6 +118,39 @@ func TestCardioInsights_CardiacDrift(t *testing.T) {
 	}
 }
 
+func TestCardioInsights_CardiacDriftAssumesEvenPaceWithoutSampledDistance(t *testing.T) {
+	s := newTestStore(t)
+	// An indoor ride: the watch records heart rate but no distance, which
+	// was entered by hand.
+	ride := longSession("2026-03-24", 140, 144)
+	ride.Activity = ActivityCycling
+	indoor := true
+	ride.Indoor = &indoor
+	ride.ManualDistance = true
+	for i := range ride.Samples {
+		ride.Samples[i].D = 0
+	}
+	seedCardio(t, s, ride)
+
+	got := cardioInsights(t, s, insightsToday, "").Drift
+	if len(got) != 1 {
+		t.Fatalf("expected the indoor ride, got %+v", got)
+	}
+	// At an even pace, 140 → 144 bpm is the same 2.8% as with distance.
+	if got[0].DriftPct != 2.8 || !got[0].EvenPace || !got[0].Indoor {
+		t.Errorf("expected 2.8%% drift marked as even pace indoors, got %+v", got[0])
+	}
+}
+
+func TestCardioInsights_CardiacDriftMeasuredIsNotMarkedEvenPace(t *testing.T) {
+	s := newTestStore(t)
+	seedCardio(t, s, longSession("2026-03-24", 140, 144))
+	got := cardioInsights(t, s, insightsToday, "").Drift
+	if len(got) != 1 || got[0].EvenPace {
+		t.Errorf("expected measured drift, got %+v", got)
+	}
+}
+
 func TestCardioInsights_IntensityAndLoad(t *testing.T) {
 	s := newTestStore(t)
 	if _, err := s.SetHeartRateProfile("2026-01-01", 190, 50); err != nil {

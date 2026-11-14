@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useAchievements } from '@/achievements/achievements-context';
 import { localDate } from '@/api/client';
 import type { NewCardioWorkout, PlannedSession } from '@/api/types';
-import { Alert, Pressable, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Chip, Message, Screen } from '@/components/ui';
@@ -16,6 +16,7 @@ import type { HealthWorkoutStatus } from '@/health/healthkit';
 import { useQuery } from '@/hooks/use-query';
 import { useTheme } from '@/hooks/use-theme';
 import { useSettings } from '@/settings/settings-context';
+import { ACTIVITY_NAMES, formatDate, formatDistance } from '@/workout/format';
 
 /**
  * Pairs each workout with the open session of its activity on its
@@ -80,13 +81,39 @@ export default function HealthImportScreen() {
   const ticked = imports.candidates.filter((_, i) => !unticked.has(uuidOf(i)));
   const skipped = imports.candidates.filter((_, i) => unticked.has(uuidOf(i)));
 
+  // Distances typed for workouts Health measured none for or only estimated.
+  const [distances, setDistances] = useState<Map<string, string>>(new Map());
+  const setDistance = (uuid: string, text: string) => setDistances((d) => new Map(d).set(uuid, text));
+  /**
+   * The workout with the distance typed for it, if any, or why it can't be
+   * imported: one Health has no distance for needs one entered.
+   */
+  const withDistance = (w: NewCardioWorkout): NewCardioWorkout | string => {
+    const text = distances.get(keyOf(w))?.trim();
+    if (!asksDistance(w)) return w;
+    if (!text) {
+      return w.distance_m
+        ? w
+        : `Enter the distance of the ${ACTIVITY_NAMES[w.activity].toLowerCase()} on ${formatDate(w.date, { day: 'numeric', month: 'short' })}, as Apple Health has none.`;
+    }
+    const value = parseFloat(text.replace(',', '.'));
+    if (!(value > 0)) return 'Enter a distance above 0.';
+    return { ...w, distance_m: w.activity === 'swimming' ? value : value * 1000, manual_distance: true };
+  };
+
   const save = async (importing: typeof ticked, skipping: typeof skipped) => {
+    const entered = importing.map(withDistance);
+    const problem = entered.find((e) => typeof e === 'string');
+    if (problem) {
+      Alert.alert("Can't import workouts", problem);
+      return;
+    }
     setSaving(true);
     try {
       if (importing.length > 0) {
         await api.importCardio(
-          importing.map((w) => {
-            const sessionId = matchOf(keyOf(w));
+          (entered as NewCardioWorkout[]).map((w, i) => {
+            const sessionId = matchOf(keyOf(importing[i]));
             return sessionId === null ? w : { ...w, planned_session_id: sessionId };
           })
         );
@@ -135,10 +162,8 @@ export default function HealthImportScreen() {
                     </ThemedText>
                   </View>
                 </Pressable>
-                {checked && !w.distance_m && (
-                  <ThemedText type="small" themeColor="textSecondary">
-                    No distance from Apple Health. Add it after importing, from the workout in History.
-                  </ThemedText>
+                {checked && asksDistance(w) && (
+                  <DistanceInput workout={w} value={distances.get(uuid) ?? ''} onChange={(t) => setDistance(uuid, t)} />
                 )}
                 {checked && options.length > 0 && (
                   <>
@@ -187,6 +212,48 @@ export default function HealthImportScreen() {
         </>
       )}
     </Screen>
+  );
+}
+
+/** Whether a workout's distance should be entered: Health has none, or only the watch's indoor estimate. */
+const asksDistance = (w: NewCardioWorkout) => !w.distance_m || w.indoor === true;
+
+/**
+ * Enters the distance of a workout being imported, e.g. from the treadmill
+ * or bike computer. Swims are in metres, the rest in km. Left empty, the
+ * workout keeps what Health has.
+ */
+function DistanceInput({
+  workout: w,
+  value,
+  onChange,
+}: {
+  workout: NewCardioWorkout;
+  value: string;
+  onChange: (text: string) => void;
+}) {
+  const theme = useTheme();
+  const metres = w.activity === 'swimming';
+  return (
+    <>
+      <ThemedText type="small" themeColor="textSecondary">
+        {w.distance_m
+          ? 'Indoors the watch only estimates the distance. Enter the machine’s, or leave it empty to keep the estimate.'
+          : 'No distance from Apple Health. Enter it, e.g. from your bike computer or the machine.'}{' '}
+      </ThemedText>
+      <View style={styles.distance}>
+        <TextInput
+          value={value}
+          onChangeText={onChange}
+          keyboardType="decimal-pad"
+          placeholder={w.distance_m ? formatDistance(w.distance_m, w.activity) : metres ? 'Metres' : 'Kilometres'}
+          placeholderTextColor={theme.textSecondary}
+          accessibilityLabel={metres ? 'Distance in metres' : 'Distance in kilometres'}
+          style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundSelected }]}
+        />
+        <ThemedText themeColor="textSecondary">{metres ? 'm' : 'km'}</ThemedText>
+      </View>
+    </>
   );
 }
 
@@ -260,6 +327,18 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  distance: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  input: {
+    flex: 1,
+    height: 40,
+    borderRadius: 10,
+    paddingHorizontal: Spacing.three,
+    fontSize: 16,
   },
   chips: {
     flexDirection: 'row',

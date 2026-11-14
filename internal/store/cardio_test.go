@@ -60,6 +60,32 @@ func TestSaveCardioWorkouts_SkipsAlreadyImported(t *testing.T) {
 	}
 }
 
+func TestSaveCardioWorkouts_KeepsDistanceEnteredOnImport(t *testing.T) {
+	s := newTestStore(t)
+	// An indoor run whose watch estimate of 2 km was replaced by the
+	// treadmill's 2.5 km while importing it.
+	run := cardioRun("a", "2026-10-10", 2)
+	run.Samples = []CardioSample{{T: 0, D: 0}, {T: 330, D: 1000}, {T: 660, D: 2000}}
+	run.Indoor = boolean(true)
+	run.DistanceM = float(2500)
+	run.ManualDistance = true
+	saved, err := s.SaveCardioWorkouts([]CardioWorkout{run})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.GetCardioWorkout(saved[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.ManualDistance || *got.DistanceM != 2500 {
+		t.Errorf("expected the distance entered kept as entered by hand, got %+v", got)
+	}
+	if last := got.Samples[len(got.Samples)-1].D; last != 2500 {
+		t.Errorf("expected the samples scaled to the distance entered, got %v", last)
+	}
+}
+
 func TestListCardioWorkouts(t *testing.T) {
 	s := newTestStore(t)
 	ride := CardioWorkout{

@@ -256,6 +256,28 @@ func (s *Store) SetCardioDistance(id int, metres float64, indoor bool) (CardioWo
 	return w, tx.Commit()
 }
 
+// SetCardioPlace records whether a workout imported before Health's place
+// was kept was indoors, returning the workout. A place already known is
+// kept. It returns ErrCardioWorkoutNotFound for an unknown id.
+func (s *Store) SetCardioPlace(id int, indoor bool) (CardioWorkout, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return CardioWorkout{}, err
+	}
+	defer tx.Rollback()
+	if _, err := getCardioWorkout(tx, id); err != nil {
+		return CardioWorkout{}, err
+	}
+	if _, err := tx.Exec("UPDATE cardio_workouts SET indoor = ? WHERE id = ? AND indoor IS NULL", indoor, id); err != nil {
+		return CardioWorkout{}, err
+	}
+	w, err := getCardioWorkout(tx, id)
+	if err != nil {
+		return CardioWorkout{}, err
+	}
+	return w, tx.Commit()
+}
+
 // DeleteCardioWorkout deletes a cardio workout, reporting whether it
 // existed. The planned session it filled is empty again.
 func (s *Store) DeleteCardioWorkout(id int) (bool, error) {

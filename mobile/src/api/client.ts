@@ -174,6 +174,9 @@ export function createApi(baseUrl: string) {
         method: 'PATCH',
         body: JSON.stringify(indoor ? { distance_m: metres, indoor } : { distance_m: metres }),
       }),
+    /** Records whether a workout imported before its place was kept was indoors, from Health. */
+    setCardioPlace: (id: number, indoor: boolean) =>
+      request<CardioWorkout>(`/api/cardio?id=${id}`, { method: 'PATCH', body: JSON.stringify({ indoor }) }),
     deleteCardio: (id: number) => request<{ success: boolean }>(`/api/cardio?id=${id}`, { method: 'DELETE' }),
 
     listGoals: async () => (await request<Goal[] | null>('/api/goals')) ?? [],

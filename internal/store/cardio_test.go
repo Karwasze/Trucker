@@ -212,6 +212,35 @@ func TestSetCardioDistance(t *testing.T) {
 	}
 }
 
+func TestSetCardioPlace_OnlyFillsAnUnknownPlace(t *testing.T) {
+	s := newTestStore(t)
+	// Imported before the place was kept, with a distance entered since.
+	ride := cardioRun("ride", "2026-10-10", 30)
+	ride.Activity = ActivityCycling
+	ride.DistanceM = nil
+	outdoor := cardioRun("outdoor", "2026-10-11", 5)
+	outdoor.Indoor = boolean(false)
+	saved, err := s.SaveCardioWorkouts([]CardioWorkout{ride, outdoor})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SetCardioDistance(saved[0].ID, 30000, false); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.SetCardioPlace(saved[0].ID, true)
+	if err != nil || got.Indoor == nil || !*got.Indoor || !got.ManualDistance || *got.DistanceM != 30000 {
+		t.Errorf("expected the ride marked indoors with its distance kept, got %+v %v", got, err)
+	}
+	// A place Health gave on import stays.
+	if got, err := s.SetCardioPlace(saved[1].ID, true); err != nil || *got.Indoor {
+		t.Errorf("expected the outdoor run kept outdoors, got %+v %v", got, err)
+	}
+	if _, err := s.SetCardioPlace(9999, true); !errors.Is(err, ErrCardioWorkoutNotFound) {
+		t.Errorf("expected ErrCardioWorkoutNotFound, got %v", err)
+	}
+}
+
 func TestSetCardioDistance_IndoorRun(t *testing.T) {
 	s := newTestStore(t)
 

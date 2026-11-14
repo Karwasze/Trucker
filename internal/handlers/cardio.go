@@ -111,10 +111,29 @@ func (h *Handlers) CardioAPI(w http.ResponseWriter, r *http.Request) {
 		}
 		var body struct {
 			DistanceM *float64 `json:"distance_m"`
-			// Indoor marks a workout imported before Health's place was kept as indoors.
-			Indoor bool `json:"indoor"`
+			// Indoor is the place, from Health, of a workout imported before
+			// it was kept. Without a distance, only the place is recorded.
+			Indoor *bool `json:"indoor"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.DistanceM == nil || *body.DistanceM <= 0 {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, "Expected a positive distance_m", http.StatusBadRequest)
+			return
+		}
+		if body.DistanceM == nil && body.Indoor != nil {
+			workout, err := h.store.SetCardioPlace(id, *body.Indoor)
+			if errors.Is(err, store.ErrCardioWorkoutNotFound) {
+				http.Error(w, "Cardio workout not found", http.StatusNotFound)
+				return
+			}
+			if err != nil {
+				http.Error(w, "Database error", http.StatusInternalServerError)
+				log.Printf("Error setting cardio place: %v", err)
+				return
+			}
+			json.NewEncoder(w).Encode(workout)
+			return
+		}
+		if body.DistanceM == nil || *body.DistanceM <= 0 {
 			http.Error(w, "Expected a positive distance_m", http.StatusBadRequest)
 			return
 		}
@@ -122,7 +141,7 @@ func (h *Handlers) CardioAPI(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			return
 		}
-		workout, err := h.store.SetCardioDistance(id, *body.DistanceM, body.Indoor)
+		workout, err := h.store.SetCardioDistance(id, *body.DistanceM, body.Indoor != nil && *body.Indoor)
 		if errors.Is(err, store.ErrCardioWorkoutNotFound) {
 			http.Error(w, "Cardio workout not found", http.StatusNotFound)
 			return

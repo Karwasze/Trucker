@@ -7,6 +7,7 @@ import { mondayOf } from '@/components/chart-scale';
 import { useQuery } from '@/hooks/use-query';
 import { healthWorkoutReport, healthWorkoutsSince, isHealthAvailable } from '@/health/healthkit';
 import { syncRestingHeartRates } from '@/health/resting-hr';
+import { syncWorkoutPlaces } from '@/health/workout-places';
 import { syncHeartRateZones } from '@/health/zones-sync';
 import { useSettings } from '@/settings/settings-context';
 
@@ -116,6 +117,7 @@ export function useHealthImports() {
       // Keeps the zones sessions are judged by current, alongside.
       syncHeartRateZones(api, true).catch(() => {});
       syncRestingHeartRates(api).catch(() => {});
+      syncWorkoutPlaces(api, imported).catch(() => {});
       const since = importSince(connectedAt!);
       const offered = await healthWorkoutsSince(since, new Set([...known, ...dismissed]));
       if (dismissed.size === 0) return offered;

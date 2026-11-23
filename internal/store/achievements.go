@@ -285,7 +285,7 @@ func strengthAchievement(sets []insightSet, bodyweight []BodyweightEntry, exerci
 			a.Best = &ratio
 		}
 		for i := range a.Tiers {
-			if a.Tiers[i].EarnedOn == "" && oneRM >= a.Tiers[i].Target*weight {
+			if a.Tiers[i].EarnedOn == "" && reachesRatio(oneRM, weight, a.Tiers[i].Target) {
 				a.Tiers[i].EarnedOn, a.Tiers[i].WorkoutID = set.date, set.workoutID
 			}
 		}

@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 // setList builds sets from reps, weight pairs.
@@ -359,6 +360,15 @@ func TestNextTargetUpTo(t *testing.T) {
 			wantReason:  "Weight up 2.5 kg: you completed 3 × 8 @ 80 kg last time.",
 		},
 		{
+			// A 5 kg step from 85 kg would overshoot an 86 kg bodyweight.
+			name:        "a step past the cap stops at the cap",
+			sessions:    [][]Set{setList(8, 75, 8, 75, 8, 75), setList(8, 80, 8, 80, 8, 80), setList(8, 85, 8, 85, 8, 85)},
+			maxWeight:   86,
+			wantSets:    setList(8, 86, 8, 86, 8, 86),
+			wantOutcome: ResultProgressed,
+			wantReason:  "Weight up 1 kg to your bodyweight: you completed 3 × 8 @ 85 kg last time.",
+		},
+		{
 			name:        "at the cap a hit adds a rep per set instead",
 			sessions:    [][]Set{setList(8, 85, 8, 85, 8, 85)},
 			maxWeight:   85,
@@ -663,5 +673,142 @@ func TestSessionsInScheme(t *testing.T) {
 	fives := [][]Set{setList(5, 100, 5, 100, 5, 100), setList(5, 90, 5, 90, 5, 90, 5, 90, 5, 90)}
 	if got, want := sessionsInScheme(fives, triple, []PlanExercise{triple, five}), fives[:1]; !reflect.DeepEqual(got, want) {
 		t.Errorf("3 × 5: got %v, want %v", got, want)
+	}
+}
+
+// stuckPullUps is a 4 × 3 pull-up stuck at 85 kg: hit once, missed until
+// a deload to 75 kg, then back to 85 kg missing again.
+var stuckPullUps = [][]Set{
+	setList(3, 80, 3, 80, 3, 80, 3, 80),
+	setList(3, 85, 3, 85, 3, 85, 3, 85),
+	setList(2, 85, 2, 85, 1, 85, 1, 85),
+	setList(1, 85, 1, 85, 1, 85, 1, 85),
+	setList(3, 75, 3, 75, 3, 75, 3, 75),
+	setList(3, 80, 3, 80, 3, 80, 3, 80),
+	setList(2, 85, 1, 85, 2, 85, 1, 85),
+}
+
+func TestSmallerScheme(t *testing.T) {
+	tests := []struct{ scheme, want PlanExercise }{
+		{PlanExercise{Sets: 4, Reps: 3}, PlanExercise{Sets: 6, Reps: 2}},
+		{PlanExercise{Sets: 5, Reps: 3}, PlanExercise{Sets: 8, Reps: 2}},
+		{PlanExercise{Sets: 3, Reps: 5}, PlanExercise{Sets: 4, Reps: 4}},
+		{PlanExercise{Sets: 5, Reps: 1}, PlanExercise{Sets: 7, Reps: 1}},
+	}
+	for _, tt := range tests {
+		if got := smallerScheme(tt.scheme); got != tt.want {
+			t.Errorf("smallerScheme(%v) = %v, want %v", tt.scheme, got, tt.want)
+		}
+	}
+}
+
+func TestPlanTarget_SmallerSetsWhenStuck(t *testing.T) {
+	scheme := PlanExercise{Name: "Pull-up", Sets: 4, Reps: 3}
+	six := setList(2, 85, 2, 85, 2, 85, 2, 85, 2, 85, 2, 85)
+	sixMissed := setList(2, 85, 2, 85, 2, 85, 1, 85, 1, 85, 1, 85)
+	with := func(extra ...[]Set) [][]Set {
+		return append(append([][]Set{}, stuckPullUps...), extra...)
+	}
+
+	tests := []struct {
+		name        string
+		sessions    [][]Set
+		wantSets    []Set
+		wantOutcome string
+		wantReason  string
+	}{
+		{
+			name:        "missing again after a deload switches to smaller sets",
+			sessions:    stuckPullUps,
+			wantSets:    six,
+			wantOutcome: ResultMissed,
+			wantReason:  "Stuck at 85 kg after deloading: 6 × 2 for the same reps in smaller sets. Complete it twice to go back to 4 × 3.",
+		},
+		{
+			name:        "smaller sets continue until completed twice",
+			sessions:    with(six),
+			wantSets:    six,
+			wantOutcome: ResultProgressed,
+			wantReason:  "Stuck at 85 kg: 6 × 2 until you complete it twice (1 done), then back to 4 × 3.",
+		},
+		{
+			name:        "a missed smaller session doesn't count",
+			sessions:    with(six, sixMissed),
+			wantSets:    six,
+			wantOutcome: ResultMissed,
+			wantReason:  "Stuck at 85 kg: 6 × 2 until you complete it twice (1 done), then back to 4 × 3.",
+		},
+		{
+			name:        "completing the smaller sets twice goes back to the plan",
+			sessions:    with(six, sixMissed, six),
+			wantSets:    setList(3, 85, 3, 85, 3, 85, 3, 85),
+			wantOutcome: ResultProgressed,
+			wantReason:  "You completed 6 × 2 @ 85 kg twice: back to 4 × 3.",
+		},
+		{
+			name:        "back on the plan, a miss progresses as usual",
+			sessions:    with(six, six, setList(3, 85, 3, 85, 2, 85, 2, 85)),
+			wantSets:    setList(3, 85, 3, 85, 3, 85, 3, 85),
+			wantOutcome: ResultMissed,
+			wantReason:  "You didn't finish 4 × 3 @ 85 kg last time: same weight, one more rep on short sets. 2 more misses deload.",
+		},
+		{
+			name:        "a miss without a deload before it progresses as usual",
+			sessions:    stuckPullUps[:3],
+			wantSets:    setList(3, 85, 3, 85, 2, 85, 2, 85),
+			wantOutcome: ResultMissed,
+			wantReason:  "You didn't finish 4 × 3 @ 85 kg last time: same weight, one more rep on short sets. 2 more misses deload.",
+		},
+		{
+			name:        "a hit while stuck progresses as usual",
+			sessions:    with(setList(3, 85, 3, 85, 3, 85, 3, 85)),
+			wantSets:    setList(3, 86, 3, 86, 3, 86, 3, 86),
+			wantOutcome: ResultProgressed,
+			wantReason:  "Weight up 1 kg to your bodyweight: you completed 4 × 3 @ 85 kg last time.",
+		},
+		{
+			name:        "smaller sets done without being stuck progress as usual",
+			sessions:    [][]Set{setList(3, 80, 3, 80, 3, 80, 3, 80), six},
+			wantSets:    setList(3, 85, 3, 85, 3, 85, 3, 85),
+			wantOutcome: ResultMissed,
+			wantReason:  "You didn't finish 4 × 3 @ 85 kg last time: same weight, one more rep on short sets. 3 more misses deload.",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotSets, gotOutcome, gotReason := planTarget(scheme, tt.sessions, 0, 86)
+			if !reflect.DeepEqual(gotSets, tt.wantSets) {
+				t.Errorf("expected sets %v, got %v", tt.wantSets, gotSets)
+			}
+			if gotOutcome != tt.wantOutcome {
+				t.Errorf("expected outcome %q, got %q", tt.wantOutcome, gotOutcome)
+			}
+			if gotReason != tt.wantReason {
+				t.Errorf("expected reason %q, got %q", tt.wantReason, gotReason)
+			}
+		})
+	}
+
+	// A layoff eases back in as usual, block or not.
+	if _, outcome, _ := planTarget(scheme, stuckPullUps, 30, 86); outcome != ResultReturning {
+		t.Errorf("expected a layoff to ease back in, got %q", outcome)
+	}
+}
+
+func TestExerciseTargets_SmallerSetsWhenStuck(t *testing.T) {
+	s := newTestStore(t)
+	date := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	for _, sets := range stuckPullUps {
+		seedWorkout(t, s, date.Format("2006-01-02"), []Exercise{{Name: "Pull-up", Sets: sets}})
+		date = date.AddDate(0, 0, 2)
+	}
+	pullUp := PlanExercise{Name: "Pull-up", Sets: 4, Reps: 3}
+	targets, err := s.ExerciseTargets([]PlanExercise{pullUp}, []PlanExercise{pullUp}, date.Format("2006-01-02"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := setList(2, 85, 2, 85, 2, 85, 2, 85, 2, 85, 2, 85); !reflect.DeepEqual(targets[0].Sets, want) {
+		t.Errorf("got %v, want %v (%s)", targets[0].Sets, want, targets[0].Reason)
 	}
 }

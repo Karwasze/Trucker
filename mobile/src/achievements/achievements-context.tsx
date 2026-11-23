@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { createContext, use, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Modal, StyleSheet, View } from 'react-native';
+import { BackHandler, StyleSheet, View } from 'react-native';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { earnedKeys, medal, tierDetail, tierKey, tierLabel } from '@/achievements/achievements';
 import type { Achievement } from '@/api/types';
@@ -62,13 +63,33 @@ export function AchievementsProvider({ children }: { children: ReactNode }) {
     if (loaded) check();
   }, [loaded, check]);
 
-  const close = () => setUnlocked([]);
+  const close = useCallback(() => setUnlocked([]), []);
+  const shown = unlocked.length > 0;
 
+  // Android's back button closes it, as it would a modal.
+  useEffect(() => {
+    if (!shown) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      close();
+      return true;
+    });
+    return () => sub.remove();
+  }, [shown, close]);
+
+  // An overlay in the app's own views rather than a React Native <Modal>: a
+  // Modal is a UIKit presentation that react-native-screens doesn't own, and
+  // presenting or dismissing it while a stack changes (closing Health import,
+  // switching tabs from it) can leave the screen beneath black and empty.
   return (
     <AchievementsContext value={{ check }}>
       {children}
-      <Modal visible={unlocked.length > 0} transparent animationType="fade" onRequestClose={close}>
-        <View style={styles.backdrop}>
+      {shown && (
+        <Animated.View
+          entering={FadeIn.duration(200)}
+          exiting={FadeOut.duration(150)}
+          style={[StyleSheet.absoluteFill, styles.backdrop]}
+          accessibilityViewIsModal
+          aria-modal>
           <Card style={styles.sheet}>
             <ThemedText style={styles.trophy}>🏆</ThemedText>
             <ThemedText type="subtitle" style={styles.center}>
@@ -95,19 +116,19 @@ export function AchievementsProvider({ children }: { children: ReactNode }) {
               variant="secondary"
               onPress={() => {
                 close();
-                router.push('/achievements');
+                router.navigate('/achievements');
               }}
             />
           </Card>
-        </View>
-      </Modal>
+        </Animated.View>
+      )}
     </AchievementsContext>
   );
 }
 
 const styles = StyleSheet.create({
   backdrop: {
-    flex: 1,
+    zIndex: 1000,
     justifyContent: 'center',
     padding: Spacing.four,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',

@@ -11,14 +11,22 @@ function Harness({
   initial,
   onChangeScheme,
   onRemove = () => {},
+  trackDone,
 }: {
   initial: DraftExercise;
   onChangeScheme?: (sets: number, reps: number) => void;
   onRemove?: () => void;
+  trackDone?: boolean;
 }) {
   const [exercise, setExercise] = useState(initial);
   return (
-    <ExerciseCard exercise={exercise} onChange={setExercise} onRemove={onRemove} onChangeScheme={onChangeScheme} />
+    <ExerciseCard
+      exercise={exercise}
+      onChange={setExercise}
+      onRemove={onRemove}
+      onChangeScheme={onChangeScheme}
+      trackDone={trackDone}
+    />
   );
 }
 
@@ -64,6 +72,41 @@ test('inputs accept a decimal comma for weight and only digits for reps', async 
   await user.clear(reps);
   await user.type(reps, '1x0');
   expect(reps).toHaveDisplayValue('10');
+});
+
+const squat = draftExercise('Squat', [
+  { weight: 100, reps: 5 },
+  { weight: 100, reps: 5 },
+  { weight: 100, reps: 5 },
+  { weight: 100, reps: 5 },
+]);
+
+test('editing a weight carries it down to the sets below that aren’t done yet', async () => {
+  const user = userEvent.setup();
+  await renderInApp(<Harness initial={squat} />);
+  await user.press(screen.getByRole('checkbox', { name: 'Set 3 done' }));
+  const weight = screen.getByLabelText('Set 2 weight');
+  await user.clear(weight);
+  await user.type(weight, '102,5');
+  expect(screen.getByLabelText('Set 1 weight')).toHaveDisplayValue('100');
+  expect(screen.getByLabelText('Set 2 weight')).toHaveDisplayValue('102.5');
+  expect(screen.getByLabelText('Set 3 weight')).toHaveDisplayValue('100');
+  expect(screen.getByLabelText('Set 4 weight')).toHaveDisplayValue('102.5');
+  // Reps stay per set.
+  const reps = screen.getByLabelText('Set 2 reps');
+  await user.clear(reps);
+  await user.type(reps, '3');
+  expect(screen.getByLabelText('Set 4 reps')).toHaveDisplayValue('5');
+});
+
+test('editing a logged workout changes only the edited set’s weight', async () => {
+  const user = userEvent.setup();
+  const logged = { ...squat, sets: squat.sets.map((s) => ({ ...s, done: false })) };
+  await renderInApp(<Harness initial={logged} trackDone={false} />);
+  const weight = screen.getByLabelText('Set 1 weight');
+  await user.clear(weight);
+  await user.type(weight, '90');
+  expect(screen.getByLabelText('Set 2 weight')).toHaveDisplayValue('100');
 });
 
 test('an exercise outside the plan can be retargeted to another scheme', async () => {

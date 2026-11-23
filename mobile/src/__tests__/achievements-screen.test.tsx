@@ -97,9 +97,12 @@ test('newly earned tiers are celebrated once, but not those earned before the fi
   expect(await screen.findByText('Achievement unlocked')).toBeOnTheScreen();
   expect(screen.getByText('5 km run')).toBeOnTheScreen();
   expect(screen.getByText('Under 20:00')).toBeOnTheScreen();
+  // Not a React Native Modal: presenting one beside react-native-screens'
+  // stacks left the Today screen black and empty once it closed.
+  expect(JSON.stringify(screen.toJSON())).not.toContain('"type":"Modal"');
 
   await user.press(screen.getByText('See all achievements'));
-  expect(router.push).toHaveBeenCalledWith('/achievements');
+  expect(router.navigate).toHaveBeenCalledWith('/achievements');
   expect(screen.queryByText('Achievement unlocked')).toBeNull();
 
   // Already celebrated.

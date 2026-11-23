@@ -148,6 +148,129 @@ func TestStrengthInsights_PlateauDecliningAndOld(t *testing.T) {
 	}
 }
 
+// repSets builds a set at weight for each of reps.
+func repSets(weight float64, reps ...int) []Set {
+	out := make([]Set, len(reps))
+	for i, r := range reps {
+		out[i] = Set{Weight: weight, Reps: r}
+	}
+	return out
+}
+
+func TestStrengthInsights_StuckAfterDeload(t *testing.T) {
+	s := newTestStore(t)
+	// Assisted pull-ups climbing to 85 kg, hitting 4 × 3 there once, missing,
+	// deloading to 75 kg and coming back to miss at 85 kg again.
+	history := []struct {
+		date string
+		sets []Set
+	}{
+		{"2026-03-03", repSets(75, 3, 3, 3, 3)},
+		{"2026-03-05", repSets(80, 3, 3, 3, 3)},
+		{"2026-03-07", repSets(85, 2, 1, 1, 1)},
+		{"2026-03-09", repSets(85, 3, 3, 3, 3)},
+		{"2026-03-11", repSets(85, 1, 2, 2, 4)},
+		{"2026-03-13", repSets(85, 1, 1, 1, 1)},
+		{"2026-03-16", repSets(75, 3, 3, 3, 3)},
+		{"2026-03-18", repSets(80, 3, 3, 3, 3)},
+		{"2026-03-20", repSets(85, 1, 2, 1, 2)},
+		{"2026-03-23", repSets(85, 1, 2, 2, 2)},
+		{"2026-03-25", repSets(85, 3, 3, 3, 3)},
+		{"2026-03-30", repSets(85, 2, 1, 2, 1)},
+	}
+	for _, h := range history {
+		seedLift(t, s, h.date, "Pull-up", h.sets...)
+	}
+	seedWeights(t, s, map[string]float64{"2026-03-01": 84, "2026-03-30": 86.5})
+	s.SaveDietDay(DietDay{Date: "2026-03-20", Adhered: true})
+
+	got := strengthInsights(t, s, insightsToday, "", 0).Plateaus
+	if len(got) != 1 {
+		t.Fatalf("expected one plateau, got %+v", got)
+	}
+	p := got[0]
+	if p.Exercise != "Pull-up" || p.Status != PlateauStuck || p.StuckKg != 85 || p.Deloads != 1 ||
+		p.SchemeSets != 4 || p.SchemeReps != 3 || p.FirstDate != "2026-03-07" || p.LastDate != "2026-03-30" {
+		t.Errorf("unexpected plateau %+v", p)
+	}
+	if p.WeightChangeKg == nil || *p.WeightChangeKg != 2.5 {
+		t.Errorf("expected +2.5 kg since first reaching 85 kg, got %v", p.WeightChangeKg)
+	}
+	if p.DietLogged != 1 || p.DietAdhered != 1 {
+		t.Errorf("expected 1 of 1 diet days, got %d of %d", p.DietAdhered, p.DietLogged)
+	}
+}
+
+func TestStrengthInsights_NotStuckAfterDeload(t *testing.T) {
+	tests := []struct {
+		name    string
+		history map[string][]Set
+	}{
+		{
+			name: "past the old weight after the deload",
+			history: map[string][]Set{
+				"2026-03-10": repSets(85, 3, 3, 3, 3),
+				"2026-03-12": repSets(85, 2, 2, 2, 2),
+				"2026-03-16": repSets(75, 3, 3, 3, 3),
+				"2026-03-20": repSets(85, 2, 2, 2, 2),
+				"2026-03-25": repSets(90, 3, 3, 3, 3),
+			},
+		},
+		{
+			name: "beat the pre-deload best at the old weight",
+			history: map[string][]Set{
+				"2026-03-10": repSets(85, 3, 3, 2, 2),
+				"2026-03-12": repSets(85, 2, 2, 2, 2),
+				"2026-03-16": repSets(75, 3, 3, 3, 3),
+				"2026-03-25": repSets(85, 3, 3, 3, 3),
+			},
+		},
+		{
+			name: "back on the usual sets after a block of smaller ones",
+			history: map[string][]Set{
+				"2026-03-10": repSets(85, 3, 3, 3, 3),
+				"2026-03-12": repSets(85, 2, 2, 2, 2),
+				"2026-03-16": repSets(75, 3, 3, 3, 3),
+				"2026-03-20": repSets(85, 2, 2, 2, 2),
+				"2026-03-23": repSets(85, 2, 2, 2, 2, 2, 2),
+				"2026-03-25": repSets(85, 2, 2, 2, 2, 2, 2),
+				"2026-03-28": repSets(85, 3, 3, 3, 2),
+			},
+		},
+		{
+			name: "still climbing back after the deload",
+			history: map[string][]Set{
+				"2026-03-10": repSets(85, 3, 3, 3, 3),
+				"2026-03-12": repSets(85, 2, 2, 2, 2),
+				"2026-03-16": repSets(75, 3, 3, 3, 3),
+				"2026-03-25": repSets(80, 3, 3, 3, 3),
+			},
+		},
+		{
+			name: "stuck, but not trained for two weeks",
+			history: map[string][]Set{
+				"2026-03-01": repSets(85, 3, 3, 3, 3),
+				"2026-03-03": repSets(85, 2, 2, 2, 2),
+				"2026-03-07": repSets(75, 3, 3, 3, 3),
+				"2026-03-14": repSets(85, 2, 2, 2, 2),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestStore(t)
+			for date, sets := range tt.history {
+				seedLift(t, s, date, "Pull-up", sets...)
+			}
+			for _, p := range strengthInsights(t, s, insightsToday, "", 0).Plateaus {
+				if p.Status == PlateauStuck {
+					t.Errorf("expected no stuck lift, got %+v", p)
+				}
+			}
+		})
+	}
+}
+
 func TestStrengthInsights_WeakLink(t *testing.T) {
 	s := newTestStore(t)
 	seedLift(t, s, "2026-03-30", "Squat", one(100))
@@ -340,5 +463,22 @@ func TestWeightNear(t *testing.T) {
 	}
 	if _, ok := weightNear(entries, "2026-04-30"); ok {
 		t.Error("expected no weight far from any weigh-in")
+	}
+}
+
+func TestStrengthInsights_StuckDuringSmallerSets(t *testing.T) {
+	s := newTestStore(t)
+	for date, sets := range map[string][]Set{
+		"2026-03-10": repSets(85, 3, 3, 3, 3),
+		"2026-03-12": repSets(85, 2, 2, 2, 2),
+		"2026-03-16": repSets(75, 3, 3, 3, 3),
+		"2026-03-20": repSets(85, 2, 2, 2, 2),
+		"2026-03-25": repSets(85, 2, 2, 2, 2, 2, 2),
+	} {
+		seedLift(t, s, date, "Pull-up", sets...)
+	}
+	got := strengthInsights(t, s, insightsToday, "", 0).Plateaus
+	if len(got) != 1 || got[0].Status != PlateauStuck || got[0].StuckKg != 85 {
+		t.Errorf("expected pull-ups still stuck at 85 kg mid-block, got %+v", got)
 	}
 }

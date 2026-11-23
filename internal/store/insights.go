@@ -53,6 +53,13 @@ var strengthStandards = []struct {
 	{"Romanian Deadlift", []float64{0.75, 1.0, 1.5, 2.0, 2.75}},
 }
 
+// reachesRatio is whether a 1RM reaches ratio times bodyweight, judged on
+// the ratio rounded as shown (to 2 decimals), so a lift shown at a level's
+// ratio counts as reaching it.
+func reachesRatio(oneRM, bodyweight, ratio float64) bool {
+	return round(oneRM/bodyweight, 2) >= ratio
+}
+
 const dateLayout = "2006-01-02"
 
 // insightSet is one logged set with its workout.
@@ -388,7 +395,7 @@ func strengthLevels(sets []insightSet, bodyweight float64) []StrengthLevel {
 
 		level := StrengthLevel{Exercise: standard.exercise, Best1RM: round(best, 1), Ratio: round(best/bodyweight, 2)}
 		for i, ratio := range standard.ratios {
-			if best >= ratio*bodyweight {
+			if reachesRatio(best, bodyweight, ratio) {
 				level.Level = strengthLevelNames[i]
 				continue
 			}
@@ -508,7 +515,7 @@ func planStalls(plan TrainingPlan, sets []insightSet, from, today string) []Plan
 			weight := workingWeight(h.sessions[last])
 			off, _ := daysOff(h.dates[last], today)
 			if misses := consecutiveMisses(scheme, h.sessions, weight); misses >= stallAfterMisses && layoffFraction(off) == 0 {
-				_, result, _ := nextTarget(scheme, h.sessions, 0)
+				_, result, _ := planTarget(scheme, h.sessions, 0, 0)
 				stalls = append(stalls, PlanStall{
 					Exercise: scheme.Name, Status: StallMissing, Weight: weight, Misses: misses,
 					Date: h.dates[last], DeloadNext: result == ResultDeloaded,
@@ -519,7 +526,7 @@ func planStalls(plan TrainingPlan, sets []insightSet, from, today string) []Plan
 			for i := last; i >= 0 && h.dates[i] >= from; i-- {
 				// Like EvaluateProgression, the outcome of a session follows
 				// from the history up to it.
-				if _, result, _ := nextTarget(scheme, h.sessions[:i+1], 0); result == ResultDeloaded {
+				if _, result, _ := planTarget(scheme, h.sessions[:i+1], 0, 0); result == ResultDeloaded {
 					weight := workingWeight(h.sessions[i])
 					stalls = append(stalls, PlanStall{
 						Exercise: scheme.Name, Status: StallDeloaded, Weight: weight,

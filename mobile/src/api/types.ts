@@ -482,10 +482,13 @@ export type StrengthProjection = {
   days_steady_weight?: number;
 };
 
-/** Mirrors store.LiftPlateau: a lift that went flat over the last 8 weeks. */
+/**
+ * Mirrors store.LiftPlateau: a lift that went flat over the last 8 weeks, or
+ * (status 'stuck') one that missed at stuck_kg again after deloading from it.
+ */
 export type LiftPlateau = {
   exercise: string;
-  status: 'flat' | 'declining';
+  status: 'flat' | 'declining' | 'stuck';
   sessions: number;
   first_date: string;
   last_date: string;
@@ -495,6 +498,13 @@ export type LiftPlateau = {
   weight_change_kg?: number;
   diet_logged: number;
   diet_adhered: number;
+  /** Stuck lifts only: the weight it keeps missing at. */
+  stuck_kg?: number;
+  /** Stuck lifts only: how many times it dropped from stuck_kg. */
+  deloads?: number;
+  /** Stuck lifts only: the best sets × reps at stuck_kg before the first deload. */
+  scheme_sets?: number;
+  scheme_reps?: number;
 };
 
 /** Mirrors store.LiftBalance. */

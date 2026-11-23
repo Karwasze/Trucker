@@ -107,6 +107,84 @@ test('names stalled lifts with the diet around them', () => {
   expect(s).toMatchObject({ headline: 'Bench Press has stalled', tone: 'warn' });
 });
 
+test('suggests a way past a lift stuck after a deload', () => {
+  const stuck = {
+    exercise: 'Pull-up',
+    status: 'stuck' as const,
+    sessions: 10,
+    first_date: '2026-10-28',
+    last_date: '2026-11-23',
+    weeks: 4,
+    best_1rm: 93.5,
+    change_pct: 0,
+    weight_change_kg: 2.5,
+    diet_logged: 0,
+    diet_adhered: 0,
+    stuck_kg: 85,
+    deloads: 1,
+    scheme_sets: 4,
+    scheme_reps: 3,
+  };
+  const s = summary(strengthInsights({ ...EMPTY_STRENGTH, plateaus: [stuck] }, true), 'plateaus');
+  expect(s).toMatchObject({
+    headline: 'Pull-up is stuck at 85 kg',
+    body: 'Another deload is unlikely to get you past it: change the rep scheme, add accessories or check recovery.',
+    tone: 'warn',
+  });
+  expect(said(s)).toContain(
+    [
+      'Pull-up missed at 85 kg again after 1 deload (best 4 × 3, since 28 Oct)',
+      'Plan targets switch to 6 × 2 at 85 kg (the same 12 reps in smaller sets) until you complete it twice, then back to 4 × 3',
+      'Add slow negatives, lat pulldowns and rows',
+      'You gained 2.5 kg since 28 Oct, and every kg adds to a pull-up',
+    ].join('\n')
+  );
+
+  // Other lifts get a generic accessory, and recovery follows the weight.
+  const bench = summary(
+    strengthInsights(
+      {
+        ...EMPTY_STRENGTH,
+        plateaus: [
+          {
+            ...stuck,
+            exercise: 'Hack Squat',
+            stuck_kg: 120,
+            deloads: 2,
+            scheme_sets: 5,
+            scheme_reps: 1,
+            weight_change_kg: -3,
+            diet_logged: 20,
+            diet_adhered: 18,
+          },
+        ],
+      },
+      true
+    ),
+    'plateaus'
+  );
+  expect(said(bench)).toContain(
+    [
+      'Hack Squat missed at 120 kg again after 2 deloads (best 5 × 1, since 28 Oct) · diet kept 18 of 20 days',
+      'Plan targets switch to 7 × 1 at 120 kg (more singles, each one fresh) until you complete it twice, then back to 5 × 1',
+      'Add accessories for the muscles it trains',
+      'You lost 3 kg since 28 Oct: a deficit makes new strength hard, so check calories, protein and sleep',
+    ].join('\n')
+  );
+
+  const steady = summary(
+    strengthInsights(
+      { ...EMPTY_STRENGTH, plateaus: [{ ...stuck, weight_change_kg: undefined, scheme_sets: 5 }] },
+      true
+    ),
+    'plateaus'
+  );
+  expect(said(steady)).toContain(
+    'Plan targets switch to 8 × 2 at 85 kg (16 reps in smaller sets) until you complete it twice, then back to 5 × 3\n'
+  );
+  expect(said(steady)).toContain('Check sleep and recovery before another deload');
+});
+
 test('names the lagging lift', () => {
   const s = summary(
     strengthInsights(

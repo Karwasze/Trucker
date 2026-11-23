@@ -1,4 +1,4 @@
-import type { StrengthInsights, StrengthProjection } from '@/api/types';
+import type { LiftPlateau, StrengthInsights, StrengthProjection } from '@/api/types';
 import {
   aboutDays,
   capitalize,
@@ -67,6 +67,49 @@ function projections({ projections: ps }: StrengthInsights, hasBodyweight: boole
   };
 }
 
+/** Accessories that build the strength a stuck lift is missing. */
+const ACCESSORIES: Record<string, string> = {
+  'Pull-up': 'slow negatives, lat pulldowns and rows',
+  'Chin-up': 'slow negatives, lat pulldowns and curls',
+  'Bench Press': 'close-grip bench, dips and triceps work',
+  Squat: 'paused squats, front squats and lunges',
+  Deadlift: 'paused deadlifts, rows and Romanian deadlifts',
+  'Romanian Deadlift': 'hip thrusts, back extensions and hamstring curls',
+  'Overhead Press': 'push presses, dips and lateral raises',
+};
+
+/** Lifts where gaining bodyweight makes the same logged weight harder. */
+const BODYWEIGHT_LIFTS = new Set(['Pull-up', 'Chin-up', 'Dip']);
+
+/** What to try for a stuck lift: a rep scheme, accessories and recovery. */
+function stuckAdvice(p: LiftPlateau): string[] {
+  const at = kg(p.stuck_kg!);
+  const sets = p.scheme_sets!;
+  const reps = p.scheme_reps!;
+  const total = sets * reps;
+  // Matches store.smallerScheme, which plan targets switch to.
+  let switched: string;
+  if (reps > 1) {
+    const smaller = reps - 1;
+    const more = Math.ceil(total / smaller);
+    switched = `${more} × ${smaller} at ${at} (${more * smaller === total ? 'the same ' : ''}${more * smaller} reps in smaller sets)`;
+  } else {
+    switched = `${sets + 2} × 1 at ${at} (more singles, each one fresh)`;
+  }
+  const scheme = `Plan targets switch to ${switched} until you complete it twice, then back to ${sets} × ${reps}`;
+
+  const since = shortDate(p.first_date);
+  const w = p.weight_change_kg;
+  let recovery = 'Check sleep and recovery before another deload';
+  if (w !== undefined && w > 0 && BODYWEIGHT_LIFTS.has(p.exercise)) {
+    recovery = `You gained ${kg(w)} since ${since}, and every kg adds to a ${p.exercise.toLowerCase()}`;
+  } else if (w !== undefined && w < 0) {
+    recovery = `You lost ${kg(-w)} since ${since}: a deficit makes new strength hard, so check calories, protein and sleep`;
+  }
+
+  return [scheme, `Add ${ACCESSORIES[p.exercise] ?? 'accessories for the muscles it trains'}`, recovery];
+}
+
 function plateaus({ plateaus: ps }: StrengthInsights): InsightSummary {
   if (ps.length === 0) {
     return {
@@ -75,7 +118,14 @@ function plateaus({ plateaus: ps }: StrengthInsights): InsightSummary {
       tone: 'good',
     };
   }
-  const details = ps.map((p) => {
+  const details = ps.flatMap((p) => {
+    if (p.status === 'stuck') {
+      const diet = p.diet_logged > 0 ? ` · diet kept ${p.diet_adhered} of ${plural(p.diet_logged, 'day')}` : '';
+      return [
+        `${p.exercise} missed at ${kg(p.stuck_kg!)} again after ${plural(p.deloads!, 'deload')} (best ${p.scheme_sets} × ${p.scheme_reps}, since ${shortDate(p.first_date)})${diet}`,
+        ...stuckAdvice(p),
+      ];
+    }
     const trend =
       p.status === 'flat'
         ? `flat for ${plural(p.weeks, 'week')}`
@@ -86,10 +136,21 @@ function plateaus({ plateaus: ps }: StrengthInsights): InsightSummary {
       context.push(w < 0 ? `while you lost ${kg(-w)}` : w > 0 ? `while you gained ${kg(w)}` : 'at a steady weight');
     }
     if (p.diet_logged > 0) context.push(`diet kept ${p.diet_adhered} of ${plural(p.diet_logged, 'day')}`);
-    return `${p.exercise} ${trend} (${kg(p.best_1rm)} est. 1RM)${context.length > 0 ? ` ${context.join(' · ')}` : ''}`;
+    return [
+      `${p.exercise} ${trend} (${kg(p.best_1rm)} est. 1RM)${context.length > 0 ? ` ${context.join(' · ')}` : ''}`,
+    ];
   });
+  const stuck = ps.filter((p) => p.status === 'stuck');
+  const body =
+    stuck.length > 0
+      ? 'Another deload is unlikely to get you past it: change the rep scheme, add accessories or check recovery.'
+      : undefined;
+  if (ps.length === 1 && stuck.length === 1) {
+    return { headline: `${ps[0].exercise} is stuck at ${kg(ps[0].stuck_kg!)}`, body, details, tone: 'warn' };
+  }
   return {
     headline: ps.length === 1 ? `${ps[0].exercise} has stalled` : `${ps.length} lifts have stalled`,
+    body,
     details,
     tone: 'warn',
   };

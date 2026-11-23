@@ -241,3 +241,21 @@ func TestListAchievements_StrengthBeforeTheFirstBodyweightUsesIt(t *testing.T) {
 		t.Errorf("expected novice earned on 2026-01-10, got %v", earned(bench))
 	}
 }
+
+// A ratio shown as the tier's target earns it: 102 kg × 3 is an estimated
+// 108 kg, 1.2457x at 86.7 kg, shown as 1.25x.
+func TestListAchievements_StrengthEarnedAtTheRatioShown(t *testing.T) {
+	s := newTestStore(t)
+	if err := s.SaveBodyweight("2026-11-16", 86.7); err != nil {
+		t.Fatal(err)
+	}
+	seedWorkout(t, s, "2026-11-23", []Exercise{{Name: "Squat", Sets: sets(5, 102, 3)}})
+
+	squat := achievement(t, listAchievements(t, s), "strength-squat")
+	if squat.Best == nil || *squat.Best != 1.25 {
+		t.Fatalf("expected a best ratio of 1.25, got %v", squat.Best)
+	}
+	if want := []string{"2026-11-23", "", "", ""}; !equalDates(earned(squat), want) {
+		t.Errorf("expected novice earned on 2026-11-23, got %v", earned(squat))
+	}
+}

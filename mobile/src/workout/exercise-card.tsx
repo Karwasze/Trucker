@@ -52,6 +52,14 @@ export function ExerciseCard({ exercise, onChange, onRemove, trackDone = true, o
       sets: exercise.sets.map((s, i) => (i === index ? { ...s, ...patch } : s)),
     });
 
+  // A weight change carries down to the sets still to come; done sets keep
+  // what was lifted, and a logged workout (every set done) edits one set only.
+  const updateWeight = (index: number, weight: string) =>
+    onChange({
+      ...exercise,
+      sets: exercise.sets.map((s, i) => (i === index || (trackDone && i > index && !s.done) ? { ...s, weight } : s)),
+    });
+
   const addSet = () => {
     const last = exercise.sets.at(-1);
     onChange({
@@ -180,7 +188,7 @@ export function ExerciseCard({ exercise, onChange, onRemove, trackDone = true, o
               </Pressable>
               <TextInput
                 value={set.weight}
-                onChangeText={(weight) => updateSet(i, { weight: weight.replace(',', '.') })}
+                onChangeText={(weight) => updateWeight(i, weight.replace(',', '.'))}
                 keyboardType="decimal-pad"
                 selectTextOnFocus
                 accessibilityLabel={`Set ${i + 1} weight`}

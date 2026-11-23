@@ -108,6 +108,11 @@ type StrengthProjection struct {
 // FirstDate to LastDate, a straight line through its Sessions changing by
 // ChangePct, with the diet over those dates: the bodyweight change and the
 // days logged and kept to.
+//
+// A stuck lift (see stuckLift) is instead one that keeps failing at StuckKg
+// even after Deloads drops below it, from FirstDate, when it first reached
+// StuckKg, to LastDate. SchemeSets × SchemeReps is the best it did there
+// before the first deload; ChangePct is 0.
 type LiftPlateau struct {
 	Exercise       string   `json:"exercise"`
 	Status         string   `json:"status"`
@@ -120,12 +125,17 @@ type LiftPlateau struct {
 	WeightChangeKg *float64 `json:"weight_change_kg,omitempty"`
 	DietLogged     int      `json:"diet_logged"`
 	DietAdhered    int      `json:"diet_adhered"`
+	StuckKg        float64  `json:"stuck_kg,omitempty"`
+	Deloads        int      `json:"deloads,omitempty"`
+	SchemeSets     int      `json:"scheme_sets,omitempty"`
+	SchemeReps     int      `json:"scheme_reps,omitempty"`
 }
 
 // Statuses of a LiftPlateau.
 const (
 	PlateauFlat      = "flat"
 	PlateauDeclining = "declining"
+	PlateauStuck     = "stuck"
 )
 
 // WeakLink sets the best est. 1RM of each of the big four lifts trained over
@@ -317,7 +327,7 @@ func strengthProjections(lifts map[string][]liftSession, weights []BodyweightEnt
 		p := StrengthProjection{Exercise: standard.exercise, Best1RM: round(best, 1), PerMonth: round(slope*daysPerMonth, 1)}
 		ratio := 0.0
 		for i, r := range standard.ratios {
-			if best >= r*bodyweight {
+			if reachesRatio(best, bodyweight, r) {
 				p.Level = strengthLevelNames[i]
 				continue
 			}
@@ -360,7 +370,15 @@ func liftPlateaus(lifts map[string][]liftSession, weights []BodyweightEntry, die
 	recent := now.AddDate(0, 0, -plateauRecentDays).Format(dateLayout)
 	for _, name := range slices.Sorted(maps.Keys(lifts)) {
 		sessions := inSpan(lifts[name], since)
-		if len(sessions) < plateauMinSessions || sessions[len(sessions)-1].date < recent {
+		if len(sessions) == 0 || sessions[len(sessions)-1].date < recent {
+			continue
+		}
+		if p, ok := stuckLift(name, sessions); ok {
+			addDietContext(&p, weights, diet, today)
+			plateaus = append(plateaus, p)
+			continue
+		}
+		if len(sessions) < plateauMinSessions {
 			continue
 		}
 		first, last := sessions[0], sessions[len(sessions)-1]
@@ -388,25 +406,55 @@ func liftPlateaus(lifts map[string][]liftSession, weights []BodyweightEntry, die
 		for _, s := range sessions {
 			p.Best1RM = math.Max(p.Best1RM, round(s.best, 1))
 		}
-
-		w0, ok0 := weightNear(weights, first.date)
-		w1, ok1 := weightNear(weights, last.date)
-		if ok0 && ok1 {
-			change := round(w1-w0, 1)
-			p.WeightChangeKg = &change
-		}
-		for _, d := range diet {
-			if d.Date < first.date || d.Date > min(last.date, today) {
-				continue
-			}
-			p.DietLogged++
-			if d.Adhered {
-				p.DietAdhered++
-			}
-		}
+		addDietContext(&p, weights, diet, today)
 		plateaus = append(plateaus, p)
 	}
 	return plateaus
+}
+
+// addDietContext fills in a plateau's bodyweight change and diet days from
+// its FirstDate to its LastDate (or today, if earlier).
+func addDietContext(p *LiftPlateau, weights []BodyweightEntry, diet []DietDay, today string) {
+	w0, ok0 := weightNear(weights, p.FirstDate)
+	w1, ok1 := weightNear(weights, p.LastDate)
+	if ok0 && ok1 {
+		change := round(w1-w0, 1)
+		p.WeightChangeKg = &change
+	}
+	for _, d := range diet {
+		if d.Date < p.FirstDate || d.Date > min(p.LastDate, today) {
+			continue
+		}
+		p.DietLogged++
+		if d.Adhered {
+			p.DietAdhered++
+		}
+	}
+}
+
+// stuckLift reports a lift stuck at its top working weight in sessions (see
+// findStuck) as a plateau from when it first reached that weight.
+func stuckLift(name string, sessions []liftSession) (LiftPlateau, bool) {
+	sets := make([][]Set, len(sessions))
+	for i, s := range sessions {
+		sets[i] = s.sets
+	}
+	found, ok := findStuck(sets)
+	if !ok {
+		return LiftPlateau{}, false
+	}
+	first, last := sessions[found.firstAtTop], sessions[len(sessions)-1]
+	p := LiftPlateau{
+		Exercise: name, Status: PlateauStuck, Sessions: len(sessions) - found.firstAtTop,
+		FirstDate: first.date, LastDate: last.date,
+		Weeks:   int(math.Round((last.day - first.day) / 7)),
+		StuckKg: found.weight, Deloads: found.deloads,
+		SchemeSets: found.best.Sets, SchemeReps: found.best.Reps,
+	}
+	for _, s := range sessions[found.firstAtTop:] {
+		p.Best1RM = math.Max(p.Best1RM, round(s.best, 1))
+	}
+	return p, true
 }
 
 func weakLink(lifts map[string][]liftSession, from string) *WeakLink {

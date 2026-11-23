@@ -838,3 +838,19 @@ func TestGetInsights_GoalSummary(t *testing.T) {
 		t.Errorf("expected no summary after the race, got %+v", after)
 	}
 }
+
+// The level agrees with the ratio shown: 1.2457x shows as 1.25x, novice.
+func TestGetInsights_StrengthLevelAtTheRatioShown(t *testing.T) {
+	s := newTestStore(t)
+	s.SaveBodyweight("2026-03-01", 86.7)
+	seedWorkout(t, s, "2026-03-20", []Exercise{{Name: "Squat", Sets: sets(5, 102, 3)}})
+
+	insights := getInsights(t, s)
+	if len(insights.Strength) != 1 {
+		t.Fatalf("expected 1 strength entry, got %+v", insights.Strength)
+	}
+	squat := insights.Strength[0]
+	if squat.Ratio != 1.25 || squat.Level != "novice" || squat.NextLevel != "intermediate" {
+		t.Errorf("expected 1.25x novice -> intermediate, got %+v", squat)
+	}
+}

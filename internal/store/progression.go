@@ -74,7 +74,8 @@ func nextTarget(scheme PlanExercise, sessions [][]Set, daysOff int) ([]Set, stri
 }
 
 // nextTargetUpTo is nextTarget with the weight capped at maxWeight (none when
-// 0): a hit at or above it adds a rep to each set of the last session at the
+// 0): a hit below it adds the weight step but never goes past maxWeight, and
+// a hit at or above it adds a rep to each set of the last session at the
 // same weight (never below the planned reps) instead of adding weight.
 func nextTargetUpTo(scheme PlanExercise, sessions [][]Set, daysOff int, maxWeight float64) ([]Set, string, string) {
 	if len(sessions) == 0 {
@@ -118,6 +119,11 @@ func nextTargetUpTo(scheme PlanExercise, sessions [][]Set, daysOff int, maxWeigh
 			return target, ResultProgressed, reason
 		}
 		step := weightStep(sessions)
+		if maxWeight > 0 && weight+step > maxWeight {
+			return uniformSets(scheme, maxWeight), ResultProgressed,
+				fmt.Sprintf("Weight up %s to your bodyweight: you completed %s last time.",
+					formatKg(roundWeight(maxWeight-weight)), planned)
+		}
 		return uniformSets(scheme, roundWeight(weight+step)), ResultProgressed,
 			fmt.Sprintf("Weight up %s: you completed %s last time.", formatKg(step), planned)
 	}
@@ -146,12 +152,13 @@ func nextTargetUpTo(scheme PlanExercise, sessions [][]Set, daysOff int, maxWeigh
 }
 
 // consecutiveMisses counts the most recent sessions that missed scheme in a
-// row at weight.
+// row at weight. Sessions in smaller sets (see smallerShaped) aren't misses
+// and end the run.
 func consecutiveMisses(scheme PlanExercise, sessions [][]Set, weight float64) int {
 	misses := 0
 	for i := len(sessions) - 1; i >= 0; i-- {
 		session := sessions[i]
-		if workingWeight(session) != weight || hitScheme(session, weight, scheme) {
+		if workingWeight(session) != weight || hitScheme(session, weight, scheme) || smallerShaped(session, scheme) {
 			break
 		}
 		misses++
@@ -342,7 +349,7 @@ func (s *Store) ExerciseTargets(exercises, schemes []PlanExercise, date string) 
 			return nil, err
 		}
 		sessions := sessionsInScheme(all, ex, schemes)
-		sets, _, reason := nextTargetUpTo(ex, sessions, off, maxWeight)
+		sets, _, reason := planTarget(ex, sessions, off, maxWeight)
 		if len(sessions) == 0 && len(all) > 0 {
 			reason = fmt.Sprintf("No %d × %d history yet: pick a starting weight.", ex.Sets, ex.Reps)
 		}
@@ -478,7 +485,7 @@ func (s *Store) EvaluateProgression(planID int, workout Workout) ([]ProgressionR
 		if n := len(sessions); n > 0 {
 			sessions = append(sessionsInScheme(sessions[:n-1], ex, plan.Exercises()), sessions[n-1])
 		}
-		_, result, _ := nextTarget(ex, sessions, 0)
+		_, result, _ := planTarget(ex, sessions, 0, 0)
 		results = append(results, ProgressionResult{Exercise: ex.Name, Result: result})
 	}
 	return results, nil

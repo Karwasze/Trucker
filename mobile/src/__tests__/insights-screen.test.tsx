@@ -88,7 +88,15 @@ const full: Insights = {
     by_exercise: [{ exercise: 'Squat', tonnage: 12000 }],
   },
   strength: [
-    { exercise: 'Squat', best_1rm: 120, ratio: 1.46, level: 'intermediate', next_level: 'advanced', next_level_kg: 25 },
+    {
+      exercise: 'Squat',
+      best_1rm: 120,
+      ratio: 1.46,
+      level: 'intermediate',
+      level_kg: 110,
+      next_level: 'advanced',
+      next_level_kg: 25,
+    },
   ],
   untagged: ['Farmer Carry'],
   cardio: [{ activity: 'cycling', sessions: 1, distance_m: 45200, duration_seconds: 8178, weekly_distance_m: 45200 }],
@@ -158,9 +166,10 @@ test('adherence, stalls, progression and strength levels are summarised on Stren
   expect(screen.getByText('Last on 16 Oct · deloads next session')).toBeOnTheScreen();
   expect(screen.getByText('After 3 misses at bodyweight on 2 Oct')).toBeOnTheScreen();
 
-  // A tile per lift: its est. 1RM against the record. The change over time is on Progress.
+  // A tile per lift: its est. 1RM against the record and its change over the timespan.
+  // The chart is on Progress.
   expect(screen.getByText('Progression · from beginning')).toBeOnTheScreen();
-  expect(screen.getByRole('button', { name: /Squat/ })).toHaveTextContent('Squat110 kg92% of record');
+  expect(screen.getByRole('button', { name: /Squat/ })).toHaveTextContent('Squat110 kg92% of record+10% since 1 Sept');
   expect(screen.queryByText('Since 1 Sept')).not.toBeOnTheScreen();
   expect(screen.queryByText('+5 kg / month')).not.toBeOnTheScreen();
 
@@ -174,12 +183,64 @@ test('adherence, stalls, progression and strength levels are summarised on Stren
 
   expect(screen.getByText('Strength levels')).toBeOnTheScreen();
   expect(screen.getByText('Intermediate')).toBeOnTheScreen();
-  expect(screen.getByText('120 kg est. 1RM · 1.46× BW · +25 kg to advanced')).toBeOnTheScreen();
+  expect(screen.getByText('120 kg est. 1RM · 1.46× BW · +25 kg')).toBeOnTheScreen();
+  // A bar from intermediate (110 kg) to advanced (145 kg), rounded down so 100% means reached.
+  expect(screen.getByText('28% to advanced')).toBeOnTheScreen();
+  expect(screen.getByRole('progressbar', { name: 'Squat: 28% of the way to advanced' })).toBeOnTheScreen();
   expect(screen.getByText('Farmer Carry')).toBeOnTheScreen();
 
   // Cardio and the race goal live on the Cardio page.
   expect(screen.queryByText('🚴 Ride · 1 session')).not.toBeOnTheScreen();
   expect(screen.queryByText('Marathon')).not.toBeOnTheScreen();
+});
+
+test('a lift that went backwards, one session, below beginner and elite', async () => {
+  const lift = full.progression[0];
+  mockServer({
+    'GET /api/insights': {
+      ...full,
+      progression: [
+        { ...lift, exercise: 'Squat', first_1rm: 120, latest_1rm: 108 },
+        { ...lift, exercise: 'Deadlift', sessions: 1, first_1rm: 150, latest_1rm: 150 },
+      ],
+      strength: [
+        {
+          exercise: 'Bench Press',
+          best_1rm: 30,
+          ratio: 0.38,
+          level: '',
+          level_kg: 0,
+          next_level: 'beginner',
+          next_level_kg: 10,
+        },
+        {
+          exercise: 'Deadlift',
+          best_1rm: 260,
+          ratio: 3.2,
+          level: 'elite',
+          level_kg: 240,
+          next_level: '',
+          next_level_kg: 0,
+        },
+      ],
+    },
+  });
+  await selectPlan(1);
+  await renderStrength();
+
+  expect(await screen.findByRole('button', { name: /Squat/ })).toHaveTextContent(
+    'Squat108 kg90% of record-10% since 1 Sept'
+  );
+  // A single session has nothing to compare against.
+  expect(screen.getByRole('button', { name: /Deadlift/ })).toHaveTextContent('Deadlift150 kgRecord');
+
+  // Below beginner the bar starts from nothing.
+  expect(screen.getByText('Below beginner')).toBeOnTheScreen();
+  expect(screen.getByText('75% to beginner')).toBeOnTheScreen();
+  // Elite is the top: a full bar with nothing further to reach.
+  expect(screen.getByText('Elite')).toBeOnTheScreen();
+  expect(screen.getByRole('progressbar', { name: 'Deadlift: top level' })).toBeOnTheScreen();
+  expect(screen.getByText('260 kg est. 1RM · 3.20× BW')).toBeOnTheScreen();
 });
 
 test('the race goal and cardio are summarised on Cardio', async () => {

@@ -20,6 +20,7 @@ export const Colors = {
     success: '#2E9E5B',
     warning: '#F5A524',
     danger: '#D93B3B',
+    highlight: '#8E4EC6',
   },
   dark: {
     text: '#ffffff',
@@ -33,6 +34,7 @@ export const Colors = {
     success: '#3FBF73',
     warning: '#F7B750',
     danger: '#F05A5A',
+    highlight: '#A97BE0',
   },
 } as const;
 

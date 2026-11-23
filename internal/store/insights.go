@@ -397,6 +397,7 @@ func strengthLevels(sets []insightSet, bodyweight float64) []StrengthLevel {
 		for i, ratio := range standard.ratios {
 			if reachesRatio(best, bodyweight, ratio) {
 				level.Level = strengthLevelNames[i]
+				level.LevelKg = round(ratio*bodyweight, 1)
 				continue
 			}
 			level.NextLevel = strengthLevelNames[i]

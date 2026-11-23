@@ -406,6 +406,9 @@ function ProgressTile({ progress: p, timespan }: { progress: LiftProgress; times
   const theme = useTheme();
   const atRecord = p.latest_1rm >= p.record_1rm;
   const share = Math.min(p.latest_1rm / p.record_1rm, 1);
+  // Est. 1RM change from the first session in the timespan to the latest.
+  const change =
+    p.sessions > 1 && p.first_1rm > 0 ? Math.round(((p.latest_1rm - p.first_1rm) / p.first_1rm) * 100) : null;
   return (
     <Pressable
       onPress={() => router.navigate({ pathname: '/stats', params: { exercise: p.exercise, span: timespan.key } })}
@@ -430,6 +433,15 @@ function ProgressTile({ progress: p, timespan }: { progress: LiftProgress; times
         <ThemedText type="small" themeColor={atRecord ? 'success' : 'textSecondary'} numberOfLines={1}>
           {atRecord ? 'Record' : `${Math.round(share * 100)}% of record`}
         </ThemedText>
+        {change !== null && (
+          <ThemedText
+            type="smallBold"
+            themeColor={change > 0 ? 'success' : change < 0 ? 'danger' : 'textSecondary'}
+            numberOfLines={1}>
+            {change > 0 ? '+' : ''}
+            {change}% since {shortDate(p.first_date)}
+          </ThemedText>
+        )}
       </Card>
     </Pressable>
   );
@@ -601,16 +613,50 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function StrengthRow({ level }: { level: StrengthLevel }) {
+/** A colour per strength level, cool to warm; '' is below beginner. */
+const LEVEL_COLORS: Record<string, ThemeColor> = {
+  '': 'textSecondary',
+  beginner: 'info',
+  novice: 'success',
+  intermediate: 'warning',
+  advanced: 'accent',
+  elite: 'highlight',
+};
+
+/** A main lift's level, with a bar from where the level starts to the next one. */
+function StrengthRow({ level: l }: { level: StrengthLevel }) {
+  const theme = useTheme();
+  const color = LEVEL_COLORS[l.level] ?? 'text';
+  // At elite there's no next level: the bar is full.
+  const nextKg = l.best_1rm + l.next_level_kg;
+  const share = l.next_level ? Math.min(Math.max((l.best_1rm - l.level_kg) / (nextKg - l.level_kg), 0), 1) : 1;
+  const percent = Math.floor(share * 100);
   return (
     <View style={styles.item}>
       <View style={styles.row}>
-        <ThemedText style={{ flex: 1 }}>{level.exercise}</ThemedText>
-        <ThemedText type="smallBold">{level.level ? capitalize(level.level) : 'Below beginner'}</ThemedText>
+        <ThemedText style={{ flex: 1 }}>{l.exercise}</ThemedText>
+        <ThemedText type="smallBold" themeColor={color}>
+          {l.level ? capitalize(l.level) : 'Below beginner'}
+        </ThemedText>
+      </View>
+      <View style={styles.row}>
+        <View
+          style={[styles.bar, { flex: 1, backgroundColor: theme.backgroundSelected }]}
+          accessible
+          accessibilityRole="progressbar"
+          accessibilityLabel={`${l.exercise}: ${l.next_level ? `${percent}% of the way to ${l.next_level}` : 'top level'}`}
+          accessibilityValue={{ min: 0, max: 100, now: percent }}>
+          <View style={[styles.fill, { width: `${share * 100}%`, backgroundColor: theme[color] }]} />
+        </View>
+        {l.next_level ? (
+          <ThemedText type="small" themeColor="textSecondary" style={styles.num}>
+            {percent}% to {l.next_level}
+          </ThemedText>
+        ) : null}
       </View>
       <ThemedText type="small" themeColor="textSecondary">
-        {formatNumber(level.best_1rm)} kg est. 1RM · {level.ratio.toFixed(2)}× BW
-        {level.next_level ? ` · +${formatNumber(level.next_level_kg)} kg to ${level.next_level}` : ''}
+        {formatNumber(l.best_1rm)} kg est. 1RM · {l.ratio.toFixed(2)}× BW
+        {l.next_level ? ` · +${formatNumber(l.next_level_kg)} kg` : ''}
       </ThemedText>
     </View>
   );

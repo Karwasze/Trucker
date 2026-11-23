@@ -132,6 +132,8 @@ export type StrengthLevel = {
   ratio: number;
   /** Empty below beginner. */
   level: string;
+  /** The est. 1RM `level` starts at, kg; 0 below beginner. */
+  level_kg: number;
   /** Empty at elite. */
   next_level: string;
   next_level_kg: number;

@@ -310,11 +310,14 @@ type MuscleVolume struct {
 
 // StrengthLevel compares a main lift's best estimated 1RM to bodyweight
 // standards. Level is empty below beginner; NextLevel is empty at elite.
+// LevelKg is the 1RM Level starts at (0 below beginner); NextLevelKg is how
+// many kg short of NextLevel the best 1RM is.
 type StrengthLevel struct {
 	Exercise    string  `json:"exercise"`
 	Best1RM     float64 `json:"best_1rm"`
 	Ratio       float64 `json:"ratio"`
 	Level       string  `json:"level"`
+	LevelKg     float64 `json:"level_kg"`
 	NextLevel   string  `json:"next_level"`
 	NextLevelKg float64 `json:"next_level_kg"`
 }

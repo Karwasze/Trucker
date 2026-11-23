@@ -248,6 +248,10 @@ func TestGetInsights_StrengthLevels(t *testing.T) {
 	if squat.NextLevelKg != 50 {
 		t.Errorf("expected 50 kg to next level, got %v", squat.NextLevelKg)
 	}
+	// Intermediate is 1.5 x 80 = 120 kg.
+	if squat.LevelKg != 120 {
+		t.Errorf("expected intermediate at 120 kg, got %v", squat.LevelKg)
+	}
 }
 
 func TestGetInsights_StrengthNeedsBodyweight(t *testing.T) {
@@ -278,10 +282,10 @@ func TestGetInsights_StrengthBelowBeginnerAndElite(t *testing.T) {
 	for _, l := range insights.Strength {
 		levels[l.Exercise] = l
 	}
-	if bench := levels["Bench Press"]; bench.Level != "" || bench.NextLevel != "beginner" || bench.NextLevelKg != 10 {
+	if bench := levels["Bench Press"]; bench.Level != "" || bench.LevelKg != 0 || bench.NextLevel != "beginner" || bench.NextLevelKg != 10 {
 		t.Errorf("unexpected bench level %+v", bench)
 	}
-	if dl := levels["Deadlift"]; dl.Level != "elite" || dl.NextLevel != "" || dl.NextLevelKg != 0 {
+	if dl := levels["Deadlift"]; dl.Level != "elite" || dl.LevelKg != 300 || dl.NextLevel != "" || dl.NextLevelKg != 0 {
 		t.Errorf("unexpected deadlift level %+v", dl)
 	}
 }
